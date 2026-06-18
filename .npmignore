@@ -1,0 +1,29 @@
+# Defense-in-depth: package.json "files" is the allowlist (ships only src/,
+# openclaw.plugin.json, LICENSE, README.md). This .npmignore additionally
+# excludes anything that must NEVER ship, in case the allowlist is ever loosened.
+
+# Paid / patented — must never ship in the free package
+**/usage-tracker.js
+**/registry-pricing.js
+**/execution-estimate.js
+**/dispatch/**
+**/*classifier*.js
+**/normalized.json
+.toggle_registry/**
+**/togglelogic-intelligence/**
+
+# SAM-internal
+**/turn-end-capture.js
+**/sam-memory-bridge.js
+**/redaction/**
+
+# Repo / dev cruft
+.git
+.gitignore
+**/*.bak*
+**/.DS_Store
+**/__pycache__/**
+**/*.test.js
+test/**
+tests/**
+node_modules/**

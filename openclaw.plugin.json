@@ -1,0 +1,96 @@
+{
+  "id": "togglelogic",
+  "name": "ToggleLogic",
+  "version": "1.0.0",
+  "description": "Free-tier model routing for OpenClaw: apply your sticky model overrides, static routes, and a simple cheapest-default — with a structured audit stream. Bring your own provider credentials, declare intent, and the plugin handles selection; no benchmark engine or model registry is included. PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
+  "license": "LicenseRef-ToggleLogic-Free-Tier",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": true,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": ["auto", "passthrough", "configured", "cheap", "intelligence"],
+        "default": "auto",
+        "description": "Routing mode. 'auto' uses the licensed intelligence layer if present, else the cheap default if configured, else passthrough. 'passthrough' defers every selection to OpenClaw's default. 'configured' uses static configuredRoutes. 'cheap' applies the deployment-declared cheapest default (a dumb static preference — no registry/benchmark). 'intelligence' requires the separately-licensed intelligence layer."
+      },
+      "logging": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean", "default": true, "description": "Whether ToggleLogic writes its routing decision log." },
+          "path": { "type": "string", "default": "~/.openclaw/logs/togglelogic-routing.log", "description": "Routing decision log path (jsonl, one object per line). Tilde expansion supported." },
+          "rotateSizeMb": { "type": "integer", "default": 50, "minimum": 1, "description": "File size in MB at which the log rotates." }
+        }
+      },
+      "configuredRoutes": {
+        "type": "object",
+        "description": "Static task-to-model mappings used in 'configured' mode. Keys are task identifiers, values are model identifiers (e.g. 'anthropic/claude-haiku-4-5').",
+        "additionalProperties": { "type": "string" }
+      },
+      "cheapHeuristic": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The simple cheapest-default (free tier). A DUMB, request-agnostic static preference: it never inspects the request, never consults a model registry/benchmark, and embeds no model names or prices. The deployment declares which of ITS models is the cheap default; the plugin just defaults to it (the user teaches real preferences via owner overrides). This is NOT the patented Intelligence selection engine.",
+        "properties": {
+          "default": { "type": "string", "description": "A single model ref to default to (e.g. 'anthropic/claude-haiku-4-5')." },
+          "order": { "type": "array", "items": { "type": "string" }, "description": "Cheapest-first ordered list of model refs the DEPLOYMENT declares; the plugin uses order[0]. The plugin does not compute relative cost — the ordering is the deployment's declaration." }
+        }
+      },
+      "intelligence": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Detection of an OPTIONAL, separately-licensed ToggleLogic Intelligence layer. Not included in this package; absent by default. When present and 'intelligence'/'auto' mode is active, the plugin defers model selection to it.",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true, "description": "Whether to attempt to detect a licensed intelligence layer at startup." },
+          "path": { "type": "string", "default": "~/togglelogic-intelligence", "description": "Filesystem path where a licensed intelligence layer would be installed. Tilde expansion supported." },
+          "registryPath": { "type": "string", "description": "Optional path to the licensed layer's normalized model registry. Config-driven (deployment DATA); when unset, defaults to a path relative to the layer (<path>/normalized.json). No workspace path is hardcoded. Tilde expansion supported." },
+          "fallbackOnError": { "type": "boolean", "default": true, "description": "If true, errors from the intelligence layer yield no override (OpenClaw falls back to its default selection)." }
+        }
+      },
+      "ownerOverride": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "User/owner model override (the override-learning mechanism). A top-priority sticky model applied ABOVE routing. GENERIC MECHANISM ONLY: the plugin READS a deployment-supplied state file per request and applies its value; it NEVER writes the file and holds no model values. The override's contents are deployment-supplied DATA (a deployment-side skill/CLI/UI sets and clears the file). Opt-in; default disabled.",
+        "properties": {
+          "enabled": { "type": "boolean", "default": false, "description": "Whether the routing hook checks for an active owner override before routing." },
+          "statePath": { "type": "string", "default": "~/.openclaw/togglelogic/owner_model_override.json", "description": "Path to the owner-override state file (JSON: {active, model_ref, provider_override?, ...}). Written by deployment tooling; read per request by this plugin. The plugin never writes it. Tilde expansion supported." },
+          "askConsumer": { "type": "string", "default": "~/.openclaw/togglelogic/owner_override_ask.py", "description": "Deployment-supplied consumer script invoked at turn-end when an override is active and the turn is substantive, so the deployment can prompt the owner to switch back. The plugin authors no prompt content. Used only when features.ownerOverrideAsk is enabled." }
+        }
+      },
+      "features": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Capability feature toggles. Each capability registers its hooks only when enabled.",
+        "properties": {
+          "routing": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Model routing (before_model_resolve hook). Opt-in; also requires the gateway's plugins.entries.togglelogic.hooks.allowConversationAccess.",
+            "properties": { "enabled": { "type": "boolean", "default": false, "description": "Whether to register the routing hook." } }
+          },
+          "ownerOverrideAsk": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Owner-override switch-back notifier (message_sending). Structurally invokes the deployment-supplied consumer so the owner can be prompted to switch back to the default. Opt-in; default off.",
+            "properties": { "enabled": { "type": "boolean", "default": false, "description": "Whether to register the owner-override turn-end notifier." } }
+          }
+        }
+      },
+      "audit": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Structured audit log of consequential plugin actions (NIST 800-53 AU-2/AU-3/AU-12 schema bar). JSONL, append-only, rotated by size. Independent of the routing log.",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true, "description": "Whether to write the audit log." },
+          "path": { "type": "string", "default": "~/.openclaw/logs/togglelogic-audit.jsonl", "description": "Audit log path. Tilde expansion supported." },
+          "rotateSizeMb": { "type": "integer", "default": 50, "minimum": 1, "description": "File size in MB at which the audit log rotates." }
+        }
+      }
+    }
+  }
+}

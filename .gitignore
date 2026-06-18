@@ -1,0 +1,9 @@
+# togglelogic — runtime/local artifacts (never the plugin source)
+node_modules/
+*.log
+*.jsonl
+.env
+.env.*
+.DS_Store
+*.tmp
+*.bak*

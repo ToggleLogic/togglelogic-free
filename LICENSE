@@ -1,0 +1,173 @@
+ToggleLogic Free-Tier License — Version 1.0 / Effective: 2026-06-18
+===================================================================
+
+Copyright (c) 2026 Motherboard, Inc. All rights reserved.
+Contact: https://bymotherboard.com/contact
+
+PATENT PENDING. This Software and the methods it relates to are the subject of
+one or more pending U.S. provisional patent applications owned by Motherboard,
+Inc. No patent rights are granted except the narrow, revocable use right in
+Section 2.
+
+----------------------------------------------------------------------------
+
+0. DEFINITIONS
+   "Licensor" — Motherboard, Inc.
+   "Software" — this ToggleLogic Free-Tier package (the plugin source files in
+       this distribution) and any updates Licensor distributes under this license.
+   "Intelligence Layer" — Motherboard's separately-licensed "ToggleLogic
+       Intelligence" components (including the Toggle Registry and the
+       benchmark-driven model-selection / Dynamic Model Determination engine).
+       The Intelligence Layer is NOT part of the Software and is NOT licensed
+       by this license.
+   "You" — the individual or entity exercising rights under this license.
+
+1. NATURE OF THIS LICENSE
+   This is a SOURCE-AVAILABLE license, not an open-source license. It is not MIT,
+   Apache, BSD, or any OSI-approved license, and must not be represented as such.
+   Licensor grants only the limited, revocable rights stated below and RESERVES
+   ALL OTHER RIGHTS.
+
+2. GRANT (limited, revocable — free for Your own use)
+   Subject to Your continuous compliance with this license, Licensor grants You a
+   personal, non-exclusive, non-transferable, non-sublicensable, worldwide,
+   royalty-free, and REVOCABLE license, for the Term, to:
+     (a) install and run the Software with OpenClaw for Your OWN use — whether
+         personal, hobbyist, or internal business operations. Using the Software to
+         help run Your own business is Your own use and owes no fee; the end user who
+         runs the Software always runs it free. (Offering the Software or its
+         functionality to others for a fee is not "Your own use" — see Section 3.)
+     (b) view and modify the Software's source for Your own internal use with the
+         Software.
+   To the limited extent necessary to exercise (a)-(b), Licensor grants a
+   correspondingly limited, revocable patent license to use the Software AS
+   DISTRIBUTED by Licensor. No other patent license is granted.
+
+3. COMMERCIAL LICENSE AND RESTRICTIONS (no rights beyond Section 2)
+   The free grant in Section 2 covers Your OWN use only. The line is USE vs. SELL:
+   using the Software (even to run Your own business) is free; SELLING something that
+   includes or uses the Software requires a separate commercial license. Items (a)-(b)
+   below are NOT prohibited — they require a commercial license, which Licensor invites
+   You to request. Items (c)-(e) are flat restrictions.
+
+   Without a separate commercial license from Licensor, You may not:
+     (a) redistribute, resell, sublicense, or rent the Software (or a derivative);
+         embed or bundle it within a product or service that You offer to others for a
+         fee; or host or offer the Software's functionality to others as a service. The
+         trigger is SELLING something that includes or uses the Software — not using
+         the Software for Your own operations.
+     (b) otherwise productize or monetize the Software for the benefit of third
+         parties for a fee. (Using the Software to run Your own business is NOT this —
+         that is free own-use under Section 2, and the end user who merely runs the
+         Software owes nothing.)
+
+   Without Licensor's prior written permission, You also may not:
+     (c) reimplement, reconstruct, or work around the Intelligence Layer or the
+         patented Dynamic Model Determination method;
+     (d) remove, alter, or obscure any copyright, patent-pending, license, or
+         attribution notice; or
+     (e) represent the Software as open-source or as licensed under any other terms.
+
+   Commercial license: commercial use is welcome under a separate license — this is an
+   invitation, not a barrier. Contact: https://bymotherboard.com/contact.
+
+4. RESERVATION OF RIGHTS
+   All right, title, and interest in the Software, the Intelligence Layer, the
+   ToggleLogic name and marks, and all related patents (including pending
+   applications), copyrights, and trade secrets remain with Licensor. This
+   license grants no ownership and no rights by implication or estoppel.
+
+5. REVOCATION, TERM, AND WITHDRAWAL
+   (a) Licensor may REVOKE or terminate this license, in whole or in part, as to
+       any person or entity, AT ANY TIME, with or without cause — including for
+       misuse, breach of this license, breach of Licensor's published policies,
+       or competitive use.
+   (b) This license terminates automatically upon any breach.
+   (c) Licensor may WITHDRAW the Software from any distribution channel (including
+       ClawHub) at any time. Withdrawal does not grant continuing rights.
+   (d) The Term runs until revocation or termination, and Licensor may publish a
+       fixed or maximum term for any release.
+   (e) On revocation or termination You must immediately cease all use and destroy
+       all copies in Your possession or control. Sections 3, 4, 6, 7, 8, 11, and 12
+       survive.
+
+6. POLICY COMPLIANCE
+   Use is conditioned on compliance with Licensor's then-current published
+   ToggleLogic acceptable-use and distribution policies (at togglelogic.ai or as
+   otherwise published). Licensor may update those policies; continued use after
+   an update is acceptance.
+
+7. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE,
+   AND NON-INFRINGEMENT.
+
+8. LIMITATION OF LIABILITY
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, LICENSOR WILL NOT BE LIABLE FOR ANY
+   INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR EXEMPLARY DAMAGES, OR FOR LOST
+   PROFITS OR DATA, ARISING FROM OR RELATING TO THE SOFTWARE OR THIS LICENSE.
+
+9. MODIFICATION AND CONTRIBUTIONS
+   These terms sit ON TOP of this license and do not loosen any restriction in
+   Section 3; in particular, the commercial trigger in Section 3 applies equally to
+   modified versions (derivatives).
+   (a) Fork and modify for Your own use. You MAY fork and modify the Software for Your
+       OWN use, consistent with the own-use grant in Section 2. A modified version
+       remains subject to this entire license. Reselling, redistributing, sublicensing,
+       embedding in a product or service offered to others for a fee, or hosting a
+       modified version as a service to others STILL requires a separate commercial
+       license under Section 3.
+   (b) Notice of modification (curable breach). You MUST notify Licensor of any
+       modification You make to the Software (via https://bymotherboard.com/contact).
+       Failure to notify is a breach of this license, but a CURABLE one: it does not
+       terminate Your license unless You fail to cure it within thirty (30) days after
+       Licensor gives You written notice of the failure. (Licensor wants visibility into
+       modifications; it does not seek to terminate a good-faith developer who has
+       simply not yet given notice.)
+   (c) Contributions for consideration. You MAY submit a modification to Licensor as a
+       CONTRIBUTION for Licensor's consideration. Licensor is under NO obligation to
+       review, accept, or merge any contribution. If Licensor accepts or merges a
+       contribution, You hereby ASSIGN to Licensor all right, title, and interest in
+       that submitted and accepted contribution, and Licensor OWNS it. No contribution
+       is made public unless and until Licensor has reviewed it and elects to publish it.
+   (d) Patent scope of a modification. The patent license in Section 2 covers ONLY the
+       Software AS DISTRIBUTED by Licensor. A modified version You create is Your own
+       work and falls OUTSIDE that patent grant; Licensor grants no patent rights in or
+       to Your modifications.
+
+10. GOVERNING LAW; DISPUTE RESOLUTION
+   (a) Governing law. This license is governed by the laws of the State of Wyoming,
+       without regard to its conflict-of-laws rules.
+   (b) Binding Arbitration. Either party may elect to resolve any dispute, claim, or
+       controversy arising out of or relating to this License through final and binding
+       arbitration administered by the American Arbitration Association under its
+       Commercial Arbitration Rules then in effect. The seat and location of arbitration
+       shall be Geauga County, Ohio. The arbitrator, and not any court, shall have
+       exclusive authority to resolve any dispute relating to the interpretation,
+       enforceability, formation, scope, or applicability of this arbitration agreement,
+       including any claim that all or part of it is void or voidable (the "delegation"
+       provision). Judgment on the award may be entered in any court of competent
+       jurisdiction. The parties waive any right to have such disputes resolved by a
+       court or jury, except that either party may seek injunctive or equitable relief in
+       a court of competent jurisdiction to protect intellectual property or confidential
+       information pending arbitration.
+
+11. NO RELIANCE
+   This License is a revocable permission, not a promise, contract for future
+   performance, or guarantee of continued availability. You acknowledge that
+   You place no reliance on any continued grant of rights hereunder, that no rights
+   vest by use or duration of use, and that Licensor may modify or revoke this
+   License at any time, with or without cause, in its sole discretion. You
+   assume all risk arising from Your use of and any investment in the Software, and
+   waive any claim of detrimental reliance, promissory estoppel, or implied license
+   arising from this grant or Licensor's conduct.
+
+12. NO WAIVER
+   No failure or delay by Licensor in exercising any right under this License, and
+   no pattern of non-enforcement against any party, shall operate as a waiver of
+   that right or of any breach, whether against the same or any other party. Any
+   waiver must be in a writing signed by Licensor and is limited to the specific
+   instance stated.
+
+----------------------------------------------------------------------------
+END OF LICENSE — ToggleLogic Free-Tier License, Version 1.0 (Effective 2026-06-18).
