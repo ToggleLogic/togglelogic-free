@@ -21,7 +21,15 @@
 .git
 .gitignore
 **/*.bak*
+LICENSE.bak-*
+LICENSE.*.bak
 **/.DS_Store
+
+# CAVEAT (2026-06-18): npm/clawhub FORCE-INCLUDE any file whose name starts with
+# LICENSE / README / NOTICE / COPYING / CHANGELOG — ignoring this .npmignore AND
+# package.json "files". A LICENSE-prefixed backup (e.g. LICENSE.bak-*) WILL still be
+# packed despite the rules above. Reliable defense: do NOT keep LICENSE-prefixed
+# backups in the package dir — back them up elsewhere or rename without a LICENSE prefix.
 **/__pycache__/**
 **/*.test.js
 test/**
