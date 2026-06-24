@@ -18,8 +18,9 @@
  *   requestId          — opaque correlation id, monotonically increasing
  *   timestamp          — ISO8601 of decision start
  *   pluginVersion      — e.g. "0.3.0-alpha.1"
- *   requestedModel     — null in alpha.1 (not in event shape; v0.4 work)
- *   requestedProvider  — null in alpha.1 (same)
+ *   requestedModel     — OpenClaw's selected model before ToggleLogic routing, when supplied
+ *   requestedProvider  — OpenClaw's selected provider before ToggleLogic routing, when supplied
+ *   modelOverrideSource — "user" | "auto" | null; provenance for the requested model
  *   capabilityNeeds    — derived heuristically from event (e.g. ["vision"])
  *   selectedModel      — model emitted as override, or null
  *   selectedProvider   — provider emitted as override, or null
@@ -37,13 +38,18 @@
 
 let counter = 0;
 
-export function newDecision({ event, mode, version }) {
+export function newDecision({ event, hookContext, mode, version }) {
   return {
     requestId: generateRequestId(),
     timestamp: new Date().toISOString(),
     pluginVersion: version,
-    requestedModel: null,
-    requestedProvider: null,
+    requestedModel: normalizeOptionalString(event?.requestedModel ?? hookContext?.modelId),
+    requestedProvider: normalizeOptionalString(
+      event?.requestedProvider ?? hookContext?.modelProviderId
+    ),
+    modelOverrideSource: normalizeOptionalString(
+      event?.modelOverrideSource ?? hookContext?.modelOverrideSource
+    ),
     capabilityNeeds: deriveCapabilityNeeds(event),
     selectedModel: null,
     selectedProvider: null,
@@ -59,6 +65,12 @@ export function finalizeDecision(decision) {
   decision.durationMs = Date.now() - decision._startedAt;
   delete decision._startedAt;
   return decision;
+}
+
+function normalizeOptionalString(value) {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
 }
 
 function deriveCapabilityNeeds(event) {

@@ -67,6 +67,7 @@ export const CAPABILITIES = [
       const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, hostRuntimeConfig);
       const interceptor = createInterceptor({
         config,
+        hostConfig: api && api.config,
         logger: routingLogger,
         seam,
         version,

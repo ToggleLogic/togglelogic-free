@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Free-tier model routing for OpenClaw: apply your sticky model overrides, static routes, and a simple cheapest-default — with a structured audit stream. Bring your own provider credentials, declare intent, and the plugin handles selection; no benchmark engine or model registry is included. PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
   "license": "LicenseRef-ToggleLogic-Free-Tier",
   "activation": {

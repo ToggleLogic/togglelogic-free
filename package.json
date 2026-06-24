@@ -1,6 +1,6 @@
 {
   "name": "togglelogic",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Free-tier model routing for OpenClaw — sticky owner overrides, static routes, a deliberately-simple cheapest-default, and a structured audit stream. Bring your own provider credentials; no benchmark engine or model registry included. PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer adds benchmark-driven automatic selection.",
   "type": "module",
   "main": "src/index.js",
@@ -27,15 +27,15 @@
     "src/",
     "openclaw.plugin.json",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "peerDependencies": {
     "openclaw": "*"
   },
   "openclaw": {
-    "bundle": { "stageRuntimeDependencies": true },
     "extensions": ["./src/index.js"],
-    "install": { "minHostVersion": ">=2026.4.25" },
+    "install": { "minHostVersion": ">=2026.6.5" },
     "compat": { "pluginApi": ">=2026.5.2" },
     "build": { "openclawVersion": "2026.6.5" }
   }
