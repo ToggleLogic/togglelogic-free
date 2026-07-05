@@ -1,6 +1,6 @@
 {
   "name": "togglelogic",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Free-tier model routing for OpenClaw — sticky owner overrides, static routes, a deliberately-simple cheapest-default, and a structured audit stream. Bring your own provider credentials; no benchmark engine or model registry included. PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer adds benchmark-driven automatic selection.",
   "type": "module",
   "main": "src/index.js",
@@ -10,7 +10,7 @@
   "homepage": "https://togglelogic.ai/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alharlow111/togglelogic-free.git"
+    "url": "git+https://github.com/ToggleLogic/togglelogic-free.git"
   },
   "bugs": { "url": "https://togglelogic.ai/" },
   "keywords": [
@@ -21,7 +21,11 @@
     "llm",
     "ai-gateway",
     "patent-pending",
-    "togglelogic"
+    "togglelogic",
+    "cost-optimization",
+    "model-selection",
+    "fallback",
+    "orchestration"
   ],
   "files": [
     "src/",
