@@ -17,6 +17,9 @@ free tier gives you:
   default; the plugin defaults to it unless an override or route says otherwise.
 - **A structured audit stream** of every routing decision (NIST 800-53 AU-2/AU-3/AU-12
   schema bar).
+- **Cost visibility (dollars) — observe-only.** See what your calls cost, per model and
+  per day, priced from live public data. Unpriced models are shown loudly, never a silent
+  $0.00. Opt-in; reports only, never enforces. (See [Cost visibility](#cost-visibility-dollars).)
 
 It does **not** include — and never ships — the patented **ToggleLogic Intelligence**
 engine (benchmark-driven automatic model selection) or the **Toggle Registry**. The
@@ -64,11 +67,37 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
 
 Owner overrides apply **above** the mode in all cases.
 
+## Cost visibility (dollars)
+
+Opt-in `features.costVisibility` observes each model call (the `llm_output` hook,
+**observe-only**) and reports **per-model and per-day dollar cost** to its own log
+(`~/.openclaw/logs/togglelogic-cost.jsonl`). Prices are **dynamic and public** — fetched
+live from [Models.dev](https://models.dev) (MIT), cached locally and refreshed daily
+(never per call, and **never from any ToggleLogic/Motherboard endpoint**), with a
+**bundled LiteLLM snapshot** (MIT) as an offline fallback. It is **curated** to the major
+providers' standard lineups (Anthropic, OpenAI, Google, xAI, Meta); anything else is
+reported **loudly as unpriced** — model + token count — and never as a false $0.00. It
+**never blocks, halts, or downgrades** a call. Enforcement and all-model /
+guaranteed-current pricing are the paid tier.
+
+Enable it (also requires `hooks.allowConversationAccess`, since `llm_output` is a
+conversation hook):
+
+```json
+{
+  "plugins": { "entries": { "togglelogic": {
+    "enabled": true,
+    "hooks": { "allowConversationAccess": true },
+    "config": { "features": { "costVisibility": { "enabled": true } } }
+  } } }
+}
+```
+
 ## Config reference
 
 See `openclaw.plugin.json` `configSchema` for every field: `mode`, `logging`,
 `configuredRoutes`, `cheapHeuristic`, `intelligence`, `ownerOverride`, `features`,
-`audit`.
+`audit`, `costVisibility`.
 
 ## License
 

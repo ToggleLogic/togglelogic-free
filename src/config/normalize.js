@@ -35,6 +35,7 @@ export const DEFAULTS = Object.freeze({
   features: Object.freeze({
     routing: Object.freeze({ enabled: false }),
     ownerOverrideAsk: Object.freeze({ enabled: false }),
+    costVisibility: Object.freeze({ enabled: false }),
   }),
   audit: Object.freeze({
     enabled: true,
@@ -48,6 +49,20 @@ export const DEFAULTS = Object.freeze({
     enabled: false,
     statePath: "~/.openclaw/togglelogic/owner_model_override.json",
     askConsumer: "~/.openclaw/togglelogic/owner_override_ask.py",
+  }),
+  // Cost visibility (observe-only): per-model / per-day DOLLAR cost from dynamic
+  // public pricing (Models.dev primary, bundled LiteLLM fallback). Curated to the
+  // free-tier providers; unpriced-loud, never $0.00. Reports only — never enforces.
+  costVisibility: Object.freeze({
+    log: Object.freeze({ enabled: true, path: "~/.openclaw/logs/togglelogic-cost.jsonl", rotateSizeMb: 50 }),
+    pricing: Object.freeze({
+      sourceUrl: "https://models.dev/api.json",
+      cachePath: "~/.openclaw/togglelogic/pricing-cache.json",
+      refreshHours: 24,
+      timeoutMs: 15000,
+      userPriceOverridePath: "",
+    }),
+    summaryEveryCalls: 20,
   }),
 });
 
@@ -91,6 +106,7 @@ export function normalizeConfig(raw) {
     features: {
       routing: normalizeFeatureEntry(features.routing, DEFAULTS.features.routing),
       ownerOverrideAsk: normalizeFeatureEntry(features.ownerOverrideAsk, DEFAULTS.features.ownerOverrideAsk),
+      costVisibility: normalizeFeatureEntry(features.costVisibility, DEFAULTS.features.costVisibility),
     },
     audit: {
       enabled: audit.enabled !== false,
@@ -104,6 +120,48 @@ export function normalizeConfig(raw) {
           : DEFAULTS.audit.rotateSizeMb,
     },
     ownerOverride: normalizeOwnerOverrideEntry(r.ownerOverride),
+    costVisibility: normalizeCostVisibility(r.costVisibility),
+  };
+}
+
+function normalizeCostVisibility(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const log = r.log && typeof r.log === "object" ? r.log : {};
+  const pricing = r.pricing && typeof r.pricing === "object" ? r.pricing : {};
+  const D = DEFAULTS.costVisibility;
+  return {
+    log: {
+      enabled: log.enabled !== false,
+      path: typeof log.path === "string" && log.path.length > 0 ? log.path : D.log.path,
+      rotateSizeMb:
+        Number.isFinite(log.rotateSizeMb) && log.rotateSizeMb >= 1
+          ? Math.floor(log.rotateSizeMb)
+          : D.log.rotateSizeMb,
+    },
+    pricing: {
+      sourceUrl:
+        typeof pricing.sourceUrl === "string" && pricing.sourceUrl.length > 0
+          ? pricing.sourceUrl
+          : D.pricing.sourceUrl,
+      cachePath:
+        typeof pricing.cachePath === "string" && pricing.cachePath.length > 0
+          ? pricing.cachePath
+          : D.pricing.cachePath,
+      refreshHours:
+        Number.isFinite(pricing.refreshHours) && pricing.refreshHours >= 1
+          ? pricing.refreshHours
+          : D.pricing.refreshHours,
+      timeoutMs:
+        Number.isFinite(pricing.timeoutMs) && pricing.timeoutMs >= 1000
+          ? Math.floor(pricing.timeoutMs)
+          : D.pricing.timeoutMs,
+      userPriceOverridePath:
+        typeof pricing.userPriceOverridePath === "string" ? pricing.userPriceOverridePath : "",
+    },
+    summaryEveryCalls:
+      Number.isFinite(r.summaryEveryCalls) && r.summaryEveryCalls >= 1
+        ? Math.floor(r.summaryEveryCalls)
+        : D.summaryEveryCalls,
   };
 }
 

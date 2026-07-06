@@ -5,17 +5,20 @@
  * PATENT PENDING. The benchmark Intelligence engine + Toggle Registry are NOT
  * in this package.
  *
- * Free-tier capabilities only: routing (static/intent + simple cheap default +
- * lazy-detection seam) and ownerOverrideAsk (the user-override notifier). The
- * paid and deployment-internal capabilities (per-message dispatch, usage metering,
- * turn-end memory capture, credential/db-write gates) are not part of this
- * package.
+ * Free-tier capabilities: routing (static/intent + simple cheap default +
+ * lazy-detection seam), ownerOverrideAsk (the user-override notifier), and
+ * costVisibility (observe-only per-model/per-day DOLLAR cost from dynamic public
+ * pricing, curated to the major providers; unpriced-loud, never $0.00). Paid /
+ * deployment-internal capabilities remain out of this package: spend ENFORCEMENT
+ * (budget-blocking), all-model + guaranteed-current registry pricing, per-message
+ * dispatch, turn-end memory capture, and credential/db-write gates.
  */
 
 import { createInterceptor } from "./routing/interceptor.js";
 import { createIntelligenceSeam } from "./intelligence/seam.js";
 import { createLogger as createRoutingLogger } from "./observability/logger.js";
 import { createOwnerOverrideAskHandler } from "./capture/owner-override-ask.js";
+import { createCostObserver } from "./usage/cost-observer.js";
 
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 
@@ -115,6 +118,30 @@ export const CAPABILITIES = [
       const handler = createOwnerOverrideAskHandler({ config, fallbackLogger });
       api.on("message_sending", handler);
       return { hooks: ["message_sending"] };
+    },
+  },
+  {
+    id: "costVisibility",
+    // Opt-in. Operators set features.costVisibility.enabled = true AND the
+    // gateway's plugins.entries.togglelogic.hooks.allowConversationAccess (the
+    // llm_output hook is a conversation hook). Observe-only: it reports dollar
+    // cost, it can never block/halt/downgrade a call.
+    defaultEnabled: false,
+    description:
+      "Cost visibility: observes the llm_output hook (OBSERVE-ONLY) and reports " +
+      "per-model / per-day DOLLAR cost from dynamic public pricing (Models.dev, " +
+      "MIT; bundled LiteLLM fallback when offline). Curated to the free-tier " +
+      "providers (Anthropic/OpenAI/Google/xAI/Meta); anything else is reported " +
+      "LOUDLY as unpriced — never a silent $0.00. Reports only; never enforces.",
+    register({ api, audit, fallbackLogger, config }) {
+      const observer = createCostObserver({ config, fallbackLogger });
+      api.on("llm_output", observer.handler);
+      observer.warm(); // prefetch pricing once at startup (no per-call fetch)
+      return {
+        hooks: ["llm_output"],
+        pricingSource: (config.costVisibility && config.costVisibility.pricing.sourceUrl) || "models.dev",
+        costLog: observer.logPath,
+      };
     },
   },
 ];

@@ -1,8 +1,8 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.0.2",
-  "description": "Free-tier model routing for OpenClaw: apply your sticky model overrides, static routes, and a simple cheapest-default — with a structured audit stream. Bring your own provider credentials, declare intent, and the plugin handles selection; no benchmark engine or model registry is included. PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
+  "version": "1.0.3",
+  "description": "Free-tier model routing for OpenClaw: apply your sticky model overrides, static routes, and a simple cheapest-default — with a structured audit stream. Bring your own provider credentials, declare intent, and the plugin handles selection; no benchmark engine or model registry is included. Optional cost visibility reports per-model dollar cost from dynamic public pricing (observe-only; curated free-tier providers; unpriced-loud, never a false $0.00). PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
   "license": "LicenseRef-ToggleLogic-Free-Tier",
   "categories": ["model-routing", "cost-optimization"],
   "activation": {
@@ -79,6 +79,12 @@
             "additionalProperties": false,
             "description": "Owner-override switch-back notifier (message_sending). Structurally invokes the deployment-supplied consumer so the owner can be prompted to switch back to the default. Opt-in; default off.",
             "properties": { "enabled": { "type": "boolean", "default": false, "description": "Whether to register the owner-override turn-end notifier." } }
+          },
+          "costVisibility": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Cost visibility (llm_output observe-only). Reports per-model/per-day DOLLAR cost from dynamic public pricing; unpriced-loud, never $0.00; never enforces. Opt-in; default off. Also requires the gateway's plugins.entries.togglelogic.hooks.allowConversationAccess (llm_output is a conversation hook).",
+            "properties": { "enabled": { "type": "boolean", "default": false, "description": "Whether to register the cost-visibility observer." } }
           }
         }
       },
@@ -90,6 +96,36 @@
           "enabled": { "type": "boolean", "default": true, "description": "Whether to write the audit log." },
           "path": { "type": "string", "default": "~/.openclaw/logs/togglelogic-audit.jsonl", "description": "Audit log path. Tilde expansion supported." },
           "rotateSizeMb": { "type": "integer", "default": 50, "minimum": 1, "description": "File size in MB at which the audit log rotates." }
+        }
+      },
+      "costVisibility": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Cost-visibility settings (used when features.costVisibility.enabled). Observe-only; reports per-model/per-day dollar cost from dynamic public pricing. Never enforces.",
+        "properties": {
+          "log": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "The plugin's own cost log (JSONL, one row per call plus periodic loud summaries). Independent of the routing/audit logs.",
+            "properties": {
+              "enabled": { "type": "boolean", "default": true, "description": "Whether to write the cost log." },
+              "path": { "type": "string", "default": "~/.openclaw/logs/togglelogic-cost.jsonl", "description": "Cost log path. Tilde expansion supported." },
+              "rotateSizeMb": { "type": "integer", "default": 50, "minimum": 1, "description": "File size in MB at which the cost log rotates." }
+            }
+          },
+          "pricing": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Dynamic public pricing. Fetched with a browser-like User-Agent, cached locally, refreshed on a slow cadence — never per-call, never from any Motherboard endpoint. Falls back to a bundled LiteLLM snapshot (MIT) when the source is unreachable.",
+            "properties": {
+              "sourceUrl": { "type": "string", "default": "https://models.dev/api.json", "description": "Public pricing source (Models.dev api.json; MIT, USD per million tokens)." },
+              "cachePath": { "type": "string", "default": "~/.openclaw/togglelogic/pricing-cache.json", "description": "Local cache path for fetched pricing. Tilde expansion supported." },
+              "refreshHours": { "type": "integer", "default": 24, "minimum": 1, "description": "How often to re-fetch pricing (hours)." },
+              "timeoutMs": { "type": "integer", "default": 15000, "minimum": 1000, "description": "Fetch timeout in milliseconds." },
+              "userPriceOverridePath": { "type": "string", "default": "", "description": "Optional deployment-supplied price map (DATA) taking highest priority. Tilde expansion supported. The plugin never writes it." }
+            }
+          },
+          "summaryEveryCalls": { "type": "integer", "default": 20, "minimum": 1, "description": "Emit a loud day-summary line to the cost log every N observed calls." }
         }
       }
     }

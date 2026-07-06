@@ -2,6 +2,24 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.0.3 — 2026-07-06
+
+Adds an opt-in **cost-visibility** capability. **Routing behavior is unchanged from 1.0.2.**
+
+### Added
+- **See what your calls cost, in dollars.** A new opt-in capability observes each model call (the `llm_output` hook, observe-only) and reports per-model and per-day dollar cost, using **dynamic public pricing** fetched live from [Models.dev](https://models.dev) — cached locally, refreshed on a slow cadence, never fetched per call. Curated to the major providers' standard lineups (Anthropic, OpenAI, Google, xAI, Meta).
+- **Bundled offline fallback.** If the live pricing source is unreachable, pricing degrades to a bundled LiteLLM snapshot (MIT) — last-known-good, not a crash and not $0.00.
+
+### Changed
+- **Unpriced usage is loud, never a silent $0.00.** Any model the curated free-tier set can't price is reported explicitly as *unpriced* (model + token count, shown separately) and is never rolled into the dollar total as $0.00. Priced and unpriced always appear together.
+
+### Safety
+- **Observe-only. Never enforces.** Cost visibility reports; it never blocks, halts, or downgrades a call. Spend enforcement and all-model / guaranteed-current pricing remain the paid tier.
+- **No callback to us.** Pricing is fetched directly from the public source; the plugin never contacts any ToggleLogic/Motherboard endpoint for pricing.
+
+### Compatibility
+- The cost observer requires the gateway's `plugins.entries.togglelogic.hooks.allowConversationAccess` (the `llm_output` hook is a conversation hook). Supported OpenClaw unchanged from 1.0.2.
+
 ## 1.0.2 — 2026-07-05
 
 Metadata and compatibility release. **Routing behavior is unchanged from 1.0.1.**
