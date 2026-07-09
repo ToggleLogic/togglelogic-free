@@ -2,7 +2,7 @@
   "id": "togglelogic",
   "name": "ToggleLogic",
   "version": "1.0.3",
-  "description": "Free-tier model routing for OpenClaw: apply your sticky model overrides, static routes, and a simple cheapest-default — with a structured audit stream. Bring your own provider credentials, declare intent, and the plugin handles selection; no benchmark engine or model registry is included. Optional cost visibility reports per-model dollar cost from dynamic public pricing (observe-only; curated free-tier providers; unpriced-loud, never a false $0.00). PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
+  "description": "Free-tier model routing for OpenClaw: apply static routes, a simple cheapest-default, and sticky model overrides that hold until you switch back...",
   "license": "LicenseRef-ToggleLogic-Free-Tier",
   "categories": ["model-routing", "cost-optimization"],
   "activation": {
@@ -56,7 +56,7 @@
       "ownerOverride": {
         "type": "object",
         "additionalProperties": false,
-        "description": "User/owner model override (the override-learning mechanism). A top-priority sticky model applied ABOVE routing. GENERIC MECHANISM ONLY: the plugin READS a deployment-supplied state file per request and applies its value; it NEVER writes the file and holds no model values. The override's contents are deployment-supplied DATA (a deployment-side skill/CLI/UI sets and clears the file). Opt-in; default disabled.",
+        "description": "User/owner model override (the pin mechanism). A top-priority sticky model applied ABOVE routing; pins persist across turns until manually cleared.",
         "properties": {
           "enabled": { "type": "boolean", "default": false, "description": "Whether the routing hook checks for an active owner override before routing." },
           "statePath": { "type": "string", "default": "~/.openclaw/togglelogic/owner_model_override.json", "description": "Path to the owner-override state file (JSON: {active, model_ref, provider_override?, ...}). Written by deployment tooling; read per request by this plugin. The plugin never writes it. Tilde expansion supported." },

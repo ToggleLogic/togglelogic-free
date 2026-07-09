@@ -8,10 +8,9 @@ ToggleLogic routes each OpenClaw request to a model you control — **bring your
 provider credentials, declare intent, and let the plugin apply your choices.** This
 free tier gives you:
 
-- **Owner overrides (sticky, learnable).** Tell your assistant "use Opus for this" and
-  a deployment-side switch writes a sticky override the plugin applies above everything
-  else — until you switch back. ToggleLogic is the generic mechanism; your deployment
-  owns the "remember it / prompt to switch back" workflow.
+- **Owner overrides (sticky, held).** Tell your assistant "use Opus for this" and the
+  deployment-side switch writes an override that persists across every subsequent request
+  — pins hold until you switch back.
 - **Static / intent routes.** Map tasks to models in `configuredRoutes`.
 - **A deliberately-simple cheapest-default.** Name the cheap model you want as the
   default; the plugin defaults to it unless an override or route says otherwise.
