@@ -2,6 +2,16 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.0.4 — 2026-07-09
+
+Patch release. **Routing and cost-visibility behavior are unchanged from 1.0.3.**
+
+### Fixed
+- **Complete manifest description.** Restores the full plugin description in `openclaw.plugin.json`, which was truncated in the 1.0.3 manifest. The published package and the ClawHub listing now carry the complete description — this corrects listing text only, with no routing, pricing, or behavior change.
+
+### Compatibility
+- Supported OpenClaw unchanged from 1.0.3.
+
 ## 1.0.3 — 2026-07-06
 
 Adds an opt-in **cost-visibility** capability. **Routing behavior is unchanged from 1.0.2.**
