@@ -66,6 +66,12 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
 
 Owner overrides apply **above** the mode in all cases.
 
+**Optional expiry.** An override may include `expires_at_ms` (a numeric epoch-ms deadline).
+After it passes, the override stops applying and routing returns to automatic — no file rewrite
+needed. Writers SHOULD set `expires_at_ms` so a forgotten override cannot hold forever; omit it
+only for a deliberately indefinite override. A present-but-non-numeric `expires_at_ms` is
+rejected (fail-closed) and logged to the audit stream.
+
 ## Cost visibility (dollars)
 
 Opt-in `features.costVisibility` observes each model call (the `llm_output` hook,

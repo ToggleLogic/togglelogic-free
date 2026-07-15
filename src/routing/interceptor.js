@@ -112,6 +112,23 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     // read a configured file and apply its value (deployment-supplied DATA; see
     // owner-override.js). resolveOwnerOverride is fail-open and never throws.
     const owner = resolveOwnerOverride(config.ownerOverride);
+    if (owner.rejected) {
+      // 1.0.5: malformed owner-override TTL → FAIL-CLOSED rejection. Emit a LOUD,
+      // structured audit event (the plugin's reliable sink; plugin console output
+      // is not captured by the host). owner-override.js returns this once per
+      // malformed file version, so this fires once — not per request.
+      _emit(audit, EVENTS.ROUTING_DECISION, {
+        outcome: OUTCOMES.FAILURE,
+        principal: { source: "owner" },
+        subject: { hook: "before_model_resolve" },
+        details: {
+          mode: "owner_override_rejected",
+          rejected: owner.rejected,
+          expires_at_ms_raw: owner.expiresRaw,
+          note: "owner override REJECTED (fail-closed): expires_at_ms is present but not a finite number; routing via classifier.",
+        },
+      });
+    }
     if (owner.applied) {
       override = {
         modelOverride: owner.modelOverride,

@@ -2,6 +2,21 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.0.5 — 2026-07-15
+
+Patch release. **Routing behavior is unchanged except for owner-override TTL enforcement.**
+
+### Added
+- **Optional owner-override expiry (`expires_at_ms`).** An owner-override state file MAY carry a numeric `expires_at_ms` (epoch milliseconds). Once that deadline passes the override stops applying and routing returns to automatic selection — no file rewrite required. Overrides with **no** `expires_at_ms` behave exactly as before (they hold until cleared).
+
+### Fixed
+- **Expired overrides are no longer honored.** An override with a past `expires_at_ms` is now rejected (Codex audit finding); previously it was still applied.
+- **Malformed `expires_at_ms` fails closed.** If the field is present but not a finite number, the override is rejected and a structured audit event (`routing.decision`, outcome `failure`, `owner_override_rejected`) is emitted — never silently honored.
+- **Plugin version string corrected.** `PLUGIN_VERSION` was stale at `1.0.3`; it now matches the package version.
+
+### Compatibility
+- Supported OpenClaw unchanged from 1.0.4.
+
 ## 1.0.4 — 2026-07-09
 
 Patch release. **Routing and cost-visibility behavior are unchanged from 1.0.3.**
