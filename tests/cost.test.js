@@ -79,7 +79,11 @@ test("resolve: every proof-bar ref resolves to the right dollar price", async ()
   }
 });
 
-test("loud-fail: non-curated and curated-but-absent are unpriced, never $0.00", async () => {
+// Calculator-level half of the guarantee: costUsd() returns null (never 0) for an
+// unpriced model. The WHOLE guarantee (incl. priced-but-usage-missing) is asserted by
+// "guarantee: priced + missing/non-finite usage is LOUD" below — this test no longer
+// carries the full-guarantee name while checking only one half of it.
+test("costUsd calculator: unpriced (non-curated / curated-but-absent) yields null, never 0", async () => {
   const p = pricingFrom(MODELSDEV);
   const nonCurated = await p.resolve("deepseek/deepseek-v3");
   assert.equal(nonCurated.curated, false);
@@ -158,4 +162,65 @@ test("config: costVisibility defaults + feature toggle normalize", () => {
   const c2 = normalizeConfig({ features: { costVisibility: { enabled: true } }, costVisibility: { pricing: { refreshHours: 6 } } });
   assert.equal(c2.features.costVisibility.enabled, true);
   assert.equal(c2.costVisibility.pricing.refreshHours, 6);
+});
+
+// The guarantee is "unpriced-loud, never a false $0.00" — and a PRICED model whose
+// usage is absent or non-finite is exactly a false $0.00 waiting to happen: the price
+// exists, so the old code took the priced branch and wrote costUsd:0.00. Three outcomes
+// must be DISTINGUISHABLE, not two: real cost / priced-but-usage-missing (loud) / unpriced
+// (loud). This test FAILS at 860a672 (writes costUsd:0 for missing usage) and PASSES after.
+test("guarantee: priced + missing/non-finite usage is LOUD (never a false $0.00)", async () => {
+  const events = [];
+  // Mirror the real per-million formula so the HANDLER's usage gate is exercised, not a
+  // stub: a priced model with real usage yields a real number; the handler must still
+  // refuse to emit it as costUsd when usage is absent/non-finite.
+  const realCostUsd = (p, u) => {
+    const n = (x) => (Number.isFinite(Number(x)) ? Number(x) : 0);
+    return ((n(u?.input) + n(u?.cacheRead) + n(u?.cacheWrite)) * (p.inputPerM ?? 0) + n(u?.output) * (p.outputPerM ?? 0)) / 1e6;
+  };
+  const pricedObs = () => createCostObserver({
+    config: normalizeConfig({ costVisibility: { log: { enabled: false } } }),
+    fallbackLogger: { warn() {} },
+    deps: {
+      logger: { write: async (r) => events.push(r), path: "(none)" },
+      pricing: {
+        resolve: async () => ({ provider: "anthropic", curated: true, priced: true, inputPerM: 5, outputPerM: 25, source: "test" }),
+        costUsd: realCostUsd, ensureIndex: async () => {},
+      },
+      now: () => 1_800_000_000_000,
+    },
+  });
+  const base = { provider: "anthropic", model: "claude-opus-4-7", resolvedRef: "anthropic/claude-opus-4-7" };
+
+  // 1) priced + usage PRESENT -> the real dollar figure (1000*5 + 500*25)/1e6 = 0.0175
+  await pricedObs().handler({ ...base, usage: { input: 1000, output: 500 } });
+  assert.equal(events.at(-1).costUsd, 0.0175, "priced+present must record the real cost");
+
+  // 2) priced + usage MISSING (no usage object) -> LOUD, NO numeric costUsd
+  await pricedObs().handler({ ...base });
+  let row = events.at(-1);
+  assert.equal(row.costUsd, undefined, "priced+missing-usage must NOT record a numeric cost (was 0.00)");
+  assert.equal(row.usageMissing, true);
+  assert.equal(row.reason, "priced-but-usage-missing");
+
+  // 3) priced + usage NON-FINITE -> LOUD, NO numeric costUsd
+  await pricedObs().handler({ ...base, usage: { input: "x", output: NaN } });
+  row = events.at(-1);
+  assert.equal(row.costUsd, undefined, "priced+non-finite-usage must NOT record a numeric cost");
+  assert.equal(row.reason, "priced-but-usage-missing");
+
+  // 4) UNPRICED -> LOUD (existing half of the guarantee), NO numeric costUsd
+  const unpricedObs = createCostObserver({
+    config: normalizeConfig({ costVisibility: { log: { enabled: false } } }),
+    fallbackLogger: { warn() {} },
+    deps: {
+      logger: { write: async (r) => events.push(r), path: "(none)" },
+      pricing: { resolve: async () => ({ provider: "mistral", curated: false, priced: false }), costUsd: () => null, ensureIndex: async () => {} },
+      now: () => 1_800_000_000_000,
+    },
+  });
+  await unpricedObs.handler({ provider: "mistral", model: "mistral-large", resolvedRef: "mistral/mistral-large", usage: { input: 1000, output: 500 } });
+  row = events.at(-1);
+  assert.equal(row.costUsd, undefined, "unpriced must NOT record a numeric cost");
+  assert.equal(row.unpriced, true);
 });

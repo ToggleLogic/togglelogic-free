@@ -60,7 +60,17 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
 
       const price = await pricing.resolve(ref);
       const priced = !!(price && price.priced);
-      const cost = priced ? pricing.costUsd(price, usage) : null;
+      // USAGE VALIDITY GATE (2026-08-02): a numeric dollar cost is trustworthy only when
+      // the call actually reported finite input AND output token counts. Absent or
+      // non-finite usage on a PRICED model is a false $0.00 waiting to happen — the old
+      // code took the priced branch and wrote costUsd: 0.00, indistinguishable from a
+      // genuine zero. It must take a LOUD path instead, distinct from both a real cost and
+      // a missing price. Three outcomes, not two. (cacheRead/cacheWrite stay optional —
+      // absent cache is normal and never gates the cost.)
+      const usageValid =
+        Number.isFinite(Number(usage.input)) && Number.isFinite(Number(usage.output));
+      const costed = priced && usageValid;
+      const cost = costed ? pricing.costUsd(price, usage) : null;
 
       const row = {
         kind: "call",
@@ -72,11 +82,19 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
         outputTok: outTok,
         cacheTok,
       };
-      if (priced) {
+      if (costed) {
         row.costUsd = round6(cost);
         row.inputPerM = price.inputPerM;
         row.outputPerM = price.outputPerM;
         row.priceSource = price.source;
+      } else if (priced) {
+        // LOUD: the model IS priced, but usage is absent/non-finite — record it as
+        // explicitly usage-missing, NEVER as costUsd: 0. Distinct reason from unpriced so
+        // the two failure modes stay diagnosable.
+        row.priced = true;
+        row.unpriced = false;
+        row.usageMissing = true;
+        row.reason = "priced-but-usage-missing";
       } else {
         // LOUD-FAIL: an unpriced call is recorded as explicitly unpriced with its
         // token count — NEVER as costUsd: 0.
@@ -85,7 +103,10 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
         row.reason = price.curated ? "no-price-in-source" : "not-in-curated-free-set";
       }
       costLog.write(row).catch(() => {});
-      tally.record({ ts: now(), ref, provider: price.provider, inputTok: inTok, outputTok: outTok, cacheTok, priced, costUsd: cost });
+      // Aggregate: only a call with a trustworthy dollar cost lands in the priced bucket;
+      // usage-missing joins unpriced in the LOUD bucket, so a day of missing-usage calls
+      // can never read as "$0.00 spend".
+      tally.record({ ts: now(), ref, provider: price.provider, inputTok: inTok, outputTok: outTok, cacheTok, priced: costed, costUsd: cost });
 
       if (++calls % summaryEvery === 0) emitSummary();
     } catch (e) {

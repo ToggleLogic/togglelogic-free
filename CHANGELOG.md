@@ -2,6 +2,22 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+<!-- DRAFT 1.0.6 — factual entry by CC 2026-08-02. Al rewrites all public wording in his own voice before publish. -->
+## 1.0.6 — 2026-08-02
+
+Patch release. **Correctness fix to cost visibility. Routing behavior is unchanged.**
+
+### Fixed
+- **A priced model with missing token usage no longer reports a false `$0.00`.** The cost-visibility observer computed a dollar cost whenever the model was *priced*, without checking that the call actually reported usage. When a priced call arrived with absent or non-finite token counts, the observer coerced the missing tokens to zero and wrote `costUsd: 0.00` — a real-looking zero indistinguishable from a genuinely free call. The published guarantee is "unpriced-loud, never a false `$0.00`," and this violated it for the missing-usage case. The observer has behaved this way since cost visibility shipped (1.0.3, 2026-07-06) and the defect is present in the currently-downloadable 1.0.5.
+- **Now there are three distinguishable outcomes, not two.** A priced call with valid usage records its real dollar cost; a priced call whose usage is **absent or non-finite** takes a loud path — recorded as `usageMissing` with reason `priced-but-usage-missing`, never a numeric cost — and is counted in the loud (uncounted) bucket, not as `$0.00` priced spend; an unpriced model remains loud as before. A day of missing-usage calls can no longer read as "$0.00 spend."
+
+### Tests
+- Added a regression test asserting all four outcomes (priced+usage-present → correct dollar figure; priced+usage-missing → loud; priced+usage-non-finite → loud; unpriced → loud). It fails on 1.0.5 and passes here.
+- The existing test that carried the guarantee's name ("…never $0.00") only asserted the missing-**price** half; it is renamed to its true (calculator-level) scope, and the whole guarantee is now asserted by the new test.
+
+### Compatibility
+- Unchanged: minimum OpenClaw `>=2026.6.5`. Validated on 2026.6.5 – 2026.6.11 (OpenClaw's plugin manifest declares a minimum floor only — there is no ceiling/range field — so the validated upper bound is documented here, not enforced by the manifest).
+
 ## 1.0.5 — 2026-07-15
 
 Patch release. **Routing behavior is unchanged except for owner-override TTL enforcement.**
