@@ -2,21 +2,53 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
-<!-- DRAFT 1.0.6 — factual entry by CC 2026-08-02. Al rewrites all public wording in his own voice before publish. -->
 ## 1.0.6 — 2026-08-02
 
-Patch release. **Correctness fix to cost visibility. Routing behavior is unchanged.**
+Patch release. Correctness fix to cost visibility. Routing is unchanged.
 
 ### Fixed
-- **A priced model with missing token usage no longer reports a false `$0.00`.** The cost-visibility observer computed a dollar cost whenever the model was *priced*, without checking that the call actually reported usage. When a priced call arrived with absent or non-finite token counts, the observer coerced the missing tokens to zero and wrote `costUsd: 0.00` — a real-looking zero indistinguishable from a genuinely free call. The published guarantee is "unpriced-loud, never a false `$0.00`," and this violated it for the missing-usage case. The observer has behaved this way since cost visibility shipped (1.0.3, 2026-07-06) and the defect is present in the currently-downloadable 1.0.5.
-- **Now there are three distinguishable outcomes, not two.** A priced call with valid usage records its real dollar cost; a priced call whose usage is **absent or non-finite** takes a loud path — recorded as `usageMissing` with reason `priced-but-usage-missing`, never a numeric cost — and is counted in the loud (uncounted) bucket, not as `$0.00` priced spend; an unpriced model remains loud as before. A day of missing-usage calls can no longer read as "$0.00 spend."
+
+**Cost visibility was lying for a specific case. It's fixed.**
+
+The cost observer had a hole. It computed a dollar figure any time the
+model was priced, without checking whether the call actually reported
+token usage. When a priced call came back with no usage, or with
+non-finite usage, the missing tokens got treated as zero. The result:
+`costUsd: 0.00`. A reported number. Nothing distinguished it from a call
+that actually cost nothing.
+
+The whole point of cost visibility is that an unpriced call is loud and
+never shows up as a false $0.00. This broke that for the missing-usage
+case. A day full of these calls could read as zero spend. That's the
+exact thing the feature exists to prevent.
+
+It shipped this way in 1.0.3 on 2026-07-06 and has been in every build
+since, including the 1.0.5 you can download today.
+
+**What changed:** There are now three distinguishable outcomes instead
+of two. A priced call with valid usage records its real cost. A priced
+call with missing or non-finite usage goes loud. It is marked
+`usageMissing` with the reason `priced-but-usage-missing`, no dollar
+figure is recorded, and it counts in the loud bucket so a day full of
+them can't read as $0.00. An unpriced model stays loud, same as before.
 
 ### Tests
-- Added a regression test asserting all four outcomes (priced+usage-present → correct dollar figure; priced+usage-missing → loud; priced+usage-non-finite → loud; unpriced → loud). It fails on 1.0.5 and passes here.
-- The existing test that carried the guarantee's name ("…never $0.00") only asserted the missing-**price** half; it is renamed to its true (calculator-level) scope, and the whole guarantee is now asserted by the new test.
+
+There was already a test carrying the guarantee's name. It only checked
+the missing-price half. The missing-usage half that produced the false
+zero had never been tested. That's how it shipped without anyone
+catching it.
+
+There is now a test covering all four cases: priced+usage-present,
+priced+usage-missing, priced+usage-non-finite, unpriced. It fails on
+1.0.5. It passes on 1.0.6. The old test is renamed to its actual scope.
 
 ### Compatibility
-- Unchanged: minimum OpenClaw `>=2026.6.5`. Validated on 2026.6.5 – 2026.6.11 (OpenClaw's plugin manifest declares a minimum floor only — there is no ceiling/range field — so the validated upper bound is documented here, not enforced by the manifest).
+
+Unchanged. Minimum OpenClaw `>=2026.6.5`. Validated through 2026.6.11.
+OpenClaw's plugin manifest has a minimum floor field only. No ceiling
+field exists in the loader, so the validated upper bound lives here,
+not in the manifest.
 
 ## 1.0.5 — 2026-07-15
 
