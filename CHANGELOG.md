@@ -2,6 +2,40 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.1.0 — 2026-08-11
+
+Minor release. Adds privacy-safe local fleet metering. Routing is unchanged.
+
+### Added
+
+- **Deployment attribution.** Cost-log call and summary rows now carry a stable
+  `deploymentId` and optional `costCenter`, configured as non-secret portable
+  slugs. When no deployment ID is configured, the local hostname is used.
+- **Versioned ledger contract.** Fleet rows declare
+  `schema: togglelogic.fleet-usage.v1`, allowing a headquarters collector to
+  distinguish and validate compatible deployment records.
+- **Invoice-safety markers.** Locally calculated dollar figures declare
+  `costBasis: public-rate-estimate` and `invoiceEligible: false`. A fleet
+  operator must reconcile totals with authoritative provider billing before
+  invoicing a customer.
+
+### Privacy
+
+- The ledger remains local and contains no prompt or assistant text.
+- ToggleLogic does not send usage, deployment identifiers, cost centers, or
+  customer information to Motherboard or any ToggleLogic endpoint.
+- Attribution accepts only short slug values; email addresses, filesystem paths,
+  and other free-form customer data are rejected by normalization.
+
+### Tests
+
+- Added regression coverage for attribution normalization, row and summary
+  stamping, hostname fallback, schema identity, and invoice-safety markers.
+
+### Compatibility
+
+- Minimum OpenClaw remains `>=2026.6.5`; routing behavior is unchanged.
+
 ## 1.0.6 — 2026-08-02
 
 Patch release. Correctness fix to cost visibility. Routing is unchanged.

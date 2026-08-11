@@ -14,6 +14,7 @@
 import { createPricing } from "./pricing.js";
 import { createTally } from "./cost-tally.js";
 import { createLogger } from "../observability/logger.js";
+import { hostname } from "node:os";
 
 function num(x) { const n = Number(x); return Number.isFinite(n) ? n : 0; }
 function round6(n) { return Math.round((Number(n) || 0) * 1e6) / 1e6; }
@@ -31,6 +32,18 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
     );
   const summaryEvery = Math.max(1, cv.summaryEveryCalls ?? 20);
   let calls = 0;
+  const configuredDeploymentId = cv.attribution && cv.attribution.deploymentId;
+  const deploymentId = configuredDeploymentId || safeHostname(deps.hostname);
+  const costCenter = (cv.attribution && cv.attribution.costCenter) || null;
+
+  function safeHostname(hostnameFn = hostname) {
+    try {
+      const value = String(hostnameFn() || "").trim().toLowerCase();
+      return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(value) ? value : "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
 
   function refOf(event) {
     if (event && event.resolvedRef) return event.resolvedRef;
@@ -41,7 +54,15 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
   function emitSummary() {
     try {
       const sum = tally.summarize();
-      costLog.write({ kind: "summary", ts: new Date(now()).toISOString(), line: tally.loudLine(sum), ...sum }).catch(() => {});
+      costLog.write({
+        schema: "togglelogic.fleet-usage.v1",
+        kind: "summary",
+        ts: new Date(now()).toISOString(),
+        deploymentId,
+        costCenter,
+        line: tally.loudLine(sum),
+        ...sum,
+      }).catch(() => {});
     } catch { /* ignore */ }
   }
 
@@ -73,8 +94,11 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
       const cost = costed ? pricing.costUsd(price, usage) : null;
 
       const row = {
+        schema: "togglelogic.fleet-usage.v1",
         kind: "call",
         ts: new Date(now()).toISOString(),
+        deploymentId,
+        costCenter,
         provider: price.provider,
         model: event && event.model,
         resolvedRef: ref,
@@ -84,6 +108,11 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
       };
       if (costed) {
         row.costUsd = round6(cost);
+        // Public price-card math is useful attribution evidence, but it is not
+        // an authoritative provider invoice. HQ reconciliation promotes it to
+        // invoice-ready only after the fleet total agrees with provider truth.
+        row.costBasis = "public-rate-estimate";
+        row.invoiceEligible = false;
         row.inputPerM = price.inputPerM;
         row.outputPerM = price.outputPerM;
         row.priceSource = price.source;
@@ -95,12 +124,14 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
         row.unpriced = false;
         row.usageMissing = true;
         row.reason = "priced-but-usage-missing";
+        row.invoiceEligible = false;
       } else {
         // LOUD-FAIL: an unpriced call is recorded as explicitly unpriced with its
         // token count — NEVER as costUsd: 0.
         row.priced = false;
         row.unpriced = true;
         row.reason = price.curated ? "no-price-in-source" : "not-in-curated-free-set";
+        row.invoiceEligible = false;
       }
       costLog.write(row).catch(() => {});
       // Aggregate: only a call with a trustworthy dollar cost lands in the priced bucket;
@@ -119,5 +150,5 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
   // per-call fetch never happens — cached + refreshed on a slow cadence).
   function warm() { try { return pricing.ensureIndex().catch(() => {}); } catch { return Promise.resolve(); } }
 
-  return { handler, emitSummary, warm, tally, pricing, costLog, logPath: costLog.path };
+  return { handler, emitSummary, warm, tally, pricing, costLog, logPath: costLog.path, deploymentId, costCenter };
 }

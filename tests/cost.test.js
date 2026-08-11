@@ -159,9 +159,68 @@ test("config: costVisibility defaults + feature toggle normalize", () => {
   assert.equal(c.features.costVisibility.enabled, false);
   assert.equal(c.costVisibility.pricing.sourceUrl, "https://models.dev/api.json");
   assert.equal(c.costVisibility.log.path, "~/.openclaw/logs/togglelogic-cost.jsonl");
+  assert.equal(c.costVisibility.attribution.deploymentId, "");
+  assert.equal(c.costVisibility.attribution.costCenter, "");
   const c2 = normalizeConfig({ features: { costVisibility: { enabled: true } }, costVisibility: { pricing: { refreshHours: 6 } } });
   assert.equal(c2.features.costVisibility.enabled, true);
   assert.equal(c2.costVisibility.pricing.refreshHours, 6);
+});
+
+test("fleet attribution accepts portable slugs and rejects sensitive-looking values", () => {
+  const good = normalizeConfig({ costVisibility: { attribution: { deploymentId: "SAM-Andy", costCenter: "Customer_001" } } });
+  assert.equal(good.costVisibility.attribution.deploymentId, "sam-andy");
+  assert.equal(good.costVisibility.attribution.costCenter, "customer_001");
+
+  const bad = normalizeConfig({ costVisibility: { attribution: { deploymentId: "person@example.com", costCenter: "../../secret" } } });
+  assert.equal(bad.costVisibility.attribution.deploymentId, "");
+  assert.equal(bad.costVisibility.attribution.costCenter, "");
+});
+
+test("fleet ledger stamps deployment attribution and never marks estimates invoice-ready", async () => {
+  const events = [];
+  const observer = createCostObserver({
+    config: normalizeConfig({ costVisibility: { attribution: { deploymentId: "sam-andy", costCenter: "andy" }, log: { enabled: false } } }),
+    fallbackLogger: { warn() {} },
+    deps: {
+      logger: { write: async (r) => events.push(r), path: "(none)" },
+      pricing: {
+        resolve: async () => ({ provider: "openai", curated: true, priced: true, inputPerM: 1, outputPerM: 4, source: "test" }),
+        costUsd: () => 0.005,
+        ensureIndex: async () => {},
+      },
+      now: () => 1_800_000_000_000,
+    },
+  });
+
+  await observer.handler({ provider: "openai", model: "gpt-test", usage: { input: 1000, output: 1000 } });
+  observer.emitSummary();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const call = events.find((r) => r.kind === "call");
+  const summary = events.find((r) => r.kind === "summary");
+  assert.equal(call.schema, "togglelogic.fleet-usage.v1");
+  assert.equal(call.deploymentId, "sam-andy");
+  assert.equal(call.costCenter, "andy");
+  assert.equal(call.costBasis, "public-rate-estimate");
+  assert.equal(call.invoiceEligible, false);
+  assert.equal("prompt" in call, false);
+  assert.equal("sessionId" in call, false);
+  assert.equal(summary.deploymentId, "sam-andy");
+  assert.equal(summary.costCenter, "andy");
+});
+
+test("fleet ledger falls back to a local hostname when deployment id is omitted", () => {
+  const observer = createCostObserver({
+    config: normalizeConfig({ costVisibility: { log: { enabled: false } } }),
+    fallbackLogger: { warn() {} },
+    deps: {
+      hostname: () => "SAM-CF.local",
+      logger: { write: async () => {}, path: "(none)" },
+      pricing: { ensureIndex: async () => {} },
+    },
+  });
+  assert.equal(observer.deploymentId, "sam-cf.local");
+  assert.equal(observer.costCenter, null);
 });
 
 // The guarantee is "unpriced-loud, never a false $0.00" — and a PRICED model whose

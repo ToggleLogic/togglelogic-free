@@ -85,6 +85,19 @@ reported **loudly as unpriced** — model + token count — and never as a false
 **never blocks, halts, or downgrades** a call. Enforcement and all-model /
 guaranteed-current pricing are the paid tier.
 
+### Fleet attribution
+
+Version 1.1 adds privacy-safe, local fleet attribution to every cost-log call and
+summary. Configure a stable deployment slug and an optional cost-center slug; the
+plugin writes them to the local JSONL ledger using schema
+`togglelogic.fleet-usage.v1`. It does not transmit usage, identifiers, prompts, or
+customer information to Motherboard or any ToggleLogic service. If `deploymentId`
+is omitted, the local hostname is used.
+
+Dollar values in this ledger are explicitly marked `public-rate-estimate` and
+`invoiceEligible: false`. A fleet operator must reconcile deployment totals
+against authoritative provider billing before creating an invoice.
+
 Enable it (also requires `hooks.allowConversationAccess`, since `llm_output` is a
 conversation hook):
 
@@ -93,7 +106,15 @@ conversation hook):
   "plugins": { "entries": { "togglelogic": {
     "enabled": true,
     "hooks": { "allowConversationAccess": true },
-    "config": { "features": { "costVisibility": { "enabled": true } } }
+    "config": {
+      "features": { "costVisibility": { "enabled": true } },
+      "costVisibility": {
+        "attribution": {
+          "deploymentId": "sam-andy",
+          "costCenter": "andy"
+        }
+      }
+    }
   } } }
 }
 ```

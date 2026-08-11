@@ -1,8 +1,8 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.0.6",
-  "description": "Free-tier model routing for OpenClaw: apply static routes, a simple cheapest-default, and sticky model overrides that hold until you switch back — with a structured audit stream. Bring your own provider credentials, declare intent, and the plugin handles selection; no benchmark engine or model registry is included. Optional cost visibility reports per-model dollar cost from dynamic public pricing (observe-only; curated free-tier providers; unpriced-loud, never a false $0.00). PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
+  "version": "1.1.0",
+  "description": "Free-tier model routing for OpenClaw: apply static routes, a simple cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no benchmark engine or model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
   "license": "LicenseRef-ToggleLogic-Free-Tier",
   "categories": ["model-routing", "cost-optimization"],
   "activation": {
@@ -103,6 +103,15 @@
         "additionalProperties": false,
         "description": "Cost-visibility settings (used when features.costVisibility.enabled). Observe-only; reports per-model/per-day dollar cost from dynamic public pricing. Never enforces.",
         "properties": {
+          "attribution": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Privacy-safe local fleet attribution. Values are non-secret slugs written only to the local cost ledger; ToggleLogic never sends them to Motherboard or any ToggleLogic service.",
+            "properties": {
+              "deploymentId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "Stable deployment slug, for example sam-andy or sam-cf. When omitted, the local hostname is used." },
+              "costCenter": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "Optional non-secret billing cost-center slug. Do not place names, email addresses, account numbers, or credentials here." }
+            }
+          },
           "log": {
             "type": "object",
             "additionalProperties": false,

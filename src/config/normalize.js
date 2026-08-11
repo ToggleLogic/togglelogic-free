@@ -54,6 +54,10 @@ export const DEFAULTS = Object.freeze({
   // public pricing (Models.dev primary, bundled LiteLLM fallback). Curated to the
   // free-tier providers; unpriced-loud, never $0.00. Reports only — never enforces.
   costVisibility: Object.freeze({
+    attribution: Object.freeze({
+      deploymentId: "",
+      costCenter: "",
+    }),
     log: Object.freeze({ enabled: true, path: "~/.openclaw/logs/togglelogic-cost.jsonl", rotateSizeMb: 50 }),
     pricing: Object.freeze({
       sourceUrl: "https://models.dev/api.json",
@@ -126,10 +130,15 @@ export function normalizeConfig(raw) {
 
 function normalizeCostVisibility(raw) {
   const r = raw && typeof raw === "object" ? raw : {};
+  const attribution = r.attribution && typeof r.attribution === "object" ? r.attribution : {};
   const log = r.log && typeof r.log === "object" ? r.log : {};
   const pricing = r.pricing && typeof r.pricing === "object" ? r.pricing : {};
   const D = DEFAULTS.costVisibility;
   return {
+    attribution: {
+      deploymentId: normalizeAttributionId(attribution.deploymentId),
+      costCenter: normalizeAttributionId(attribution.costCenter),
+    },
     log: {
       enabled: log.enabled !== false,
       path: typeof log.path === "string" && log.path.length > 0 ? log.path : D.log.path,
@@ -163,6 +172,15 @@ function normalizeCostVisibility(raw) {
         ? Math.floor(r.summaryEveryCalls)
         : D.summaryEveryCalls,
   };
+}
+
+// Billing attribution is deliberately a small, non-secret identifier surface.
+// Restrict values to portable slugs so names, email addresses, paths, tokens,
+// or other customer data cannot accidentally enter the local usage ledger.
+function normalizeAttributionId(value) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(trimmed) ? trimmed : "";
 }
 
 function normalizeCheapHeuristic(raw) {
