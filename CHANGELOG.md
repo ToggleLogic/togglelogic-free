@@ -2,6 +2,29 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.1.1 — 2026-08-14
+
+Patch release. Resolves current ClawHub manifest validation findings. Routing,
+cost observation, fleet attribution, and all runtime behavior are unchanged.
+
+### Fixed
+
+- **Current OpenClaw manifest compatibility.** Removed unsupported top-level
+  `license` and `categories` fields from `openclaw.plugin.json`. License
+  information remains in the supported `package.json` package metadata; package
+  keywords remain available for discovery.
+
+### Verification
+
+- ClawHub package validation passes with zero issues and warnings against
+  OpenClaw `2026.8.1-beta.1` and `2026.7.1-2`.
+- The ToggleLogic test suite passes (12 tests).
+
+### Compatibility
+
+- Minimum OpenClaw remains `>=2026.6.5`.
+- No configuration or behavior change is required for an existing 1.1.0 user.
+
 ## 1.1.0 — 2026-08-11
 
 Minor release. Adds privacy-safe local fleet metering. Routing is unchanged.
