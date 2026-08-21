@@ -32,7 +32,9 @@ const MIN_COMPATIBLE_VERSION = "1.0.0-alpha.2";
  *                        with a non-standard registry location supply it here
  *                        as DATA — the plugin hardcodes no workspace path.
  */
-export async function detectIntelligenceLayer(configuredPath, registryPath) {
+export const INTELLIGENCE_SEAM_ABI = 1;
+
+export async function detectIntelligenceLayer(configuredPath, registryPath, pluginVersion = "") {
   const resolvedPath = expandTilde(configuredPath ?? "~/togglelogic-intelligence");
 
   // 1. Path must exist and be a directory.
@@ -64,6 +66,30 @@ export async function detectIntelligenceLayer(configuredPath, registryPath) {
     return { present: false, reason: `version ${version} below minimum ${MIN_COMPATIBLE_VERSION}`, resolvedPath, version };
   }
 
+  // Released private Intelligence builds must declare the pairwise contract.
+  // Development snapshots without it remain unavailable; the public plugin
+  // never guesses compatibility from a package version alone.
+  const manifestPath = path.join(resolvedPath, "release-manifest.json");
+  let manifest;
+  try {
+    manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  } catch (err) {
+    return { present: false, reason: `release manifest missing or invalid: ${err.message}`, resolvedPath, version };
+  }
+  if (manifest.product !== "togglelogic-intelligence" || manifest.version !== version) {
+    return { present: false, reason: "release manifest identity mismatch", resolvedPath, version };
+  }
+  if (manifest.release_state !== "released") {
+    return { present: false, reason: `release state is ${manifest.release_state ?? "missing"}`, resolvedPath, version };
+  }
+  if (manifest.seam_abi !== INTELLIGENCE_SEAM_ABI) {
+    return { present: false, reason: `seam ABI mismatch: expected ${INTELLIGENCE_SEAM_ABI}`, resolvedPath, version };
+  }
+  const compatibility = manifest.plugin_compatibility || {};
+  if (!pluginVersion || !versionInRange(pluginVersion, compatibility.minimum, compatibility.maximum_exclusive)) {
+    return { present: false, reason: `plugin ${pluginVersion || "unknown"} outside Intelligence compatibility interval`, resolvedPath, version };
+  }
+
   // 4. Normalized model registry must exist. Config-driven; neutral default is
   //    RELATIVE to the layer — no deployment/workspace path is hardcoded here.
   const resolvedRegistry =
@@ -77,6 +103,23 @@ export async function detectIntelligenceLayer(configuredPath, registryPath) {
   }
 
   return { present: true, resolvedPath, version };
+}
+
+function versionInRange(actual, minimum, maximumExclusive) {
+  return Boolean(parseVersion(actual) && parseVersion(minimum) && parseVersion(maximumExclusive))
+    && compareVersions(actual, minimum) >= 0
+    && compareVersions(actual, maximumExclusive) < 0;
+}
+
+function compareVersions(left, right) {
+  const a = parseVersion(left); const b = parseVersion(right);
+  for (const key of ["major", "minor", "patch"]) {
+    if (a[key] !== b[key]) return a[key] < b[key] ? -1 : 1;
+  }
+  if (a.prerelease === b.prerelease) return 0;
+  if (!a.prerelease) return 1;
+  if (!b.prerelease) return -1;
+  return a.prerelease < b.prerelease ? -1 : 1;
 }
 
 function expandTilde(p) {

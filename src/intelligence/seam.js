@@ -17,7 +17,7 @@
 
 import { detectIntelligenceLayer } from "./detector.js";
 
-export function createIntelligenceSeam(intelligenceConfig, fallbackLogger, hostRuntimeConfig = null) {
+export function createIntelligenceSeam(intelligenceConfig, fallbackLogger, hostRuntimeConfig = null, pluginVersion = "") {
   const config = intelligenceConfig ?? {};
   const enabled = config.enabled !== false;
 
@@ -31,7 +31,7 @@ export function createIntelligenceSeam(intelligenceConfig, fallbackLogger, hostR
     try {
       // registryPath is config-driven (deployment DATA); detector defaults to a
       // path relative to the layer when unset. No workspace path hardcoded.
-      const result = await detectIntelligenceLayer(config.path, config.registryPath);
+      const result = await detectIntelligenceLayer(config.path, config.registryPath, pluginVersion);
       detectionResult = result;
 
       if (result.present) {

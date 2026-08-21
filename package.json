@@ -1,6 +1,6 @@
 {
   "name": "togglelogic",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Free-tier model routing for OpenClaw — sticky owner overrides, static routes, a deliberately-simple cheapest-default, structured audit, and privacy-safe local fleet cost attribution. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). Bring your own provider credentials; no benchmark engine or model registry included. PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer adds benchmark-driven automatic selection.",
   "type": "module",
   "main": "src/index.js",
@@ -37,7 +37,8 @@
     "README.md",
     "CHANGELOG.md",
     "docs/RELEASE-NOTES-1.1.0.md",
-    "docs/RELEASE-NOTES-1.1.1.md"
+    "docs/RELEASE-NOTES-1.1.1.md",
+    "docs/RELEASE-NOTES-1.1.2.md"
   ],
   "peerDependencies": {
     "openclaw": "*"

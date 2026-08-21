@@ -2,6 +2,32 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.1.2 — 2026-08-21
+
+Patch release. Aligns runtime identity with package metadata and adds a
+fail-closed compatibility contract for the separately licensed ToggleLogic
+Intelligence layer. Free routing behavior is unchanged.
+
+### Fixed
+
+- **Consistent release identity.** The running plugin, package metadata, and
+  OpenClaw manifest now report the same version.
+
+### Safety
+
+- **Private Intelligence compatibility fails closed.** Intelligence is accepted
+  only when its release manifest is released, version-consistent, declares seam
+  ABI 1, and explicitly includes the running Free-plugin version in its
+  compatibility interval.
+- **Public/private boundary remains explicit.** The Free package contains no
+  classifier, model registry, learning system, customer evidence, or private
+  Intelligence source. Missing or incompatible Intelligence is never activated.
+
+### Verification
+
+- The ToggleLogic test suite passes 14 tests.
+- The ClawHub Plugin Inspector reports zero issues and zero warnings.
+
 ## 1.1.1 — 2026-08-14
 
 Patch release. Resolves current ClawHub manifest validation findings. Routing,

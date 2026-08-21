@@ -67,7 +67,7 @@ export const CAPABILITIES = [
     register({ api, audit, fallbackLogger, version, config }) {
       const routingLogger = createRoutingLogger(config.logging, fallbackLogger);
       const hostRuntimeConfig = buildRuntimeConfigFromApiConfig(api && api.config);
-      const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, hostRuntimeConfig);
+      const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, hostRuntimeConfig, version);
       const interceptor = createInterceptor({
         config,
         hostConfig: api && api.config,
