@@ -61,7 +61,7 @@ export const CAPABILITIES = [
     defaultEnabled: false,
     description:
       "Model routing: before_model_resolve hook. Resolves owner-override > " +
-      "static configuredRoutes > simple cheap default > passthrough. Optionally " +
+      "structured-label configuredRoutes > simple cheap default > passthrough. Optionally " +
       "defers to a separately-licensed Intelligence layer via the detection seam " +
       "(no benchmark engine or registry ships in this package).",
     register({ api, audit, fallbackLogger, version, config }) {

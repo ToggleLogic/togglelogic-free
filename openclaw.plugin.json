@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Free-tier model routing for OpenClaw: apply static routes, a simple cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no benchmark engine or model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
   "activation": {
     "onStartup": true
@@ -15,7 +15,7 @@
         "type": "string",
         "enum": ["auto", "passthrough", "configured", "cheap", "intelligence"],
         "default": "auto",
-        "description": "Routing mode. 'auto' uses the licensed intelligence layer if present, else the cheap default if configured, else passthrough. 'passthrough' defers every selection to OpenClaw's default. 'configured' uses static configuredRoutes. 'cheap' applies the deployment-declared cheapest default (a dumb static preference — no registry/benchmark). 'intelligence' requires the separately-licensed intelligence layer."
+        "description": "Routing mode. 'auto' uses the licensed intelligence layer if present, else the cheap default if configured, else passthrough. 'passthrough' defers every selection to OpenClaw's default. 'configured' uses static configuredRoutes matched only against host-supplied task labels, then optional default. 'cheap' applies the deployment-declared cheapest default (a dumb static preference — no registry/benchmark). 'intelligence' requires the separately-licensed intelligence layer and reports unavailable rather than silently downgrading."
       },
       "logging": {
         "type": "object",
@@ -28,7 +28,7 @@
       },
       "configuredRoutes": {
         "type": "object",
-        "description": "Static task-to-model mappings used in 'configured' mode. Keys are task identifiers, values are model identifiers (e.g. 'anthropic/claude-haiku-4-5').",
+        "description": "Static task-label-to-model mappings used in 'configured' mode. Labels may be supplied by the host as hookContext.taskType, hookContext.task, hookContext.capability, event.taskType, event.task, or event.metadata.taskType. `default` is optional fallback. Prompt text is never inspected.",
         "additionalProperties": { "type": "string" }
       },
       "cheapHeuristic": {

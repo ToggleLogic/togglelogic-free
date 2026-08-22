@@ -11,7 +11,9 @@ free tier gives you:
 - **Owner overrides (sticky, held).** Tell your assistant "use Opus for this" and the
   deployment-side switch writes an override that persists across every subsequent request
   — pins hold until you switch back.
-- **Static / intent routes.** Map tasks to models in `configuredRoutes`.
+- **Static / intent routes.** Map host-supplied task labels to models in
+  `configuredRoutes`. The Free plugin never inspects prompt text to infer a
+  task.
 - **A deliberately-simple cheapest-default.** Name the cheap model you want as the
   default; the plugin defaults to it unless an override or route says otherwise.
 - **A structured audit stream** of every routing decision (NIST 800-53 AU-2/AU-3/AU-12
@@ -60,9 +62,9 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
 |---|---|
 | `auto` | Licensed Intelligence layer if present → else the cheap default if configured → else passthrough |
 | `passthrough` | Defer every selection to OpenClaw's default (log only) |
-| `configured` | Apply `configuredRoutes` (static task→model map) |
+| `configured` | Apply `configuredRoutes` from a host-supplied task label, then optional `default` |
 | `cheap` | Apply the deployment-declared cheapest default (dumb, static) |
-| `intelligence` | Defer to the separately-licensed Intelligence layer (not included) |
+| `intelligence` | Defer to the separately-licensed Intelligence layer (not included); report unavailable rather than silently downgrading |
 
 Owner overrides apply **above** the mode in all cases.
 

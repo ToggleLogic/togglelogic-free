@@ -5,7 +5,9 @@
  *
  * Modes:
  *   passthrough   — log only; defer every selection to the OpenClaw default.
- *   configured    — apply static configuredRoutes mapping; passthrough on miss.
+ *   configured    — apply a static, host-supplied task-label route; passthrough
+ *                   on a label miss.  This mode never reads or classifies a
+ *                   prompt.
  *   cheap         — apply the deployment-declared cheap default (dumb, static,
  *                   request-agnostic; see cheap-heuristic.js). passthrough if
  *                   no cheap default is configured.
@@ -28,7 +30,10 @@ export function resolveEffectiveMode(configuredMode, seamStatus, config) {
   if (configuredMode === "cheap") return "cheap";
   if (configuredMode === "intelligence") {
     if (seamStatus === "available") return "intelligence";
-    return cheapConfigured(config) ? "cheap" : "passthrough";
+    // An explicit Intelligence selection is an operator contract, not a hint.
+    // Do not silently downgrade to cheap routing: retain a visible, auditable
+    // unavailable state and let the host choose its normal model.
+    return "intelligence_unavailable";
   }
   // 'auto' or anything unrecognized: prefer the licensed intelligence layer if
   // it's available; otherwise fall back to the dumb cheap default (if the
@@ -47,7 +52,7 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam })
       return passthroughResult();
 
     case "configured": {
-      const route = pickConfiguredRoute(config.configuredRoutes);
+      const route = pickConfiguredRoute(config.configuredRoutes, event, hookContext);
       if (!route) return passthroughResult({ reason: "no configured match" });
       return {
         override: { modelOverride: route.modelId },
@@ -98,6 +103,12 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam })
       };
     }
 
+    case "intelligence_unavailable":
+      return passthroughResult({
+        reason: "explicit Intelligence mode unavailable",
+        intelligenceStatus: seam.status(),
+      });
+
     default:
       return passthroughResult({ reason: `unknown mode '${mode}'` });
   }
@@ -114,14 +125,40 @@ function passthroughResult(details = {}) {
 }
 
 /**
- * Static configuredRoutes lookup. alpha: single 'default' key applied to every
- * request. (Channel/capability-scoped matching may extend this later without
- * changing dispatchByMode's return shape.)
+ * Static configuredRoutes lookup. The only optional match input is a host-
+ * supplied task label. We deliberately never examine event.prompt or arbitrary
+ * message text in the Free plugin. A deployment may also set `default` as the
+ * final static route.
  */
-function pickConfiguredRoute(configuredRoutes) {
-  const modelId = configuredRoutes?.default;
+export function pickConfiguredRoute(configuredRoutes, event = {}, hookContext = {}) {
+  const taskKey = configuredTaskLabel(event, hookContext);
+  const modelId = taskKey ? configuredRoutes?.[taskKey] : configuredRoutes?.default;
   if (typeof modelId === "string" && modelId.length > 0) {
-    return { key: "default", modelId };
+    return { key: taskKey ?? "default", modelId };
+  }
+  if (taskKey) {
+    const fallback = configuredRoutes?.default;
+    if (typeof fallback === "string" && fallback.length > 0) {
+      return { key: "default", modelId: fallback, requestedKey: taskKey };
+    }
+  }
+  return null;
+}
+
+function configuredTaskLabel(event, hookContext) {
+  // These are documented, structured task labels supplied by the host or
+  // integration. Keep the accepted field list narrow so configuration cannot
+  // turn this public static mode into hidden prompt classification.
+  const candidates = [
+    hookContext?.taskType,
+    hookContext?.task,
+    hookContext?.capability,
+    event?.taskType,
+    event?.task,
+    event?.metadata?.taskType,
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
   }
   return null;
 }

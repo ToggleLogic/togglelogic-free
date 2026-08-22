@@ -2,6 +2,30 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.2.0 — 2026-08-22
+
+Minor release. Makes the documented static-route behavior real and makes an
+explicit Intelligence selection fail visibly instead of silently changing mode.
+No private classifier, registry, learning system, customer evidence, or provider
+credential is included in the Free package.
+
+### Fixed
+
+- **Static configured routes now honor host-supplied task labels.** `configured`
+  mode checks the documented structured labels, then optional `default`; it
+  never reads or classifies message text.
+- **Explicit Intelligence mode no longer silently downgrades.** When the
+  separately licensed layer is unavailable or incompatible, routing passes
+  through to the host and records `explicit Intelligence mode unavailable`.
+  `auto` retains its documented safe fallback behavior.
+
+### Verification
+
+- Added routing-mode tests for structured labels, default fallback, prompt
+  non-inspection, and explicit-Intelligence unavailability.
+- Added a release identity test so package, manifest, and runtime versions must
+  agree.
+
 ## 1.1.2 — 2026-08-21
 
 Patch release. Aligns runtime identity with package metadata and adds a
