@@ -2,6 +2,21 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.2.1 — 2026-08-22
+
+Release-metadata correction. Runtime behavior is unchanged from 1.2.0.
+
+### Fixed
+
+- **Release provenance.** The CycloneDX SBOM now points at the exact public
+  source commit for this release. Version 1.2.0's plugin archive remains
+  intact, but its immutable SBOM asset carried an incorrect VCS commit URL.
+
+### Verification
+
+- The source, package, manifest, runtime identity, checksum, and SBOM now
+  point to one exact release commit.
+
 ## 1.2.0 — 2026-08-22
 
 Minor release. Makes the documented static-route behavior real and makes an
