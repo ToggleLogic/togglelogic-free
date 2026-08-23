@@ -54,7 +54,9 @@ export async function createAdapter({
   try {
     fallbackLogger?.info?.(
       classifyFn !== null
-        ? `togglelogic adapter: classifier wired (v${version}). Overrides will be emitted when the classifier matches a non-default tier.`
+        ? shadow === true
+          ? `togglelogic adapter: classifier wired (v${version}) in shadow mode. Recommendations will be audited; no overrides will be emitted.`
+          : `togglelogic adapter: classifier wired (v${version}). Overrides will be emitted when the classifier matches a non-default tier.`
         : `togglelogic adapter: classifier load FAILED at ${intelligencePath}. Operating in shadow mode (no overrides emitted).`
     );
   } catch {

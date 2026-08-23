@@ -2,6 +2,11 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.2.3 — 2026-08-23
+
+Patch release. Makes the Intelligence startup status accurately say when a
+deployment is in shadow mode. Routing behavior is unchanged from 1.2.2.
+
 ## 1.2.2 — 2026-08-23
 
 Patch release. Adds an explicit no-routing-change shadow gate for the separately
