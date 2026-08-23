@@ -49,7 +49,11 @@ test("Intelligence shadow mode records its recommendation without overriding the
     status: () => "available",
     classify: async () => ({
       shadow: true,
-      details: { recommended_model_ref: "google/gemini-3.5-flash", required_tier: "general_purpose" },
+      details: {
+        recommended_model_ref: "google/gemini-3.5-flash",
+        required_tier: "general_purpose",
+        family_routing: { stopped: false, events: [{ event: "family_selected" }] },
+      },
     }),
   };
   const result = await dispatchByMode({
@@ -58,4 +62,5 @@ test("Intelligence shadow mode records its recommendation without overriding the
   assert.deepEqual(result.override, {});
   assert.equal(result.selectionReason, "intelligence_shadow");
   assert.equal(result.selectionDetails.recommended_model_ref, "google/gemini-3.5-flash");
+  assert.equal(result.selectionDetails.family_routing.events[0].event, "family_selected");
 });

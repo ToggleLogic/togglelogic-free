@@ -2,6 +2,12 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.2.4 — 2026-08-23
+
+Patch release. Preserves the private Intelligence layer’s structured
+family-resolution result in the existing local routing audit record. No private
+classifier, benchmark data, or prompt content is added to the Free package.
+
 ## 1.2.3 — 2026-08-23
 
 Patch release. Makes the Intelligence startup status accurately say when a

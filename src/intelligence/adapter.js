@@ -94,6 +94,7 @@ export async function createAdapter({
         confidence: result.confidence,
         matched_rule: result.matched_rule,
         reasoning: result.reasoning,
+        family_routing: result.family_routing ?? null,
         pin_matched: result.pin_matched ?? null,
         pin_resolution: result.pin_resolution ?? null,
       };
