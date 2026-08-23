@@ -43,3 +43,19 @@ test("explicit Intelligence mode remains visibly unavailable", async () => {
 test("auto keeps its documented cheap fallback when Intelligence is unavailable", () => {
   assert.equal(resolveEffectiveMode("auto", "unavailable", { cheapHeuristic: { default: "cheap/model" } }), "cheap");
 });
+
+test("Intelligence shadow mode records its recommendation without overriding the host", async () => {
+  const seam = {
+    status: () => "available",
+    classify: async () => ({
+      shadow: true,
+      details: { recommended_model_ref: "google/gemini-3.5-flash", required_tier: "general_purpose" },
+    }),
+  };
+  const result = await dispatchByMode({
+    mode: "intelligence", event: { prompt: "hello" }, hookContext: {}, config: {}, seam,
+  });
+  assert.deepEqual(result.override, {});
+  assert.equal(result.selectionReason, "intelligence_shadow");
+  assert.equal(result.selectionDetails.recommended_model_ref, "google/gemini-3.5-flash");
+});

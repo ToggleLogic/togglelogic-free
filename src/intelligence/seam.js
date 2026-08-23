@@ -42,6 +42,7 @@ export function createIntelligenceSeam(intelligenceConfig, fallbackLogger, hostR
         adapter = await createAdapter({
           intelligencePath: result.resolvedPath,
           version: result.version,
+          shadow: config.shadow === true,
           fallbackLogger,
         });
         state = "available";

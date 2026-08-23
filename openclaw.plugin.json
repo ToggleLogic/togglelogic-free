@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Free-tier model routing for OpenClaw: apply static routes, a simple cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no benchmark engine or model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. An optional, separately-licensed ToggleLogic Intelligence layer can add benchmark-driven automatic selection. Source-available under the ToggleLogic Free-Tier License (see LICENSE).",
   "activation": {
     "onStartup": true
@@ -48,6 +48,7 @@
           "enabled": { "type": "boolean", "default": true, "description": "Whether to attempt to detect a licensed intelligence layer at startup." },
           "path": { "type": "string", "default": "~/togglelogic-intelligence", "description": "Filesystem path where a licensed intelligence layer would be installed. Tilde expansion supported." },
           "registryPath": { "type": "string", "description": "Optional path to the licensed layer's normalized model registry. Config-driven (deployment DATA); when unset, defaults to a path relative to the layer (<path>/normalized.json). No workspace path is hardcoded. Tilde expansion supported." },
+          "shadow": { "type": "boolean", "default": false, "description": "When true, evaluate and audit Intelligence decisions but never emit a model override. Use for a versioned canary before enabling live routing." },
           "fallbackOnError": { "type": "boolean", "default": true, "description": "If true, errors from the intelligence layer yield no override (OpenClaw falls back to its default selection)." }
         }
       },

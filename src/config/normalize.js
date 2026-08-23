@@ -30,6 +30,7 @@ export const DEFAULTS = Object.freeze({
     enabled: true,
     path: "~/togglelogic-intelligence",
     registryPath: "",
+    shadow: false,
     fallbackOnError: true,
   }),
   features: Object.freeze({
@@ -105,6 +106,7 @@ export function normalizeConfig(raw) {
         typeof intelligence.registryPath === "string" && intelligence.registryPath.length > 0
           ? intelligence.registryPath
           : "",
+      shadow: intelligence.shadow === true,
       fallbackOnError: intelligence.fallbackOnError !== false,
     },
     features: {

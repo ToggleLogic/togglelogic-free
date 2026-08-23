@@ -30,6 +30,7 @@
 export async function createAdapter({
   intelligencePath,
   version,
+  shadow = false,
   fallbackLogger,
 }) {
   let classifyFn = null;
@@ -82,19 +83,20 @@ export async function createAdapter({
       const override = slash > 0 && slash < ref.length - 1
         ? { providerOverride: ref.slice(0, slash), modelOverride: ref.slice(slash + 1) }
         : { modelOverride: ref };
-      // Surface pin metadata so the routing log captures pin_matched /
-      // pin_resolution. Both are null in the no-pin path.
-      return {
-        ...override,
-        details: {
-          required_tier: result.required_tier,
-          confidence: result.confidence,
-          matched_rule: result.matched_rule,
-          reasoning: result.reasoning,
-          pin_matched: result.pin_matched ?? null,
-          pin_resolution: result.pin_resolution ?? null,
-        },
+      // Shadow runs preserve the full recommendation in the audit record but
+      // never return an override to the host.
+      const details = {
+        shadow: shadow === true,
+        recommended_model_ref: ref,
+        required_tier: result.required_tier,
+        confidence: result.confidence,
+        matched_rule: result.matched_rule,
+        reasoning: result.reasoning,
+        pin_matched: result.pin_matched ?? null,
+        pin_resolution: result.pin_resolution ?? null,
       };
+      if (shadow === true) return { shadow: true, details };
+      return { ...override, details };
     } catch (err) {
       try {
         fallbackLogger?.warn?.(

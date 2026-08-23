@@ -84,6 +84,15 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam })
         attachments: event?.attachments,
         hookContext,
       });
+      if (choice && choice.shadow === true) {
+        return {
+          override: PASSTHROUGH,
+          selectedModel: null,
+          selectedProvider: null,
+          selectionReason: "intelligence_shadow",
+          selectionDetails: choice.details ?? {},
+        };
+      }
       if (!choice || (!choice.modelOverride && !choice.providerOverride)) {
         return passthroughResult({ reason: "intelligence declined" });
       }

@@ -2,6 +2,22 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.2.2 — 2026-08-23
+
+Patch release. Adds an explicit no-routing-change shadow gate for the separately
+licensed Intelligence layer.
+
+### Added
+
+- **Intelligence shadow mode.** Set `intelligence.shadow: true` to evaluate and
+  audit every Intelligence recommendation while returning no model override to
+  OpenClaw. This permits a release canary before live routing is enabled.
+
+### Verification
+
+- Added a routing-mode test that proves a shadow recommendation cannot alter
+  the host selection while its recommended model remains available in the audit.
+
 ## 1.2.1 — 2026-08-22
 
 Release-metadata correction. Runtime behavior is unchanged from 1.2.0.
