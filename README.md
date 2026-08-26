@@ -38,6 +38,18 @@ Automatic benchmark-driven selection is the separately-licensed Intelligence lay
 installed, this plugin detects it and defers to it (see `intelligence` config). To
 license it: https://togglelogic.ai/
 
+## OpenClaw compatibility
+
+> **Backward-compatible with OpenClaw 2026.6.5 and later; validated through
+> OpenClaw 2026.7.1-2.**
+
+The minimum gateway version remains `>=2026.6.5`, and the plugin API floor
+remains `>=2026.5.2`. Those lower bounds are intentional: they preserve support
+for existing OpenClaw deployments and do not mean ToggleLogic depends on an
+obsolete host release. ToggleLogic Free 1.3.1 was packaged and passed its full
+release quality gate on OpenClaw `2026.7.1-2`. OpenClaw versions newer than the
+stated validation point should be verified before production promotion.
+
 ## Install (from ClawHub)
 
 ```

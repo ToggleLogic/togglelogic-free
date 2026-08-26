@@ -2,6 +2,29 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.3.1 — 2026-08-26
+
+Metadata and documentation compatibility release. Routing, model selection,
+cost observation, fleet attribution, configuration, and network behavior are
+unchanged from 1.3.0.
+
+- Record OpenClaw `2026.7.1-2` as the host used to package and validate this
+  release.
+- State prominently that ToggleLogic is backward-compatible with OpenClaw
+  `2026.6.5` and later and is validated through OpenClaw `2026.7.1-2`.
+- Retain the intentional minimum gateway floor `>=2026.6.5` and plugin API
+  floor `>=2026.5.2` for existing deployments.
+- Clarify that the minimum version is a compatibility floor, not a dependency
+  on an obsolete OpenClaw release.
+- Add a regression assertion that release metadata cannot silently change any
+  of the three compatibility values.
+
+### Verification
+
+- Full ToggleLogic release quality gate passes on OpenClaw `2026.7.1-2`.
+- ClawHub package validation and artifact inspection are required before
+  publication.
+
 ## 1.3.0 — 2026-08-26
 
 - Add opt-in, provider-constrained family aliases for configured routes, with

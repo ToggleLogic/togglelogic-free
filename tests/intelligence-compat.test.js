@@ -28,7 +28,7 @@ test("pairwise release contract accepts exact compatible pair", async () => {
   assert.equal((await detectIntelligenceLayer(root, "", "1.1.2")).present, true);
   assert.equal((await detectIntelligenceLayer(root, "", "1.2.0")).present, true);
   assert.equal((await detectIntelligenceLayer(root, "", "1.3.0")).present, true);
-  assert.equal((await detectIntelligenceLayer(root, "", "1.3.0")).present, true);
+  assert.equal((await detectIntelligenceLayer(root, "", "1.3.1")).present, true);
 });
 
 test("pairwise release contract fails closed on ABI, version, and development state", async () => {
@@ -40,7 +40,7 @@ test("pairwise release contract fails closed on ABI, version, and development st
 
 test("pairwise release contract fails closed when classifier bytes do not match manifest", async () => {
   const root = await fixture({ entrypoint_sha256: "0".repeat(64) });
-  const result = await detectIntelligenceLayer(root, "", "1.3.0");
+  const result = await detectIntelligenceLayer(root, "", "1.3.1");
   assert.equal(result.present, false);
   assert.equal(result.reason, "classifier entrypoint hash mismatch");
 });
