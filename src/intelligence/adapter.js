@@ -15,16 +15,10 @@
  * succeeds — so a customer with the open-source plugin alone never
  * imports any licensed code.
  *
- * v0.3.0-alpha.1: STUB. Detection succeeds, adapter loads, but classify()
- *                 always returns null (decline). This proves the lazy
- *                 import works, the state machine transitions correctly,
- *                 and v0.3.1 only needs to flip the classify() body —
- *                 no architectural refactor.
- *
- * v0.3.1: Real classifier wiring. The TODO block below shows the shape
- *         of the import and the call. Until then we run in shadow mode:
- *         the seam reports 'available', requests are logged with mode
- *         'intelligence', but no overrides are emitted.
+ * The adapter imports the separately installed classifier only after the
+ * detector verifies its release identity, compatibility interval, seam ABI,
+ * entrypoint hash, and configured registry. Shadow mode records a recommendation
+ * but never emits an override.
  */
 
 export async function createAdapter({

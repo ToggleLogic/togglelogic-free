@@ -2,7 +2,7 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
-## 1.3.0-rc.1 — 2026-08-26
+## 1.3.0-rc.2 — 2026-08-26
 
 Release candidate. Reconstructs the useful family-routing experiment in the
 authoritative public source tree without carrying forward the unsafe installed
@@ -29,6 +29,10 @@ alpha implementation.
 
 - Added family-resolution, provider-filter, stale/corrupt-catalog, safe
   fallback, split override, and false-zero regression tests.
+- Added direct owner-override, session-provenance, interceptor-priority, and
+  fail-open/fail-closed routing tests after independent review.
+- Added fail-closed SHA-256 verification of the paired Intelligence classifier
+  before dynamic import.
 - Added a reproducible quality gate and CI workflow.
 
 ## 1.2.4 — 2026-08-23

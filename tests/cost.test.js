@@ -101,15 +101,18 @@ test("pricing rejects 0/0 placeholders and half-null rows instead of emitting fa
     openai: { models: {
       "gpt-zero": { cost: { input: 0, output: 0 } },
       "gpt-half": { cost: { input: 1, output: null } },
+      "gpt-zero-input": { cost: { input: 0, output: 4 } },
       "gpt-real": { cost: { input: 1, output: 4 } },
     } },
   } });
   assert.equal(idx.has("gpt-zero"), false);
   assert.equal(idx.has("gpt-half"), false);
+  assert.equal(idx.has("gpt-zero-input"), false);
   assert.equal(idx.has("gpt-real"), true);
-  const pricing = createPricing({}, null, { fallbackData: { models: [] }, fetch: async () => ({ ok: true, json: async () => ({}) }) });
+  const pricing = createPricing({}, null, { fetchImpl: async () => ({ ok: true, json: async () => ({}) }) });
   assert.equal(pricing.costUsd({ priced: true, inputPerM: 1, outputPerM: null }, { input: 1000, output: 1000 }), null);
   assert.equal(pricing.costUsd({ priced: true, inputPerM: 0, outputPerM: 0 }, { input: 1000, output: 1000 }), null);
+  assert.equal(pricing.costUsd({ priced: true, inputPerM: 0, outputPerM: 4 }, { input: 1000, output: 1000 }), null);
 });
 
 test("costUsd: dollar math (per-million) is correct", async () => {

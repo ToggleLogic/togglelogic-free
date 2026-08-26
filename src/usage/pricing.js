@@ -53,7 +53,7 @@ export function buildIndex({ modelsDev, fallback, userOverride } = {}) {
     // A usable price requires both directions and at least one non-zero rate.
     // Half-null and 0/0 feed rows are incomplete placeholders, not priced calls.
     if (val.inputPerM == null || val.outputPerM == null) return;
-    if (val.inputPerM === 0 && val.outputPerM === 0) return;
+    if (val.inputPerM <= 0 || val.outputPerM <= 0) return;
     for (const k of keys) if (!idx.has(k)) idx.set(k, val);
   };
 
@@ -227,7 +227,7 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
   function costUsd(priceInfo, usage) {
     if (!priceInfo || !priceInfo.priced) return null;
     if (priceInfo.inputPerM == null || priceInfo.outputPerM == null) return null;
-    if (priceInfo.inputPerM === 0 && priceInfo.outputPerM === 0) return null;
+    if (priceInfo.inputPerM <= 0 || priceInfo.outputPerM <= 0) return null;
     const inTok = num(usage?.input) ?? 0;
     const outTok = num(usage?.output) ?? 0;
     const cacheTok = (num(usage?.cacheRead) ?? 0) + (num(usage?.cacheWrite) ?? 0);

@@ -19,6 +19,7 @@
  */
 
 import { promises as fs } from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import os from "node:os";
 
@@ -84,6 +85,18 @@ export async function detectIntelligenceLayer(configuredPath, registryPath, plug
   }
   if (manifest.seam_abi !== INTELLIGENCE_SEAM_ABI) {
     return { present: false, reason: `seam ABI mismatch: expected ${INTELLIGENCE_SEAM_ABI}`, resolvedPath, version };
+  }
+  if (manifest.entrypoint !== "src/classifier.js" || !/^[a-f0-9]{64}$/.test(manifest.entrypoint_sha256 || "")) {
+    return { present: false, reason: "classifier entrypoint integrity metadata missing or invalid", resolvedPath, version };
+  }
+  try {
+    const classifier = await fs.readFile(path.join(resolvedPath, manifest.entrypoint));
+    const actualHash = crypto.createHash("sha256").update(classifier).digest("hex");
+    if (actualHash !== manifest.entrypoint_sha256) {
+      return { present: false, reason: "classifier entrypoint hash mismatch", resolvedPath, version };
+    }
+  } catch (err) {
+    return { present: false, reason: `classifier entrypoint unavailable: ${err.message}`, resolvedPath, version };
   }
   const compatibility = manifest.plugin_compatibility || {};
   if (!pluginVersion || !versionInRange(pluginVersion, compatibility.minimum, compatibility.maximum_exclusive)) {
