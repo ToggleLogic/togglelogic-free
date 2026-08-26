@@ -19,6 +19,7 @@ import { createIntelligenceSeam } from "./intelligence/seam.js";
 import { createLogger as createRoutingLogger } from "./observability/logger.js";
 import { createOwnerOverrideAskHandler } from "./capture/owner-override-ask.js";
 import { createCostObserver } from "./usage/cost-observer.js";
+import { FamilyResolver } from "./routing/family-resolver.js";
 
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 
@@ -48,6 +49,16 @@ function buildRuntimeConfigFromApiConfig(cfg) {
   return out;
 }
 
+export function configuredProvidersFromApiConfig(cfg) {
+  try {
+    const providers = cfg?.models?.providers;
+    if (!providers || typeof providers !== "object") return [];
+    return Object.keys(providers).map((value) => value.toLowerCase()).sort();
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Capability registry — one entry per feature group. Customer/community
  * deployments use the config.features flags as a delivery-time toggle.
@@ -67,6 +78,8 @@ export const CAPABILITIES = [
     register({ api, audit, fallbackLogger, version, config }) {
       const routingLogger = createRoutingLogger(config.logging, fallbackLogger);
       const hostRuntimeConfig = buildRuntimeConfigFromApiConfig(api && api.config);
+      const configuredProviders = configuredProvidersFromApiConfig(api && api.config);
+      const familyResolver = new FamilyResolver(config.familyResolution, fallbackLogger);
       const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, hostRuntimeConfig, version);
       const interceptor = createInterceptor({
         config,
@@ -75,6 +88,8 @@ export const CAPABILITIES = [
         seam,
         version,
         audit,
+        familyResolver,
+        configuredProviders,
       });
       api.on("before_model_resolve", interceptor);
 

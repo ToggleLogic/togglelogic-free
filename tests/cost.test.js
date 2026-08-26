@@ -96,6 +96,22 @@ test("costUsd calculator: unpriced (non-curated / curated-but-absent) yields nul
   assert.equal(p.costUsd(absent, { input: 1000, output: 500 }), null); // NOT 0
 });
 
+test("pricing rejects 0/0 placeholders and half-null rows instead of emitting false zero", async () => {
+  const idx = buildIndex({ modelsDev: {
+    openai: { models: {
+      "gpt-zero": { cost: { input: 0, output: 0 } },
+      "gpt-half": { cost: { input: 1, output: null } },
+      "gpt-real": { cost: { input: 1, output: 4 } },
+    } },
+  } });
+  assert.equal(idx.has("gpt-zero"), false);
+  assert.equal(idx.has("gpt-half"), false);
+  assert.equal(idx.has("gpt-real"), true);
+  const pricing = createPricing({}, null, { fallbackData: { models: [] }, fetch: async () => ({ ok: true, json: async () => ({}) }) });
+  assert.equal(pricing.costUsd({ priced: true, inputPerM: 1, outputPerM: null }, { input: 1000, output: 1000 }), null);
+  assert.equal(pricing.costUsd({ priced: true, inputPerM: 0, outputPerM: 0 }, { input: 1000, output: 1000 }), null);
+});
+
 test("costUsd: dollar math (per-million) is correct", async () => {
   const p = pricingFrom(MODELSDEV);
   const r = await p.resolve("anthropic/claude-opus-4-7"); // $5/$25 per M
@@ -164,6 +180,17 @@ test("config: costVisibility defaults + feature toggle normalize", () => {
   const c2 = normalizeConfig({ features: { costVisibility: { enabled: true } }, costVisibility: { pricing: { refreshHours: 6 } } });
   assert.equal(c2.features.costVisibility.enabled, true);
   assert.equal(c2.costVisibility.pricing.refreshHours, 6);
+});
+
+test("config: family aliases normalize narrowly and remain disabled by default", () => {
+  assert.equal(normalizeConfig({}).familyResolution.enabled, false);
+  const config = normalizeConfig({ familyResolution: { enabled: true, aliases: {
+    grok: { family: "Grok", providers: ["XAI", "xai", "bad provider"], strategy: "newest", maxInputPerM: 5 },
+    "bad alias!": { family: "gpt", providers: ["openai"] },
+  } } });
+  assert.deepEqual(config.familyResolution.aliases, {
+    grok: { family: "grok", providers: ["xai"], strategy: "newest", maxInputPerM: 5 },
+  });
 });
 
 test("fleet attribution accepts portable slugs and rejects sensitive-looking values", () => {

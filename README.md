@@ -14,6 +14,11 @@ free tier gives you:
 - **Static / intent routes.** Map host-supplied task labels to models in
   `configuredRoutes`. The Free plugin never inspects prompt text to infer a
   task.
+- **Optional family aliases for configured routes.** An operator may explicitly
+  map a route to `family:<alias>`. Resolution is disabled by default, restricted
+  to approved providers already configured in OpenClaw, requires a fresh public
+  pricing catalog with complete non-zero prices, and safely passes through if
+  any condition is not met.
 - **A deliberately-simple cheapest-default.** Name the cheap model you want as the
   default; the plugin defaults to it unless an override or route says otherwise.
 - **A structured audit stream** of every routing decision (NIST 800-53 AU-2/AU-3/AU-12
@@ -26,6 +31,9 @@ It does **not** include — and never ships — the patented **ToggleLogic Intel
 engine (benchmark-driven automatic model selection) or the **Toggle Registry**. The
 free cheapest-default is a *dumb static preference*: it never inspects your request,
 never consults a model registry or benchmark, and embeds no model names or prices.
+The optional configured-route family alias reads only a deployment-local cache
+of the public Models.dev catalog; no catalog or proprietary registry ships here,
+and this feature never participates in `cheap` mode.
 Automatic benchmark-driven selection is the separately-licensed Intelligence layer; if
 installed, this plugin detects it and defers to it (see `intelligence` config). To
 license it: https://togglelogic.ai/
@@ -67,6 +75,36 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
 | `intelligence` | Defer to the separately-licensed Intelligence layer (not included); report unavailable rather than silently downgrading |
 
 Owner overrides apply **above** the mode in all cases.
+
+### Optional configured-route family aliases
+
+Family resolution is explicit and off by default. A route must use the
+`family:<alias>` form, and the alias must name allowed providers. Those
+providers must also exist in OpenClaw's `models.providers` configuration.
+
+```json
+{
+  "mode": "configured",
+  "configuredRoutes": { "research": "family:grok" },
+  "familyResolution": {
+    "enabled": true,
+    "maxAgeHours": 48,
+    "aliases": {
+      "grok": {
+        "family": "grok",
+        "providers": ["xai"],
+        "strategy": "lowest_cost",
+        "maxInputPerM": 5,
+        "maxOutputPerM": 20
+      }
+    }
+  }
+}
+```
+
+`newest` is also available, but still obeys provider, freshness, complete-price,
+and optional price-ceiling gates. Failure produces passthrough, never a bare
+family name.
 
 **Optional expiry.** An override may include `expires_at_ms` (a numeric epoch-ms deadline).
 After it passes, the override stops applying and routing returns to automatic — no file rewrite
@@ -124,7 +162,7 @@ conversation hook):
 ## Config reference
 
 See `openclaw.plugin.json` `configSchema` for every field: `mode`, `logging`,
-`configuredRoutes`, `cheapHeuristic`, `intelligence`, `ownerOverride`, `features`,
+`configuredRoutes`, `cheapHeuristic`, `familyResolution`, `intelligence`, `ownerOverride`, `features`,
 `audit`, `costVisibility`.
 
 ## License

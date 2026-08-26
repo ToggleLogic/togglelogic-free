@@ -15,7 +15,7 @@ import { createAuditLogger } from "./audit/audit-logger.js";
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 import { registerCapabilities } from "./capabilities.js";
 
-const PLUGIN_VERSION = "1.2.4";
+const PLUGIN_VERSION = "1.3.0-rc.1";
 
 /**
  * ToggleLogic (Free Tier) plugin entry.

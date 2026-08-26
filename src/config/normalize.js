@@ -26,6 +26,12 @@ export const DEFAULTS = Object.freeze({
   // Simple cheapest-default heuristic (free tier): a deployment-declared static
   // default. No registry, no benchmark, no request classification.
   cheapHeuristic: Object.freeze({ default: "", order: [] }),
+  familyResolution: Object.freeze({
+    enabled: false,
+    catalogPath: "~/.openclaw/togglelogic/pricing-cache.json",
+    maxAgeHours: 48,
+    aliases: Object.freeze({}),
+  }),
   intelligence: Object.freeze({
     enabled: true,
     path: "~/togglelogic-intelligence",
@@ -96,6 +102,7 @@ export function normalizeConfig(raw) {
         ? { ...r.configuredRoutes }
         : {},
     cheapHeuristic: normalizeCheapHeuristic(r.cheapHeuristic),
+    familyResolution: normalizeFamilyResolution(r.familyResolution),
     intelligence: {
       enabled: intelligence.enabled !== false,
       path:
@@ -127,6 +134,34 @@ export function normalizeConfig(raw) {
     },
     ownerOverride: normalizeOwnerOverrideEntry(r.ownerOverride),
     costVisibility: normalizeCostVisibility(r.costVisibility),
+  };
+}
+
+function normalizeFamilyResolution(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const aliases = {};
+  if (r.aliases && typeof r.aliases === "object" && !Array.isArray(r.aliases)) {
+    for (const [name, value] of Object.entries(r.aliases)) {
+      if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(name) || !value || typeof value !== "object") continue;
+      const providers = Array.isArray(value.providers)
+        ? [...new Set(value.providers.map((item) => String(item).trim().toLowerCase()).filter((item) => /^[a-z0-9][a-z0-9_-]{0,31}$/.test(item)))]
+        : [];
+      const family = typeof value.family === "string" ? value.family.trim().toLowerCase() : "";
+      if (!family || providers.length === 0) continue;
+      aliases[name] = {
+        family,
+        providers,
+        strategy: value.strategy === "newest" ? "newest" : "lowest_cost",
+        ...(Number.isFinite(value.maxInputPerM) && value.maxInputPerM > 0 ? { maxInputPerM: value.maxInputPerM } : {}),
+        ...(Number.isFinite(value.maxOutputPerM) && value.maxOutputPerM > 0 ? { maxOutputPerM: value.maxOutputPerM } : {}),
+      };
+    }
+  }
+  return {
+    enabled: r.enabled === true,
+    catalogPath: typeof r.catalogPath === "string" && r.catalogPath.length > 0 ? r.catalogPath : DEFAULTS.familyResolution.catalogPath,
+    maxAgeHours: Number.isFinite(r.maxAgeHours) && r.maxAgeHours >= 1 ? r.maxAgeHours : DEFAULTS.familyResolution.maxAgeHours,
+    aliases,
   };
 }
 

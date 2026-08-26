@@ -88,7 +88,7 @@ function sameSelection(left, right) {
   return leftRef === rightRef;
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit }) {
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, familyResolver, configuredProviders = [] }) {
   return async function beforeModelResolve(event, hookContext) {
     const decision = newDecision({ event, hookContext, mode: config.mode, version });
 
@@ -188,6 +188,8 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
             hookContext,
             config,
             seam,
+            familyResolver,
+            configuredProviders,
           });
           classifierSelection = selectedModelFromDispatchResult(classifierResult);
         } catch (err) {
@@ -255,6 +257,8 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
         hookContext,
         config,
         seam,
+        familyResolver,
+        configuredProviders,
       });
 
       override = result.override;

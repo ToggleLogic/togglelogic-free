@@ -46,7 +46,7 @@ function cheapConfigured(config) {
   return Boolean(pickCheapDefault(config && config.cheapHeuristic));
 }
 
-export async function dispatchByMode({ mode, event, hookContext, config, seam }) {
+export async function dispatchByMode({ mode, event, hookContext, config, seam, familyResolver, configuredProviders = [] }) {
   switch (mode) {
     case "passthrough":
       return passthroughResult();
@@ -54,6 +54,25 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam })
     case "configured": {
       const route = pickConfiguredRoute(config.configuredRoutes, event, hookContext);
       if (!route) return passthroughResult({ reason: "no configured match" });
+      if (route.modelId.startsWith("family:")) {
+        const alias = route.modelId.slice("family:".length);
+        const resolved = familyResolver?.resolve(alias, configuredProviders);
+        if (!resolved) {
+          return passthroughResult({ reason: "family route unresolved", matchedKey: route.key, familyAlias: alias });
+        }
+        return {
+          override: { modelOverride: resolved.modelId, providerOverride: resolved.provider },
+          selectedModel: `${resolved.provider}/${resolved.modelId}`,
+          selectedProvider: resolved.provider,
+          selectionReason: "configured_family",
+          selectionDetails: {
+            matchedKey: route.key,
+            familyAlias: alias,
+            strategy: config.familyResolution.aliases[alias]?.strategy ?? "lowest_cost",
+            priceSource: "deployment-cached-models.dev",
+          },
+        };
+      }
       return {
         override: { modelOverride: route.modelId },
         selectedModel: route.modelId,

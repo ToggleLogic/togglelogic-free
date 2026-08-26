@@ -2,6 +2,35 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.3.0-rc.1 — 2026-08-26
+
+Release candidate. Reconstructs the useful family-routing experiment in the
+authoritative public source tree without carrying forward the unsafe installed
+alpha implementation.
+
+### Added
+
+- Opt-in `familyResolution` for explicit `family:<alias>` values in
+  `configuredRoutes` only.
+- Provider intersection: candidates must be approved by the alias and present
+  in OpenClaw's configured provider map.
+- Complete-price and freshness gates with `lowest_cost` or bounded `newest`
+  selection. Unresolved aliases safely pass through.
+
+### Fixed
+
+- Reject null, blank, half-priced, and 0/0 placeholder rates instead of
+  coercing them into a priced zero-dollar call.
+- Preserve the documented static behavior of `cheap` mode; it never performs
+  family resolution or silently upgrades to a newer model.
+- Keep the release candidate npm-private until independent review passes.
+
+### Verification
+
+- Added family-resolution, provider-filter, stale/corrupt-catalog, safe
+  fallback, split override, and false-zero regression tests.
+- Added a reproducible quality gate and CI workflow.
+
 ## 1.2.4 — 2026-08-23
 
 Patch release. Preserves the private Intelligence layer’s structured

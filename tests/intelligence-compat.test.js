@@ -12,7 +12,7 @@ async function fixture(overrides = {}) {
   await fs.writeFile(path.join(root, "release-manifest.json"), JSON.stringify({
     product: "togglelogic-intelligence", version: "1.2.0-rc.1", release_state: "released",
     seam_abi: INTELLIGENCE_SEAM_ABI,
-    plugin_compatibility: { minimum: "1.1.2", maximum_exclusive: "1.3.0" }, ...overrides,
+    plugin_compatibility: { minimum: "1.1.2", maximum_exclusive: "1.4.0" }, ...overrides,
   }));
   return root;
 }
@@ -21,6 +21,8 @@ test("pairwise release contract accepts exact compatible pair", async () => {
   const root = await fixture();
   assert.equal((await detectIntelligenceLayer(root, "", "1.1.2")).present, true);
   assert.equal((await detectIntelligenceLayer(root, "", "1.2.0")).present, true);
+  assert.equal((await detectIntelligenceLayer(root, "", "1.3.0-rc.1")).present, true);
+  assert.equal((await detectIntelligenceLayer(root, "", "1.3.0")).present, true);
 });
 
 test("pairwise release contract fails closed on ABI, version, and development state", async () => {
