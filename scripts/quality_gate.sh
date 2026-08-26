@@ -18,8 +18,15 @@ const runtime = /const PLUGIN_VERSION = "([^"]+)"/.exec(source)?.[1];
 if (!runtime || pkg.version !== manifest.version || pkg.version !== runtime) {
   throw new Error('release identity mismatch');
 }
-if (!pkg.private || !pkg.version.includes('-rc.')) {
-  throw new Error('release-candidate package must remain private and use an rc version');
+const isRc = pkg.version.includes('-rc.');
+if (isRc && pkg.private !== true) {
+  throw new Error('release-candidate package must remain private');
+}
+if (!isRc && pkg.private === true) {
+  throw new Error('stable release package must be publishable');
+}
+if (!/^\d+\.\d+\.\d+(?:-rc\.\d+)?$/.test(pkg.version)) {
+  throw new Error('unsupported release version');
 }
 NODE
 npm_pack_report="$(mktemp -t togglelogic-pack-dry-run.XXXXXX)"
@@ -33,4 +40,4 @@ const forbidden = names.filter((name) => /(^|\/)(tests?|reports?|\.git|node_modu
 if (forbidden.length) throw new Error(`forbidden package files: ${forbidden.join(', ')}`);
 if (!names.includes('src/routing/family-resolver.js')) throw new Error('family resolver missing from package');
 NODE
-echo "ToggleLogic release-candidate quality gate passed."
+echo "ToggleLogic release quality gate passed."

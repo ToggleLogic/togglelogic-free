@@ -2,6 +2,22 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.3.0 — 2026-08-26
+
+- Add opt-in, provider-constrained family aliases for configured routes, with
+  fresh complete pricing required and safe passthrough on uncertainty.
+- Preserve explicit owner and session model choices above automatic routing.
+- Prevent false `$0.00` reporting from zero, blank, or half-priced catalog rows.
+- Verify the separately licensed Intelligence classifier by release-manifest
+  identity, compatibility interval, ABI, and exact SHA-256 before loading it.
+- Add Intelligence shadow mode so recommendations can be audited without
+  changing the model selected by OpenClaw.
+- Respect OpenClaw named/dev profile isolation for all legacy default paths.
+- Add reproducible packaging, SBOM/provenance checks, and expanded security,
+  fallback, pricing, routing, integrity, and isolation regression coverage.
+- Keep the Free distribution free of the private classifier, registry,
+  customer evidence, credentials, and deployment backups.
+
 ## 1.3.0-rc.3 — 2026-08-26
 
 - Respect OpenClaw named/dev profile isolation by remapping legacy
