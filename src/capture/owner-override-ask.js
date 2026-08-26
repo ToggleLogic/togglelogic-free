@@ -7,15 +7,8 @@
  */
 
 import { spawn } from "node:child_process";
-import { homedir } from "node:os";
 import { resolveOwnerOverride } from "../routing/owner-override.js";
-
-function expandTilde(p) {
-  if (typeof p !== "string") return p;
-  if (p === "~") return homedir();
-  if (p.startsWith("~/")) return homedir() + p.slice(1);
-  return p;
-}
+import { resolveOpenClawPath } from "../path-utils.js";
 
 // User-facing channels only (same generic set as turn-end capture). The
 // consumer decides which one is the owner; the engine stays channel-agnostic.
@@ -31,7 +24,7 @@ const PY = "/usr/bin/python3"; // production interpreter (stock macOS)
  */
 export function createOwnerOverrideAskHandler({ config, fallbackLogger }) {
   const oo = (config && config.ownerOverride) || {};
-  const consumer = expandTilde(oo.askConsumer);
+  const consumer = resolveOpenClawPath(oo.askConsumer);
 
   return async function ownerOverrideAskHandler(event, ctx) {
     try {

@@ -58,15 +58,8 @@
  * applied, request routes via the classifier. We never throw into the hook.
  */
 
-import { homedir } from "node:os";
 import { statSync, readFileSync } from "node:fs";
-
-function expandTilde(p) {
-  if (typeof p !== "string") return p;
-  if (p === "~") return homedir();
-  if (p.startsWith("~/")) return homedir() + p.slice(1);
-  return p;
-}
+import { resolveOpenClawPath } from "../path-utils.js";
 
 /** A model_ref must be "provider/model" — a single non-edge slash. */
 function looksLikeModelRef(ref) {
@@ -113,7 +106,7 @@ export function resolveOwnerOverride(ownerOverrideConfig) {
   if (!cfg || cfg.enabled !== true || typeof cfg.statePath !== "string") {
     return NOT_APPLIED;
   }
-  const path = expandTilde(cfg.statePath);
+  const path = resolveOpenClawPath(cfg.statePath);
 
   let mtimeMs;
   try {
@@ -182,4 +175,4 @@ export function resolveOwnerOverride(ownerOverrideConfig) {
 }
 
 // Exposed for in-process tests only.
-export const _internal = { expandTilde, looksLikeModelRef, ttlVerdict };
+export const _internal = { expandTilde: resolveOpenClawPath, looksLikeModelRef, ttlVerdict };

@@ -18,8 +18,8 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { resolveOpenClawPath } from "../path-utils.js";
 
 import { candidateKeys, feedIndexKeys, isCurated, providerOf } from "./normalize-ref.js";
 
@@ -35,13 +35,6 @@ const USER_AGENT =
 // Curated first-party provider blocks are indexed FIRST so their prices win over
 // aggregator re-keys of the same model.
 const FIRST_PARTY = ["anthropic", "openai", "google", "xai", "togetherai", "together"];
-
-function expandTilde(p) {
-  if (typeof p !== "string") return p;
-  if (p === "~") return os.homedir();
-  if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
-  return p;
-}
 
 /**
  * Build a resolution index: Map<canonKey, {inputPerM, outputPerM, source}>.
@@ -116,9 +109,9 @@ function num(x) {
  * Create the pricing engine. `deps` lets tests inject fetch/clock/paths.
  */
 export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
-  const cachePath = expandTilde(cfg.cachePath ?? "~/.openclaw/togglelogic/pricing-cache.json");
+  const cachePath = resolveOpenClawPath(cfg.cachePath ?? "~/.openclaw/togglelogic/pricing-cache.json");
   const overridePath = cfg.userPriceOverridePath
-    ? expandTilde(cfg.userPriceOverridePath)
+    ? resolveOpenClawPath(cfg.userPriceOverridePath)
     : "";
   const refreshMs = Math.max(1, cfg.refreshHours ?? 24) * 3600 * 1000;
   const timeoutMs = Math.max(1000, cfg.timeoutMs ?? 15000);

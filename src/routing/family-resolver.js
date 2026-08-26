@@ -8,16 +8,8 @@
  */
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-
-function expandTilde(value) {
-  if (value === "~") return os.homedir();
-  if (typeof value === "string" && value.startsWith("~/")) {
-    return path.join(os.homedir(), value.slice(2));
-  }
-  return value;
-}
+import { resolveOpenClawPath } from "../path-utils.js";
 
 function finitePositive(value) {
   const number = Number(value);
@@ -38,7 +30,7 @@ function matchesFamily(modelId, info, family) {
 export class FamilyResolver {
   constructor(config = {}, logger = null) {
     this.enabled = config.enabled === true;
-    this.catalogPath = expandTilde(config.catalogPath || "");
+    this.catalogPath = resolveOpenClawPath(config.catalogPath || "");
     this.maxAgeHours = Number.isFinite(config.maxAgeHours) ? config.maxAgeHours : 48;
     this.aliases = config.aliases && typeof config.aliases === "object" ? config.aliases : {};
     this.logger = logger;

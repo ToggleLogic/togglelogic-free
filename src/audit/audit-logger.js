@@ -8,8 +8,8 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import crypto from "node:crypto";
+import { resolveOpenClawPath } from "../path-utils.js";
 
 import { AUDIT_SCHEMA, OUTCOMES, controlsFor } from "./audit-events.js";
 
@@ -40,7 +40,7 @@ const MAX_ROTATION_INDEX = 4; // .1 through .5
 export function createAuditLogger(auditConfig, hostLogger, runtimeMeta = {}) {
   const config = auditConfig ?? {};
   const enabled = config.enabled !== false;
-  const targetPath = expandTilde(
+  const targetPath = resolveOpenClawPath(
     config.path ?? "~/.openclaw/logs/togglelogic-audit.jsonl"
   );
   const rotateBytes = Math.max(1, config.rotateSizeMb ?? 50) * 1024 * 1024;
@@ -150,13 +150,6 @@ export function createAuditLogger(auditConfig, hostLogger, runtimeMeta = {}) {
     // dispatch.tier1.ack's attempted/delivered split.
     correlationId: generateCorrelationId,
   };
-}
-
-function expandTilde(p) {
-  if (typeof p !== "string") return p;
-  if (p === "~") return os.homedir();
-  if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
-  return p;
 }
 
 function generateSessionId() {

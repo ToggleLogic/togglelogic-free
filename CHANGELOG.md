@@ -2,6 +2,13 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.3.0-rc.3 — 2026-08-26
+
+- Respect OpenClaw named/dev profile isolation by remapping legacy
+  `~/.openclaw/...` defaults through `OPENCLAW_STATE_DIR`.
+- Add regression coverage for profile-scoped paths while preserving ordinary
+  home-relative paths.
+
 ## 1.3.0-rc.2 — 2026-08-26
 
 Release candidate. Reconstructs the useful family-routing experiment in the

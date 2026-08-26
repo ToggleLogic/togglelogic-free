@@ -21,7 +21,7 @@
 import { promises as fs } from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
-import os from "node:os";
+import { resolveOpenClawPath } from "../path-utils.js";
 
 const MIN_COMPATIBLE_VERSION = "1.0.0-alpha.2";
 
@@ -36,7 +36,7 @@ const MIN_COMPATIBLE_VERSION = "1.0.0-alpha.2";
 export const INTELLIGENCE_SEAM_ABI = 1;
 
 export async function detectIntelligenceLayer(configuredPath, registryPath, pluginVersion = "") {
-  const resolvedPath = expandTilde(configuredPath ?? "~/togglelogic-intelligence");
+  const resolvedPath = resolveOpenClawPath(configuredPath ?? "~/togglelogic-intelligence");
 
   // 1. Path must exist and be a directory.
   let stats;
@@ -107,7 +107,7 @@ export async function detectIntelligenceLayer(configuredPath, registryPath, plug
   //    RELATIVE to the layer — no deployment/workspace path is hardcoded here.
   const resolvedRegistry =
     typeof registryPath === "string" && registryPath.length > 0
-      ? expandTilde(registryPath)
+      ? resolveOpenClawPath(registryPath)
       : path.join(resolvedPath, "normalized.json");
   try {
     await fs.access(resolvedRegistry);
@@ -133,13 +133,6 @@ function compareVersions(left, right) {
   if (!a.prerelease) return 1;
   if (!b.prerelease) return -1;
   return a.prerelease < b.prerelease ? -1 : 1;
-}
-
-function expandTilde(p) {
-  if (typeof p !== "string") return p;
-  if (p === "~") return os.homedir();
-  if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
-  return p;
 }
 
 /**
