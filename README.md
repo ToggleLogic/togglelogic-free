@@ -1,67 +1,46 @@
-# ToggleLogic (Free Tier) — model routing for OpenClaw
+# ToggleLogic Free — policy-based model routing for OpenClaw
 
 > **PATENT PENDING.** Source-available under the **ToggleLogic Free Startup
-> Commercial Use License 2.0** (see [LICENSE](./LICENSE)). Personal and internal
-> business use is free. Qualifying startups may also embed ToggleLogic Free in a
-> commercial product while below the published funding and revenue thresholds.
-> It is not open source. © 2026 Motherboard, Inc. · https://togglelogic.ai/
+> Commercial Use License 2.0** (see [LICENSE](./LICENSE)). It is not open source.
+> © 2026 Motherboard, Inc. · https://togglelogic.ai/
 
-ToggleLogic routes each OpenClaw request to a model you control — **bring your own
-provider credentials, declare intent, and let the plugin apply your choices.** This
-free tier gives you:
+## Routing you configure. Overrides that stick. A record of both.
 
-- **Owner overrides (sticky, held).** Tell your assistant "use Opus for this" and the
-  deployment-side switch writes an override that persists across every subsequent request
-  — pins hold until you switch back.
-- **Static / intent routes.** Map host-supplied task labels to models in
-  `configuredRoutes`. The Free plugin never inspects prompt text to infer a
-  task.
-- **Optional family aliases for configured routes.** An operator may explicitly
-  map a route to `family:<alias>`. Resolution is disabled by default, restricted
-  to approved providers already configured in OpenClaw, requires a fresh public
-  pricing catalog with complete non-zero prices, and safely passes through if
-  any condition is not met.
-- **A deliberately-simple cheapest-default.** Name the cheap model you want as the
-  default; the plugin defaults to it unless an override or route says otherwise.
-- **A structured audit stream** of every routing decision (NIST 800-53 AU-2/AU-3/AU-12
-  schema bar).
-- **Cost visibility (dollars) — observe-only.** See what your calls cost, per model and
-  per day, priced from live public data. Unpriced models are shown loudly, never a silent
-  $0.00. Opt-in; reports only, never enforces. (See [Cost visibility](#cost-visibility-dollars).)
+ToggleLogic Free is the source-available routing layer for OpenClaw. It applies
+your configured model choices, keeps an owner's explicit choice in force until
+it is changed, and writes what happened to local records you can inspect.
 
-It does **not** include — and never ships — the patented **ToggleLogic Intelligence**
-engine (benchmark-driven automatic model selection) or the **Toggle Registry**. The
-free cheapest-default is a *dumb static preference*: it never inspects your request,
-never consults a model registry or benchmark, and embeds no model names or prices.
-The optional configured-route family alias reads only a deployment-local cache
-of the public Models.dev catalog; no catalog or proprietary registry ships here,
-and this feature never participates in `cheap` mode.
-Automatic benchmark-driven selection is the separately-licensed Intelligence layer; if
-installed, this plugin detects it and defers to it (see `intelligence` config). To
-evaluate or license it: https://togglelogic.ai/presentation/
+It does not read prompts to guess intent. Your policy and provider credentials
+remain under your control. Its routing audit and cost ledger stay on your machine
+and are not transmitted to Motherboard. Model traffic still goes to the providers
+you configure in OpenClaw.
 
-## Startup commercial use
+## What it does
 
-You may build, host, and charge for a bona fide product containing ToggleLogic
-Free without contacting Motherboard first while your consolidated startup group
-remains below both thresholds:
+- **Configured routes.** Point a host-supplied task label at an exact model.
+  Routing is deterministic and entirely under your control.
+- **Deployment-declared cheapest default.** Name the inexpensive model you want
+  used when nothing higher-priority applies. ToggleLogic Free does not classify
+  the request or calculate the cheapest capable model.
+- **Owner overrides that persist.** Set a model in the moment and it stays set
+  until you change it. No silent re-routing on the next turn.
+- **A local audit record.** See which task, which model, and on what basis in a
+  structured routing log. ToggleLogic does not transmit that record to Motherboard.
+- **Local cost visibility.** Estimate cost per model from public pricing data,
+  computed on your machine. Unpriced models remain visibly unpriced, never a
+  false `$0.00`.
+- **Optional model-family aliases.** Name a family for a configured route and
+  resolve it only within providers you have approved. Resolution safely passes
+  through when freshness, provider, or price requirements are not satisfied.
 
-- less than **USD $1,000,000 in cumulative outside funding actually received**;
-- less than **USD $1,000,000 in actual gross revenue during a trailing 12-month
-  period**.
+## What it does not do
 
-Reaching either threshold starts a 30-day notice deadline and an automatic
-180-day transition license. The license also provides a cure period and continuity
-for lawfully deployed customer copies. No projected sales, ARR, valuation, or
-announced-but-unreceived financing is used. Read [LICENSE](./LICENSE) for the
-controlling definitions and terms, or see the plain-language policy at
-https://togglelogic.ai/licensing/.
+No prompt inspection or intent inference. No benchmark-driven selection. No
+Toggle Registry, private classifiers, proprietary benchmark data, or bundled
+provider credentials.
 
-This permission covers **ToggleLogic Free only**. It grants no access or rights to
-ToggleLogic Intelligence, the Toggle Registry, proprietary benchmark selection,
-private evidence, or other excluded components. Early contact is optional; contact
-Motherboard whenever an Intelligence evaluation, architecture discussion, support,
-or partnership would help: https://togglelogic.ai/contact/.
+Those belong to **ToggleLogic Intelligence**, a separately licensed product.
+Free is the mechanism. Intelligence is the judgment.
 
 ## OpenClaw compatibility
 
@@ -100,6 +79,41 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
   }
 }
 ```
+
+Bring your own provider credentials. Set your routing policy. The evidence stays
+local.
+
+## License, in brief
+
+ToggleLogic Free is source-available, not open source. Personal use and internal
+business use are free. You may also build, host, and charge for a bona fide product
+containing ToggleLogic Free without contacting Motherboard first while your
+consolidated startup group remains below both:
+
+- **USD $1,000,000 in cumulative outside funding actually received**; and
+- **USD $1,000,000 in actual gross revenue during a trailing 12-month period**.
+
+Announced but unreceived financing, ARR, valuation, projected sales, and pipeline
+do not count. Rights in a release lawfully received are not revocable absent a
+material breach. Curable breaches receive a 30-day cure under the controlling
+license.
+
+Crossing either threshold starts a 30-day notice window and an automatic 180-day
+transition license. If no commercial agreement or extension is effective when
+that period ends, you must stop accepting new customers, making new deployments,
+or materially expanding external commercial use. Existing customers may continue
+running lawfully delivered copies, and you may provide defined security,
+compatibility, defect-correction, and migration updates to previously deployed or
+contractually committed customers for another 12 months.
+
+This permission covers **ToggleLogic Free only**. It grants no access or rights to
+ToggleLogic Intelligence, the Toggle Registry, proprietary benchmark selection,
+private evidence, or other excluded components. Early contact is optional; contact
+Motherboard whenever an Intelligence evaluation, architecture discussion, support,
+or partnership would help: https://togglelogic.ai/contact/.
+
+Read [LICENSE](./LICENSE) for the controlling terms or see the plain-language
+summary at https://togglelogic.ai/licensing/.
 
 ## Modes
 
