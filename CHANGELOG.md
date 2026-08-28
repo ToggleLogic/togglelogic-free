@@ -2,6 +2,17 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.3.2 — 2026-08-28
+
+- Preserve session intent across a single affirmative confirmation by
+  inheriting the preceding high-confidence Intelligence decision within that
+  session, with a 15-minute TTL and consume-once semantics.
+- Classify each logical host turn only once so OpenClaw fallback candidates are
+  not re-routed back to the model that already failed.
+- Carry the classifier's required execution surface into routing audit details.
+- Record explicit Intelligence unavailability as a failed routing decision,
+  while ordinary classifier declines remain safe no-ops.
+
 ## 1.3.1 — 2026-08-26
 
 Metadata and documentation compatibility release. Routing, model selection,

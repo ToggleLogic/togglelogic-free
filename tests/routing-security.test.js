@@ -76,3 +76,22 @@ test("interceptor fallback policy passes through or rethrows as configured", asy
   config = normalizeConfig({ mode: "intelligence", intelligence: { fallbackOnError: false } });
   await assert.rejects(() => harness(config, { seam: throwingSeam })({ prompt: "hello" }, {}), /classifier failed/);
 });
+
+test("interceptor classifies a logical turn once and preserves host fallback candidates", async () => {
+  let calls = 0;
+  const seam = {
+    status: () => "available",
+    classify: async () => {
+      calls += 1;
+      return { providerOverride: "xai", modelOverride: "grok", details: { matched_rule: "tool" } };
+    },
+  };
+  const config = normalizeConfig({ mode: "intelligence" });
+  const interceptor = harness(config, { seam });
+  const event = { prompt: "create an Outlook draft" };
+  const first = await interceptor(event, { sessionKey: "session-a", modelProviderId: "google", modelId: "gemini" });
+  const fallback = await interceptor(event, { sessionKey: "session-a", modelProviderId: "anthropic", modelId: "claude" });
+  assert.deepEqual(first, { providerOverride: "xai", modelOverride: "grok" });
+  assert.deepEqual(fallback, {});
+  assert.equal(calls, 1, "fallback pass must not re-enter Intelligence");
+});

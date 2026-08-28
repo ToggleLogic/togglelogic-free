@@ -27,6 +27,31 @@ export async function createAdapter({
   shadow = false,
   fallbackLogger,
 }) {
+  const continuity = new Map();
+  const CONTINUITY_TTL_MS = 15 * 60 * 1000;
+  const CONTINUITY_MAX_SESSIONS = 256;
+
+  function sessionKey(request) {
+    const key = request?.hookContext?.sessionKey;
+    return typeof key === "string" && key.trim() ? key.trim() : null;
+  }
+
+  function isAffirmativeConfirmation(prompt) {
+    const normalized = prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    return /^(yes|yes please|proceed|please proceed|go ahead|please go ahead|do it|please do it|yes proceed|yes please proceed|yes go ahead|yes please go ahead|yes do it|yes please do it|yes that is exactly what i need you to do|that is exactly what i need you to do)$/.test(normalized);
+  }
+
+  function pruneContinuity(now) {
+    for (const [key, entry] of continuity) {
+      if (now - entry.at > CONTINUITY_TTL_MS) continuity.delete(key);
+    }
+    while (continuity.size > CONTINUITY_MAX_SESSIONS) {
+      continuity.delete(continuity.keys().next().value);
+    }
+  }
   let classifyFn = null;
   try {
     const classifierUrl = new URL(
@@ -72,7 +97,34 @@ export async function createAdapter({
       // classifier can resolve each lane's runtime/surface. Optional: the engine
       // falls back to documented defaults when no context is supplied.
       const context = runtimeConfig ? { runtimeConfig } : undefined;
-      const result = classifyFn(prompt, context);
+      let result = classifyFn(prompt, context);
+      const key = sessionKey(request);
+      const now = Date.now();
+      pruneContinuity(now);
+
+      // Short affirmative turns carry the immediately preceding task intent.
+      // Inherit once, within the same host session, then consume the entry so a
+      // later unrelated "yes" cannot resurrect stale routing or surface needs.
+      if (!result.recommended_model_ref && key && isAffirmativeConfirmation(prompt)) {
+        const previous = continuity.get(key);
+        if (previous && now - previous.at <= CONTINUITY_TTL_MS) {
+          continuity.delete(key);
+          result = {
+            ...previous.result,
+            matched_rule: `confirmation_inherit:${previous.result.matched_rule}`,
+            reasoning: `affirmative confirmation inherited the preceding decision in session ${key}`,
+          };
+        }
+      } else if (
+        key &&
+        result.recommended_model_ref &&
+        Number(result.confidence) >= 0.75 &&
+        prompt.trim().length >= 12
+      ) {
+        continuity.delete(key);
+        continuity.set(key, { at: now, result: { ...result } });
+      }
+
       if (!result.recommended_model_ref) return null;
       const ref = result.recommended_model_ref;
       const slash = ref.indexOf("/");
@@ -88,6 +140,7 @@ export async function createAdapter({
         confidence: result.confidence,
         matched_rule: result.matched_rule,
         reasoning: result.reasoning,
+        required_surface: result.required_surface ?? null,
         family_routing: result.family_routing ?? null,
         pin_matched: result.pin_matched ?? null,
         pin_resolution: result.pin_resolution ?? null,

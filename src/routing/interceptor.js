@@ -15,6 +15,7 @@ import {
   readSessionSelection,
 } from "./session-store.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
+import crypto from "node:crypto";
 
 /** Safe audit emit — never raise into the hook caller. */
 function _emit(audit, event, partial) {
@@ -89,6 +90,12 @@ function sameSelection(left, right) {
 }
 
 export function createInterceptor({ config, hostConfig, logger, seam, version, audit, familyResolver, configuredProviders = [] }) {
+  // OpenClaw re-enters before_model_resolve for each candidate in its fallback
+  // chain. Classify the logical turn once; subsequent passes must preserve the
+  // host's candidate instead of routing every fallback back to the failed model.
+  const recentTurns = new Map();
+  const FALLBACK_WINDOW_MS = 60_000;
+
   return async function beforeModelResolve(event, hookContext) {
     const decision = newDecision({ event, hookContext, mode: config.mode, version });
 
@@ -247,6 +254,43 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       return PASSTHROUGH;
     }
 
+    const prompt = typeof event?.prompt === "string" ? event.prompt : "";
+    const sessionKey = normalizeOptionalString(hookContext?.sessionKey);
+    if (prompt && sessionKey) {
+      const now = Date.now();
+      const fingerprint = crypto
+        .createHash("sha256")
+        .update(`${sessionKey}\0${prompt}`)
+        .digest("hex");
+      for (const [key, at] of recentTurns) {
+        if (now - at > FALLBACK_WINDOW_MS) recentTurns.delete(key);
+      }
+      if (recentTurns.has(fingerprint)) {
+        decision.mode = "host_fallback";
+        decision.selectionReason = "host_fallback_passthrough";
+        decision.selectionDetails = {
+          matched_rule: "repeated_turn_fallback_guard",
+          reason: "same logical turn re-entered model resolution; preserving the host fallback candidate",
+        };
+        finalizeDecision(decision);
+        logger.write(decision).catch(() => {});
+        _emit(audit, EVENTS.ROUTING_DECISION, {
+          outcome: OUTCOMES.NOOP,
+          principal: { source: "agent" },
+          subject: { hook: "before_model_resolve" },
+          details: {
+            mode: decision.mode,
+            matched_rule: decision.selectionDetails.matched_rule,
+            selectionReason: decision.selectionReason,
+            durationMs: decision.durationMs,
+          },
+          correlationId: decision.requestId,
+        });
+        return PASSTHROUGH;
+      }
+      recentTurns.set(fingerprint, now);
+    }
+
     try {
       const effectiveMode = resolveEffectiveMode(config.mode, seam.status(), config);
       decision.mode = effectiveMode;
@@ -300,7 +344,12 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     logger.write(decision).catch(() => {});
 
     _emit(audit, EVENTS.ROUTING_DECISION, {
-      outcome: override === PASSTHROUGH ? OUTCOMES.NOOP : OUTCOMES.SUCCESS,
+      outcome:
+        decision.mode === "intelligence_unavailable"
+          ? OUTCOMES.FAILURE
+          : override === PASSTHROUGH
+            ? OUTCOMES.NOOP
+            : OUTCOMES.SUCCESS,
       principal: { source: "agent" },
       subject: { hook: "before_model_resolve" },
       details: {

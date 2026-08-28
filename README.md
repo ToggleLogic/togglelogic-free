@@ -46,7 +46,7 @@ license it: https://togglelogic.ai/
 The minimum gateway version remains `>=2026.6.5`, and the plugin API floor
 remains `>=2026.5.2`. Those lower bounds are intentional: they preserve support
 for existing OpenClaw deployments and do not mean ToggleLogic depends on an
-obsolete host release. ToggleLogic Free 1.3.1 was packaged and passed its full
+obsolete host release. ToggleLogic Free 1.3.2 was packaged and passed its full
 release quality gate on OpenClaw `2026.7.1-2`. OpenClaw versions newer than the
 stated validation point should be verified before production promotion.
 
