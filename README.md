@@ -39,8 +39,8 @@ No prompt inspection or intent inference. No benchmark-driven selection. No
 Toggle Registry, private classifiers, proprietary benchmark data, or bundled
 provider credentials.
 
-Those belong to **ToggleLogic Intelligence**, a separately licensed product.
-Free is the mechanism. Intelligence is the judgment.
+Those belong to **ToggleLogic Intelligence**, a separately licensed source-available package.
+Its public engine can be inspected and contributed to; eligible startups register before commercial production use. The maintained production registry, benchmark intelligence, private evidence, signed packs, and services remain separately delivered. Free is the mechanism. Intelligence is the judgment.
 
 ## OpenClaw compatibility
 
@@ -119,11 +119,11 @@ summary at https://togglelogic.ai/licensing/.
 
 | Mode | Behavior |
 |---|---|
-| `auto` | Licensed Intelligence layer if present → else the cheap default if configured → else passthrough |
+| `auto` | Compatible Intelligence layer if present → else the cheap default if configured → else passthrough |
 | `passthrough` | Defer every selection to OpenClaw's default (log only) |
 | `configured` | Apply `configuredRoutes` from a host-supplied task label, then optional `default` |
 | `cheap` | Apply the deployment-declared cheapest default (dumb, static) |
-| `intelligence` | Defer to the separately-licensed Intelligence layer (not included); report unavailable rather than silently downgrading |
+| `intelligence` | Defer to the separately licensed Intelligence package (not included in Free); report unavailable rather than silently downgrading |
 
 Owner overrides apply **above** the mode in all cases.
 

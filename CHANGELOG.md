@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — coordinated Intelligence public-development launch
+
+- Update current package and README copy to identify ToggleLogic Intelligence as a separate source-available package whose engine is public for inspection and contribution.
+- Clarify that qualifying startup commercial production use of Intelligence requires its own free company and project registration.
+- Preserve the Free package boundary: no Intelligence engine, production Toggle Registry, maintained benchmark intelligence, private evidence, credentials, signed packs, or services are included here.
+- No ToggleLogic Free routing behavior or License 2.0 right changes in this documentation update.
+
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
 ## Unreleased — License 2.0 policy update
