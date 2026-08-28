@@ -1,173 +1,268 @@
-ToggleLogic Free-Tier License — Version 1.0 / Effective: 2026-06-18
-===================================================================
+ToggleLogic Free Startup Commercial Use License — Version 2.0
+Effective: 2026-08-28
+============================================================
 
 Copyright (c) 2026 Motherboard, Inc. All rights reserved.
-Contact: https://bymotherboard.com/contact
+Licensor: Motherboard, Inc.
+Policy and notice contact: https://togglelogic.ai/contact/
 
-PATENT PENDING. This Software and the methods it relates to are the subject of
-one or more pending U.S. provisional patent applications owned by Motherboard,
-Inc. No patent rights are granted except the narrow, revocable use right in
-Section 2.
+This is a source-available license. It is not an open-source license and is not
+approved by the Open Source Initiative. ToggleLogic Intelligence and the other
+Excluded Proprietary Components defined below are not included or licensed.
 
-----------------------------------------------------------------------------
+1. DEFINITIONS
 
-0. DEFINITIONS
-   "Licensor" — Motherboard, Inc.
-   "Software" — this ToggleLogic Free-Tier package (the plugin source files in
-       this distribution) and any updates Licensor distributes under this license.
-   "Intelligence Layer" — Motherboard's separately-licensed "ToggleLogic
-       Intelligence" components (including the Toggle Registry and the
-       benchmark-driven model-selection / Dynamic Model Determination engine).
-       The Intelligence Layer is NOT part of the Software and is NOT licensed
-       by this license.
-   "You" — the individual or entity exercising rights under this license.
+"Software" means the ToggleLogic Free package distributed with this License,
+including its source files, documentation, and notices. A future release is
+Software only if that release is distributed with this License.
 
-1. NATURE OF THIS LICENSE
-   This is a SOURCE-AVAILABLE license, not an open-source license. It is not MIT,
-   Apache, BSD, or any OSI-approved license, and must not be represented as such.
-   Licensor grants only the limited, revocable rights stated below and RESERVES
-   ALL OTHER RIGHTS.
+"You" means the individual or legal entity exercising rights under this License.
 
-2. GRANT (limited, revocable — free for Your own use)
-   Subject to Your continuous compliance with this license, Licensor grants You a
-   personal, non-exclusive, non-transferable, non-sublicensable, worldwide,
-   royalty-free, and REVOCABLE license, for the Term, to:
-     (a) install and run the Software with OpenClaw for Your OWN use — whether
-         personal, hobbyist, or internal business operations. Using the Software to
-         help run Your own business is Your own use and owes no fee; the end user who
-         runs the Software always runs it free. (Offering the Software or its
-         functionality to others for a fee is not "Your own use" — see Section 3.)
-     (b) view and modify the Software's source for Your own internal use with the
-         Software.
-   To the limited extent necessary to exercise (a)-(b), Licensor grants a
-   correspondingly limited, revocable patent license to use the Software AS
-   DISTRIBUTED by Licensor. No other patent license is granted.
+"Affiliate" means an entity that directly or indirectly Controls, is Controlled
+by, or is under common Control with You. "Control" means ownership of more than
+50% of the outstanding voting power or beneficial equity interests, or the direct
+or indirect power to direct management or policies by ownership, voting agreement,
+contract, or otherwise. Customary minority-investor protective rights, a board-
+observer right, or a passive minority investment alone do not create Control. A
+venture, private-equity, or institutional investor and its other portfolio
+companies are not Affiliates solely because of such an investment or right.
 
-3. COMMERCIAL LICENSE AND RESTRICTIONS (no rights beyond Section 2)
-   The free grant in Section 2 covers Your OWN use only. The line is USE vs. SELL:
-   using the Software (even to run Your own business) is free; SELLING something that
-   includes or uses the Software requires a separate commercial license. Items (a)-(b)
-   below are NOT prohibited — they require a commercial license, which Licensor invites
-   You to request. Items (c)-(e) are flat restrictions.
+"Startup Group" means You and every Affiliate. Threshold calculations are made
+for the Startup Group as one consolidated group, without double-counting
+intercompany transactions or transfers.
 
-   Without a separate commercial license from Licensor, You may not:
-     (a) redistribute, resell, sublicense, or rent the Software (or a derivative);
-         embed or bundle it within a product or service that You offer to others for a
-         fee; or host or offer the Software's functionality to others as a service. The
-         trigger is SELLING something that includes or uses the Software — not using
-         the Software for Your own operations.
-     (b) otherwise productize or monetize the Software for the benefit of third
-         parties for a fee. (Using the Software to run Your own business is NOT this —
-         that is free own-use under Section 2, and the end user who merely runs the
-         Software owes nothing.)
+"Cumulative Outside Funding" means the gross amount of cash and fair market
+value, when received, of non-cash consideration actually received by the Startup
+Group after formation from persons outside the Startup Group through: equity or
+equity-linked securities; SAFEs or similar instruments; convertible notes or
+other equity-convertible debt; securities crowdfunding; venture debt or other
+financing raised primarily to fund growth; and non-refundable grants intended to
+finance development or operations. It excludes customer revenue and bona fide
+customer prepayments; ordinary-course trade credit; equipment leases and
+equipment-specific financing; non-equity-linked working-capital facilities from
+regulated financial institutions secured principally by receivables, inventory,
+or equipment; tax refunds and refundable tax credits; insurance proceeds;
+intercompany transfers; and founder capital contributed before the first sale of
+outside equity or equity-linked securities. Funding counts when actually received,
+not when announced, signed, committed, or approved. Transaction expenses,
+repayment, redemption, repurchase, or cancellation do not reduce it.
 
-   Without Licensor's prior written permission, You also may not:
-     (c) reimplement, reconstruct, or work around the Intelligence Layer or the
-         patented Dynamic Model Determination method;
-     (d) remove, alter, or obscure any copyright, patent-pending, license, or
-         attribution notice; or
-     (e) represent the Software as open-source or as licensed under any other terms.
+"Actual Gross Revenue" means revenue recognized by the Startup Group from all
+sources under the accounting method consistently used in its books and financial
+statements, before operating expenses, cost of revenue, commissions, model or API
+costs, hosting costs, or other deductions. It excludes separately stated sales,
+use, value-added, and similar transaction taxes collected for a taxing authority,
+and refunds and chargebacks actually issued. It is tested on the last day of each
+calendar month for the 12 consecutive calendar months ending on that date. If the
+Startup Group has existed for fewer than 12 months, the period begins on its
+formation date. Revenue is not annualized or projected. Foreign-currency amounts
+must use the reasonable, consistently applied conversion method used in the
+Startup Group's financial statements.
 
-   Commercial license: commercial use is welcome under a separate license — this is an
-   invitation, not a barrier. Contact: https://bymotherboard.com/contact.
+"Product" means Your bona fide application, service, platform, device, or managed
+offering in which the Software is integrated as a component and that provides
+material functionality independent of the Software.
 
-4. RESERVATION OF RIGHTS
-   All right, title, and interest in the Software, the Intelligence Layer, the
-   ToggleLogic name and marks, and all related patents (including pending
-   applications), copyrights, and trade secrets remain with Licensor. This
-   license grants no ownership and no rights by implication or estoppel.
+"Threshold Event" occurs on the first date the Startup Group either (a) has
+received at least USD $1,000,000 in Cumulative Outside Funding or (b) has at least
+USD $1,000,000 in Actual Gross Revenue for a trailing 12-month measurement period.
+That date is the "Threshold Date." Announced, committed, projected, pipeline,
+booked-but-unrecognized, or forecast amounts do not count. Eligibility does not
+revive if revenue later declines, funding is repaid, or the group is reorganized.
 
-5. REVOCATION, TERM, AND WITHDRAWAL
-   (a) Licensor may REVOKE or terminate this license, in whole or in part, as to
-       any person or entity, AT ANY TIME, with or without cause — including for
-       misuse, breach of this license, breach of Licensor's published policies,
-       or competitive use.
-   (b) This license terminates automatically upon any breach.
-   (c) Licensor may WITHDRAW the Software from any distribution channel (including
-       ClawHub) at any time. Withdrawal does not grant continuing rights.
-   (d) The Term runs until revocation or termination, and Licensor may publish a
-       fixed or maximum term for any release.
-   (e) On revocation or termination You must immediately cease all use and destroy
-       all copies in Your possession or control. Sections 3, 4, 6, 7, 8, 11, and 12
-       survive.
+"Qualifying Startup" means a Startup Group before its first Threshold Event.
 
-6. POLICY COMPLIANCE
-   Use is conditioned on compliance with Licensor's then-current published
-   ToggleLogic acceptable-use and distribution policies (at togglelogic.ai or as
-   otherwise published). Licensor may update those policies; continued use after
-   an update is acceptance.
+"Acquisition Event" means a merger, consolidation, or similar transaction
+resulting in a change of Control; a transfer of more than 50% of voting power or
+beneficial equity; a transfer of all or substantially all assets; or a transfer of
+the Product or business in which the Software is used.
 
-7. NO WARRANTY
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE,
-   AND NON-INFRINGEMENT.
+"Excluded Proprietary Components" means materials that are not Software,
+including ToggleLogic Intelligence; the Toggle Registry; proprietary benchmark
+data, normalization, weighting, selection, and Dynamic Model Determination
+methods; private classifiers; private evaluation or customer evidence;
+credentials, keys, access controls, services, documentation, or APIs supplied
+only under a separate agreement; and other materials expressly identified as
+proprietary and excluded. A compatibility seam, detector, interface name,
+configuration field, or public description does not grant access to or rights in
+an Excluded Proprietary Component.
 
-8. LIMITATION OF LIABILITY
-   TO THE MAXIMUM EXTENT PERMITTED BY LAW, LICENSOR WILL NOT BE LIABLE FOR ANY
-   INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR EXEMPLARY DAMAGES, OR FOR LOST
-   PROFITS OR DATA, ARISING FROM OR RELATING TO THE SOFTWARE OR THIS LICENSE.
+2. ACCEPTANCE AND RELEASE STABILITY
 
-9. MODIFICATION AND CONTRIBUTIONS
-   These terms sit ON TOP of this license and do not loosen any restriction in
-   Section 3; in particular, the commercial trigger in Section 3 applies equally to
-   modified versions (derivatives).
-   (a) Fork and modify for Your own use. You MAY fork and modify the Software for Your
-       OWN use, consistent with the own-use grant in Section 2. A modified version
-       remains subject to this entire license. Reselling, redistributing, sublicensing,
-       embedding in a product or service offered to others for a fee, or hosting a
-       modified version as a service to others STILL requires a separate commercial
-       license under Section 3.
-   (b) Notice of modification (curable breach). You MUST notify Licensor of any
-       modification You make to the Software (via https://bymotherboard.com/contact).
-       Failure to notify is a breach of this license, but a CURABLE one: it does not
-       terminate Your license unless You fail to cure it within thirty (30) days after
-       Licensor gives You written notice of the failure. (Licensor wants visibility into
-       modifications; it does not seek to terminate a good-faith developer who has
-       simply not yet given notice.)
-   (c) Contributions for consideration. You MAY submit a modification to Licensor as a
-       CONTRIBUTION for Licensor's consideration. Licensor is under NO obligation to
-       review, accept, or merge any contribution. If Licensor accepts or merges a
-       contribution, You hereby ASSIGN to Licensor all right, title, and interest in
-       that submitted and accepted contribution, and Licensor OWNS it. No contribution
-       is made public unless and until Licensor has reviewed it and elects to publish it.
-   (d) Patent scope of a modification. The patent license in Section 2 covers ONLY the
-       Software AS DISTRIBUTED by Licensor. A modified version You create is Your own
-       work and falls OUTSIDE that patent grant; Licensor grants no patent rights in or
-       to Your modifications.
+By exercising rights under this License, You accept it. Rights for a version You
+lawfully receive are perpetual and non-revocable except under Section 11.
+Licensor may stop distributing the Software and may license future versions under
+different terms, but those actions do not revoke rights already granted for this
+version. Licensor has no obligation to provide updates, maintenance, support,
+hosted services, future compatibility, or a commercial agreement unless separately
+agreed in writing.
 
-10. GOVERNING LAW; DISPUTE RESOLUTION
-   (a) Governing law. This license is governed by the laws of the State of Wyoming,
-       without regard to its conflict-of-laws rules.
-   (b) Binding Arbitration. Either party may elect to resolve any dispute, claim, or
-       controversy arising out of or relating to this License through final and binding
-       arbitration administered by the American Arbitration Association under its
-       Commercial Arbitration Rules then in effect. The seat and location of arbitration
-       shall be Geauga County, Ohio. The arbitrator, and not any court, shall have
-       exclusive authority to resolve any dispute relating to the interpretation,
-       enforceability, formation, scope, or applicability of this arbitration agreement,
-       including any claim that all or part of it is void or voidable (the "delegation"
-       provision). Judgment on the award may be entered in any court of competent
-       jurisdiction. The parties waive any right to have such disputes resolved by a
-       court or jury, except that either party may seek injunctive or equitable relief in
-       a court of competent jurisdiction to protect intellectual property or confidential
-       information pending arbitration.
+3. PERSONAL AND INTERNAL USE GRANT
 
-11. NO RELIANCE
-   This License is a revocable permission, not a promise, contract for future
-   performance, or guarantee of continued availability. You acknowledge that
-   You place no reliance on any continued grant of rights hereunder, that no rights
-   vest by use or duration of use, and that Licensor may modify or revoke this
-   License at any time, with or without cause, in its sole discretion. You
-   assume all risk arising from Your use of and any investment in the Software, and
-   waive any claim of detrimental reliance, promissory estoppel, or implied license
-   arising from this grant or Licensor's conduct.
+Subject to Your compliance with this License, Licensor grants You a worldwide,
+royalty-free, non-exclusive license to use, copy, execute, display, and modify the
+Software for personal use and internal business operations.
 
-12. NO WAIVER
-   No failure or delay by Licensor in exercising any right under this License, and
-   no pattern of non-enforcement against any party, shall operate as a waiver of
-   that right or of any breach, whether against the same or any other party. Any
-   waiver must be in a writing signed by Licensor and is limited to the specific
-   instance stated.
+4. STARTUP COMMERCIAL USE GRANT
 
-----------------------------------------------------------------------------
-END OF LICENSE — ToggleLogic Free-Tier License, Version 1.0 (Effective 2026-06-18).
+While You are a Qualifying Startup, Licensor additionally grants You the right to:
+
+(a) integrate the Software into a Product;
+(b) operate or host the Software as part of a Product;
+(c) reproduce and distribute the Software solely as an integrated or subordinate
+    part of a Product; and
+(d) charge customers for the Product.
+
+No advance approval, registration, or contact is required. A Controlled entity
+may exercise this grant only as part of the Startup Group and while it remains
+Controlled. You are responsible for its compliance.
+
+5. THRESHOLD NOTICE AND TRANSITION
+
+You must notify Licensor at https://togglelogic.ai/contact/ within 30 days after
+the Threshold Date. The notice must state Your legal name, primary domain,
+responsible contact, Product name and description, whether funding or revenue
+triggered the notice, the Threshold Date, a non-sensitive financial range, and
+whether You seek commercial licensing, an Intelligence evaluation, support,
+partnership, or a migration discussion.
+
+Beginning on the Threshold Date, the Startup Commercial Use Grant is automatically
+replaced by a 180-day "Transition License" permitting the same uses authorized
+immediately before the Threshold Event. Timely notice is a condition of the
+Transition License, subject to the cure provision in Section 11. Licensor and You
+may negotiate a commercial agreement or written extension, but neither is required
+to enter one.
+
+If no commercial agreement or written extension is effective at the end of the
+Transition License, You must stop accepting new customers for, newly deploying,
+or materially expanding external commercial use of the Software. For the next 12
+months, You may provide security, compatibility, defect-correction, and migration
+updates to customers who received or were contractually committed to receive the
+Product before the Transition License ended. The internal-use grant in Section 3
+continues.
+
+6. DOWNSTREAM CUSTOMER CONTINUITY
+
+Each customer who lawfully receives the Software as an integrated part of a
+Product receives directly from Licensor a limited, non-exclusive, non-transferable
+license to run that integrated copy solely as part of the Product. The customer
+may not extract, redistribute, sublicense, or offer the Software separately. A
+later Threshold Event or termination affecting the Product provider does not
+retroactively terminate an innocent customer's right to run a lawfully delivered
+copy, but does not authorize new versions or updates delivered after the provider's
+rights end.
+
+7. RESTRICTIONS AND RESERVED RIGHTS
+
+Without a separate written license or permission, You may not:
+
+(a) sell, rent, sublicense, or offer the Software as a standalone product;
+(b) offer a hosted service whose principal marketed purpose is access to the
+    Software itself rather than a Product's independent functionality;
+(c) remove, alter, or obscure copyright, patent-pending, license, or modification
+    notices;
+(d) use Licensor's names or marks except for accurate nominative statements;
+(e) access, copy, extract, reconstruct, reverse engineer, or circumvent any
+    non-public Excluded Proprietary Component or its access controls; or
+(f) represent the Software as open source or represent that Licensor endorses You.
+
+All rights not expressly granted are reserved. Nothing here restricts lawful
+independent development or grants rights by implication or estoppel.
+
+8. MODIFICATIONS AND CONTRIBUTIONS
+
+You may modify the Software for any use otherwise permitted by this License. You
+do not have to report modifications. If You distribute a modified copy, You must
+retain this License and all notices and identify modified files with a reasonable
+notice of change and date. A contribution is voluntary and is governed only by a
+separate contributor agreement accepted by both parties. No ownership assignment
+occurs merely because You submit or discuss a modification.
+
+9. PATENT LICENSE
+
+To the extent necessary to exercise rights expressly granted here, Licensor grants
+You a worldwide, royalty-free, non-exclusive patent license under patent claims
+Licensor owns or controls that are necessarily infringed by the Software as
+distributed by Licensor. The grant continues for a permitted modified version to
+the extent the same claim would necessarily be infringed by the unmodified
+Software. No patent license is granted for a claim infringed only because of Your
+modification, combination, or addition, or for an Excluded Proprietary Component.
+
+If You or an Affiliate brings a written patent claim alleging that the Software
+infringes a patent, the patent rights granted to You under this Section terminate
+on the date that claim is brought.
+
+10. RECORDS AND VERIFICATION
+
+You must keep reasonable records sufficient to determine threshold eligibility.
+No more than once in any 12-month period, Licensor may reasonably request
+supporting records under confidentiality, unless Licensor has a reasonable basis
+to suspect a material misstatement. You need not publicly disclose funding or
+revenue under this License.
+
+11. TERMINATION AND CURE
+
+Licensor may terminate Your rights only for a material breach. Except for an
+Excluded Serious Breach, rights terminate only if Licensor gives written notice
+describing the breach and You do not cure it within 30 days. For Your first
+curable breach, complete cure and practical correction of past noncompliance
+retroactively reinstate Your rights. A late Threshold Notice is curable by
+providing the required notice and information. A substantially similar breach
+repeated within 12 months after cure may terminate without a second cure.
+
+"Excluded Serious Breach" means intentional unauthorized access to an Excluded
+Proprietary Component, deliberate circumvention of access controls, knowing
+material fraud, or deliberate removal of ownership or license notices.
+
+After final termination, You must stop uses no longer licensed and delete or
+return unlicensed copies within 30 days, excluding one archival copy retained
+solely for legal and compliance purposes and copies lawfully usable by downstream
+customers under Section 6. No deletion is required while a cure, Transition
+License, written extension, or customer-continuity period remains effective.
+
+12. ACQUISITIONS AND ASSIGNMENT
+
+An Acquisition Event is not a retroactive breach. At closing, the acquired entity
+is combined with the acquirer's controlled group for threshold calculations. If
+the combined group has crossed either threshold, closing is the Threshold Date.
+You may assign this License in a bona fide Acquisition Event if the successor
+assumes it in writing and provides notice within 30 days after closing. Other
+assignment or sublicensing requires Licensor's written consent.
+
+13. TRADEMARKS
+
+This License grants no trademark rights. You may make accurate nominative
+statements identifying the Software and Licensor, subject to the trademark notice
+distributed with the Software.
+
+14. DISCLAIMER OF WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+15. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, LICENSOR WILL NOT BE LIABLE FOR ANY
+INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR EXEMPLARY DAMAGES, OR FOR LOST
+PROFITS, REVENUE, GOODWILL, OR DATA, ARISING FROM OR RELATING TO THE SOFTWARE OR
+THIS LICENSE. LICENSOR'S TOTAL LIABILITY ARISING FROM OR RELATING TO THE SOFTWARE
+OR THIS LICENSE WILL NOT EXCEED USD $100.
+
+16. GOVERNING LAW AND VENUE
+
+This License is governed by Wyoming law, without regard to conflict-of-laws rules.
+The state and federal courts located in Wyoming have exclusive jurisdiction over
+disputes arising from this License, and each party consents to that jurisdiction
+and venue. Either party may seek injunctive or equitable relief in any court of
+competent jurisdiction to protect intellectual property or confidential information.
+
+17. GENERAL
+
+This License is the entire agreement concerning the Software unless Licensor and
+You sign a separate written agreement. If a provision is unenforceable, it will be
+narrowed to the minimum extent necessary and the remainder will continue. A waiver
+must be in writing and applies only to the stated instance. Headings are for
+convenience. "Including" means "including without limitation."
+
+END OF LICENSE — Version 2.0 (Effective 2026-08-28)

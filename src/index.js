@@ -1,7 +1,7 @@
 /*
- * ToggleLogic (Free Tier) — a model-routing plugin for OpenClaw.
- * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
- * License (see LICENSE): free, limited, REVOCABLE use; all rights reserved.
+ * ToggleLogic Free — a model-routing plugin for OpenClaw.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free Startup
+ * Commercial Use License 2.0 (see LICENSE); all rights reserved.
  * PATENT PENDING (U.S. provisional applications). The patented "ToggleLogic
  * Intelligence" benchmark model-selection engine and the Toggle Registry are
  * NOT included in this package; this plugin only DETECTS and defers to a

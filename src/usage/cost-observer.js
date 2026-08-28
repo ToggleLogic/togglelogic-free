@@ -1,7 +1,7 @@
 /*
  * ToggleLogic (Free Tier) — cost-visibility observer.
  * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
- * License (see LICENSE): free, limited, REVOCABLE use; all rights reserved.
+ * License (see LICENSE); all rights reserved.
  * PATENT PENDING.
  *
  * Subscribes to the core `llm_output` hook (post-completion, OBSERVE-ONLY),

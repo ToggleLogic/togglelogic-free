@@ -1,6 +1,6 @@
 /*
  * ToggleLogic (Free Tier) — cost-visibility unit tests (node --test, no deps).
- * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier License.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free Startup Commercial Use License 2.0.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";

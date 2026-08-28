@@ -1,7 +1,7 @@
 /*
  * ToggleLogic (Free Tier) — cost tally + loud-unpriced summary.
  * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
- * License (see LICENSE): free, limited, REVOCABLE use; all rights reserved.
+ * License (see LICENSE); all rights reserved.
  * PATENT PENDING.
  *
  * Accumulates per-model dollar cost and a per-day total from observed usage.

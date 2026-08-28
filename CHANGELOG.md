@@ -2,6 +2,21 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## Unreleased — License 2.0 policy update
+
+- Replace the revocable own-use-only license with the ToggleLogic Free Startup
+  Commercial Use License 2.0.
+- Permit qualifying startups to embed, host, distribute as an integrated
+  component, and charge for a product containing ToggleLogic Free while below
+  both published $1 million thresholds.
+- Add a 30-day threshold notice, automatic 180-day transition, 12-month existing-
+  customer continuity period, stable released-version rights, and breach cure.
+- Preserve the complete separation of ToggleLogic Intelligence, the Toggle
+  Registry, proprietary benchmark-driven selection, and other excluded materials.
+- Add standalone notices for product, patent, and trademark boundaries.
+
+Runtime behavior is unchanged.
+
 ## 1.3.2 — 2026-08-28
 
 - Preserve session intent across a single affirmative confirmation by

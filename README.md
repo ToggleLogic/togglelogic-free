@@ -1,8 +1,10 @@
 # ToggleLogic (Free Tier) — model routing for OpenClaw
 
-> **PATENT PENDING.** Source-available under the **ToggleLogic Free-Tier License**
-> (see [LICENSE](./LICENSE)) — free, limited, **revocable** use; all rights reserved.
-> Not open-source; not MIT/Apache. © 2026 Motherboard, Inc. · https://togglelogic.ai/
+> **PATENT PENDING.** Source-available under the **ToggleLogic Free Startup
+> Commercial Use License 2.0** (see [LICENSE](./LICENSE)). Personal and internal
+> business use is free. Qualifying startups may also embed ToggleLogic Free in a
+> commercial product while below the published funding and revenue thresholds.
+> It is not open source. © 2026 Motherboard, Inc. · https://togglelogic.ai/
 
 ToggleLogic routes each OpenClaw request to a model you control — **bring your own
 provider credentials, declare intent, and let the plugin apply your choices.** This
@@ -36,7 +38,30 @@ of the public Models.dev catalog; no catalog or proprietary registry ships here,
 and this feature never participates in `cheap` mode.
 Automatic benchmark-driven selection is the separately-licensed Intelligence layer; if
 installed, this plugin detects it and defers to it (see `intelligence` config). To
-license it: https://togglelogic.ai/
+evaluate or license it: https://togglelogic.ai/presentation/
+
+## Startup commercial use
+
+You may build, host, and charge for a bona fide product containing ToggleLogic
+Free without contacting Motherboard first while your consolidated startup group
+remains below both thresholds:
+
+- less than **USD $1,000,000 in cumulative outside funding actually received**;
+- less than **USD $1,000,000 in actual gross revenue during a trailing 12-month
+  period**.
+
+Reaching either threshold starts a 30-day notice deadline and an automatic
+180-day transition license. The license also provides a cure period and continuity
+for lawfully deployed customer copies. No projected sales, ARR, valuation, or
+announced-but-unreceived financing is used. Read [LICENSE](./LICENSE) for the
+controlling definitions and terms, or see the plain-language policy at
+https://togglelogic.ai/licensing/.
+
+This permission covers **ToggleLogic Free only**. It grants no access or rights to
+ToggleLogic Intelligence, the Toggle Registry, proprietary benchmark selection,
+private evidence, or other excluded components. Early contact is optional; contact
+Motherboard whenever an Intelligence evaluation, architecture discussion, support,
+or partnership would help: https://togglelogic.ai/contact/.
 
 ## OpenClaw compatibility
 
@@ -179,7 +204,9 @@ See `openclaw.plugin.json` `configSchema` for every field: `mode`, `logging`,
 
 ## License
 
-Use of this Software is governed by the **ToggleLogic Free-Tier License** ([LICENSE](./LICENSE)).
-It is free to use but **revocable**, reserves all of Motherboard, Inc.'s rights including
-its pending patents, and prohibits redistribution and competing use. It is **not** an
-open-source license.
+Use of this Software is governed by the **ToggleLogic Free Startup Commercial Use
+License 2.0** ([LICENSE](./LICENSE)). It permits personal and internal use and
+defined commercial use by qualifying startups. Rights in a lawfully received
+release are stable and may be terminated only under the license's breach-and-cure
+terms. It is **not** an open-source license. See [NOTICE.md](./NOTICE.md) and
+[TRADEMARKS.md](./TRADEMARKS.md).

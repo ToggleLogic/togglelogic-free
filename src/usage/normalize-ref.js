@@ -1,7 +1,7 @@
 /*
  * ToggleLogic (Free Tier) — model-ref normalization for cost visibility.
  * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
- * License (see LICENSE): free, limited, REVOCABLE use; all rights reserved.
+ * License (see LICENSE); all rights reserved.
  * PATENT PENDING. The benchmark Intelligence engine + Toggle Registry are NOT
  * in this package.
  *
