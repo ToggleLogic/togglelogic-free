@@ -5,7 +5,7 @@ ToggleLogic Free is copyright © 2026 Motherboard, Inc. All rights reserved.
 It is source-available under the [ToggleLogic Free Startup Commercial Use
 License 2.0](./LICENSE). It is not open-source software.
 
-ToggleLogic Intelligence, the Toggle Registry, proprietary benchmark data and
+The separately licensed ToggleLogic Intelligence package, the production Toggle Registry, maintained benchmark data and
 weighting, Dynamic Model Determination, private classifiers, private evidence,
 credentials, and other separately supplied proprietary components are not part
 of ToggleLogic Free and are not licensed by the Free license.
