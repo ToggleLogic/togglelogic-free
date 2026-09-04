@@ -17,7 +17,13 @@
 
 import { detectIntelligenceLayer } from "./detector.js";
 
-export function createIntelligenceSeam(intelligenceConfig, fallbackLogger, hostRuntimeConfig = null, pluginVersion = "") {
+export function createIntelligenceSeam(
+  intelligenceConfig,
+  fallbackLogger,
+  hostRuntimeConfig = null,
+  pluginVersion = "",
+  consumeNewSession = null,
+) {
   const config = intelligenceConfig ?? {};
   const enabled = config.enabled !== false;
 
@@ -25,46 +31,52 @@ export function createIntelligenceSeam(intelligenceConfig, fallbackLogger, hostR
   let adapter = null;
   let detectionError = null;
   let detectionResult = null;
+  let detectionPromise = null;
 
-  async function detect() {
-    if (!enabled) return;
-    try {
+  function detect() {
+    if (!enabled) return Promise.resolve();
+    if (detectionPromise) return detectionPromise;
+    detectionPromise = (async () => {
+      try {
       // registryPath is config-driven (deployment DATA); detector defaults to a
       // path relative to the layer when unset. No workspace path hardcoded.
-      const result = await detectIntelligenceLayer(config.path, config.registryPath, pluginVersion);
-      detectionResult = result;
+        const result = await detectIntelligenceLayer(config.path, config.registryPath, pluginVersion);
+        detectionResult = result;
 
-      if (result.present) {
+        if (result.present) {
         // LAZY DYNAMIC IMPORT — the only line in the seam that touches
         // adapter.js, and adapter.js is the only file that imports from the
         // licensed layer.
-        const { createAdapter } = await import("./adapter.js");
-        adapter = await createAdapter({
-          intelligencePath: result.resolvedPath,
-          version: result.version,
-          shadow: config.shadow === true,
-          fallbackLogger,
-        });
-        state = "available";
-        try {
-          fallbackLogger?.info?.(
-            `togglelogic seam: intelligence layer available (v${result.version}).`
-          );
-        } catch { /* ignore */ }
-      } else {
+          const { createAdapter } = await import("./adapter.js");
+          adapter = await createAdapter({
+            intelligencePath: result.resolvedPath,
+            version: result.version,
+            shadow: config.shadow === true,
+            fallbackLogger,
+            consumeNewSession,
+          });
+          state = "available";
+          try {
+            fallbackLogger?.info?.(
+              `togglelogic seam: intelligence layer available (v${result.version}).`
+            );
+          } catch { /* ignore */ }
+        } else {
+          state = "absent";
+          try {
+            fallbackLogger?.info?.(
+              `togglelogic seam: intelligence layer absent (${result.reason}). ` +
+                `Plugin will operate in passthrough/configured/cheap modes.`
+            );
+          } catch { /* ignore */ }
+        }
+      } catch (err) {
         state = "absent";
-        try {
-          fallbackLogger?.info?.(
-            `togglelogic seam: intelligence layer absent (${result.reason}). ` +
-              `Plugin will operate in passthrough/configured/cheap modes.`
-          );
-        } catch { /* ignore */ }
+        detectionError = err;
+        throw err;
       }
-    } catch (err) {
-      detectionError = err;
-      state = "absent";
-      throw err;
-    }
+    })();
+    return detectionPromise;
   }
 
   function status() {
@@ -76,6 +88,13 @@ export function createIntelligenceSeam(intelligenceConfig, fallbackLogger, hostR
    * "decline to choose" — the interceptor falls back to passthrough.
    */
   async function classify(request) {
+    if (state === "detecting") {
+      try {
+        await detect();
+      } catch {
+        return null;
+      }
+    }
     if (state !== "available" || !adapter) return null;
     return adapter.classify(request, hostRuntimeConfig);
   }

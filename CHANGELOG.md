@@ -1,28 +1,30 @@
 # Changelog
 
-## Unreleased — coordinated Intelligence public-development launch
-
-- Update current package and README copy to identify ToggleLogic Intelligence as a separate source-available package whose engine is public for inspection and contribution.
-- Clarify that qualifying startup commercial production use of Intelligence requires its own free company and project registration.
-- Preserve the Free package boundary: no Intelligence engine, production Toggle Registry, maintained benchmark intelligence, private evidence, credentials, signed packs, or services are included here.
-- No ToggleLogic Free routing behavior or License 2.0 right changes in this documentation update.
-
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
-## Unreleased — License 2.0 policy update
+## 1.3.4 — 2026-09-04
 
-- Replace the revocable own-use-only license with the ToggleLogic Free Startup
-  Commercial Use License 2.0.
-- Permit qualifying startups to embed, host, distribute as an integrated
-  component, and charge for a product containing ToggleLogic Free while below
-  both published $1 million thresholds.
-- Add a 30-day threshold notice, automatic 180-day transition, 12-month existing-
-  customer continuity period, stable released-version rights, and breach cure.
-- Preserve the complete separation of ToggleLogic Intelligence, the Toggle
-  Registry, proprietary benchmark-driven selection, and other excluded materials.
-- Add standalone notices for product, patent, and trademark boundaries.
+- Add a bounded, privacy-safe new-session signal so a separately installed
+  Intelligence package can choose its general-purpose default on the first turn.
+- Preserve that one-shot signal across OpenClaw gateway and worker processes
+  using hashed, expiring local markers; raw session identifiers are never stored.
+- Wait for licensed Intelligence detection and registry reachability during cold
+  one-shot task startup instead of silently missing the first routing decision.
+- Split `provider/model` references into OpenClaw 2026.9.1's separate provider
+  and model override fields in configured and cheap modes.
+- Keep disabled Intelligence detection awaitable so Free-only routing registers
+  cleanly on OpenClaw 2026.9.1.
+- Validate the release on OpenClaw `2026.9.1` while preserving the intentional
+  `>=2026.6.5` host and `>=2026.5.2` plugin API compatibility floors.
 
-Runtime behavior is unchanged.
+- Publish the coordinated Intelligence public-development references while
+  preserving the Free package boundary: no Intelligence engine, production
+  Toggle Registry, maintained benchmark intelligence, private evidence,
+  credentials, signed packs, or services are included here.
+- Adopt the ToggleLogic Free Startup Commercial Use License 2.0, including its
+  qualifying-startup commercial permissions, published thresholds, transition
+  provisions, stable released-version rights, and breach cure.
+- Add standalone product, patent, and trademark notices.
 
 ## 1.3.2 — 2026-08-28
 

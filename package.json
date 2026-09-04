@@ -1,6 +1,6 @@
 {
   "name": "togglelogic",
-  "version": "1.3.2",
+  "version": "1.3.4",
   "description": "Policy-based model routing for OpenClaw: configured task routes, a deployment-declared cheapest default, persistent owner overrides, local audit records, and cost estimates from public pricing. No prompt inspection. Bring your own provider credentials. Source-available and free for personal, internal, and qualifying startup commercial use. The separate ToggleLogic Intelligence engine is public for inspection and contribution, with registration before qualifying startup production use.",
   "type": "module",
   "main": "src/index.js",
@@ -35,6 +35,8 @@
     "src/",
     "openclaw.plugin.json",
     "LICENSE",
+    "NOTICE.md",
+    "TRADEMARKS.md",
     "README.md",
     "CHANGELOG.md",
     "docs/"
@@ -46,6 +48,6 @@
     "extensions": ["./src/index.js"],
     "install": { "minHostVersion": ">=2026.6.5" },
     "compat": { "pluginApi": ">=2026.5.2" },
-    "build": { "openclawVersion": "2026.7.1-2" }
+    "build": { "openclawVersion": "2026.9.1" }
   }
 }

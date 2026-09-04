@@ -26,6 +26,7 @@ export async function createAdapter({
   version,
   shadow = false,
   fallbackLogger,
+  consumeNewSession = null,
 }) {
   const continuity = new Map();
   const CONTINUITY_TTL_MS = 15 * 60 * 1000;
@@ -53,12 +54,16 @@ export async function createAdapter({
     }
   }
   let classifyFn = null;
+  let waitForReachabilityFn = null;
   try {
     const classifierUrl = new URL(
       "file://" + intelligencePath + "/src/classifier.js"
     ).href;
     const mod = await import(classifierUrl);
     classifyFn = mod.classify;
+    waitForReachabilityFn = typeof mod.waitForReachability === "function"
+      ? mod.waitForReachability
+      : null;
   } catch (err) {
     try {
       fallbackLogger?.warn?.(
@@ -75,7 +80,7 @@ export async function createAdapter({
       classifyFn !== null
         ? shadow === true
           ? `togglelogic adapter: classifier wired (v${version}) in shadow mode. Recommendations will be audited; no overrides will be emitted.`
-          : `togglelogic adapter: classifier wired (v${version}). Overrides will be emitted when the classifier matches a non-default tier.`
+          : `togglelogic adapter: classifier wired (v${version}). Overrides will be emitted for classified tasks and new-session general-purpose defaults.`
         : `togglelogic adapter: classifier load FAILED at ${intelligencePath}. Operating in shadow mode (no overrides emitted).`
     );
   } catch {
@@ -93,10 +98,19 @@ export async function createAdapter({
     if (typeof prompt !== "string" || prompt.length === 0) return null;
 
     try {
+      if (waitForReachabilityFn) {
+        await waitForReachabilityFn(10_000);
+      }
       // Pass the host-fed execution-surface context (from api.config) so the
       // classifier can resolve each lane's runtime/surface. Optional: the engine
       // falls back to documented defaults when no context is supplied.
-      const context = runtimeConfig ? { runtimeConfig } : undefined;
+      const routeGeneralPurposeOnMiss = typeof consumeNewSession === "function"
+        ? consumeNewSession(request?.hookContext)
+        : false;
+      const context = {
+        ...(runtimeConfig ? { runtimeConfig } : {}),
+        routeGeneralPurposeOnMiss,
+      };
       let result = classifyFn(prompt, context);
       const key = sessionKey(request);
       const now = Date.now();

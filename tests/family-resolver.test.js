@@ -90,7 +90,10 @@ test("cheap mode remains static and never calls the family resolver", async () =
     config: { cheapHeuristic: { default: "xai/grok-fixed", order: [] } },
     familyResolver: { resolve: () => { throw new Error("must not run"); } },
   });
-  assert.deepEqual(result.override, { modelOverride: "xai/grok-fixed" });
+  assert.deepEqual(result.override, {
+    modelOverride: "grok-fixed",
+    providerOverride: "xai",
+  });
   assert.equal(result.selectionReason, "cheap_default");
 });
 

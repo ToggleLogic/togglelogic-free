@@ -29,7 +29,7 @@ export function resolveEffectiveMode(configuredMode, seamStatus, config) {
   if (configuredMode === "configured") return "configured";
   if (configuredMode === "cheap") return "cheap";
   if (configuredMode === "intelligence") {
-    if (seamStatus === "available") return "intelligence";
+    if (seamStatus === "available" || seamStatus === "detecting") return "intelligence";
     // An explicit Intelligence selection is an operator contract, not a hint.
     // Do not silently downgrade to cheap routing: retain a visible, auditable
     // unavailable state and let the host choose its normal model.
@@ -38,12 +38,23 @@ export function resolveEffectiveMode(configuredMode, seamStatus, config) {
   // 'auto' or anything unrecognized: prefer the licensed intelligence layer if
   // it's available; otherwise fall back to the dumb cheap default (if the
   // deployment declared one), else passthrough.
-  if (seamStatus === "available") return "intelligence";
+  if (seamStatus === "available" || seamStatus === "detecting") return "intelligence";
   return cheapConfigured(config) ? "cheap" : "passthrough";
 }
 
 function cheapConfigured(config) {
   return Boolean(pickCheapDefault(config && config.cheapHeuristic));
+}
+
+function overrideForModelRef(modelRef) {
+  const slash = typeof modelRef === "string" ? modelRef.indexOf("/") : -1;
+  if (slash > 0 && slash < modelRef.length - 1) {
+    return {
+      modelOverride: modelRef.slice(slash + 1),
+      providerOverride: modelRef.slice(0, slash),
+    };
+  }
+  return { modelOverride: modelRef };
 }
 
 export async function dispatchByMode({ mode, event, hookContext, config, seam, familyResolver, configuredProviders = [] }) {
@@ -73,10 +84,11 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam, f
           },
         };
       }
+      const override = overrideForModelRef(route.modelId);
       return {
-        override: { modelOverride: route.modelId },
+        override,
         selectedModel: route.modelId,
-        selectedProvider: null,
+        selectedProvider: override.providerOverride ?? null,
         selectionReason: "configured",
         selectionDetails: { matchedKey: route.key },
       };
@@ -86,10 +98,11 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam, f
       // Dumb static default — no request inspection, no registry, no classifier.
       const route = pickCheapDefault(config.cheapHeuristic);
       if (!route) return passthroughResult({ reason: "no cheap default configured" });
+      const override = overrideForModelRef(route.modelId);
       return {
-        override: { modelOverride: route.modelId },
+        override,
         selectedModel: route.modelId,
-        selectedProvider: null,
+        selectedProvider: override.providerOverride ?? null,
         selectionReason: "cheap_default",
         selectionDetails: { matchedKey: route.key },
       };

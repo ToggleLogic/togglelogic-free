@@ -20,6 +20,7 @@ import { createLogger as createRoutingLogger } from "./observability/logger.js";
 import { createOwnerOverrideAskHandler } from "./capture/owner-override-ask.js";
 import { createCostObserver } from "./usage/cost-observer.js";
 import { FamilyResolver } from "./routing/family-resolver.js";
+import { createNewSessionTracker } from "./routing/new-session-tracker.js";
 
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 
@@ -80,7 +81,14 @@ export const CAPABILITIES = [
       const hostRuntimeConfig = buildRuntimeConfigFromApiConfig(api && api.config);
       const configuredProviders = configuredProvidersFromApiConfig(api && api.config);
       const familyResolver = new FamilyResolver(config.familyResolution, fallbackLogger);
-      const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, hostRuntimeConfig, version);
+      const newSessions = createNewSessionTracker();
+      const seam = createIntelligenceSeam(
+        config.intelligence,
+        fallbackLogger,
+        hostRuntimeConfig,
+        version,
+        newSessions.consume,
+      );
       const interceptor = createInterceptor({
         config,
         hostConfig: api && api.config,
@@ -90,6 +98,12 @@ export const CAPABILITIES = [
         audit,
         familyResolver,
         configuredProviders,
+      });
+      api.on("session_start", (event, hookContext) => {
+        newSessions.mark({
+          sessionId: event?.sessionId ?? hookContext?.sessionId,
+          sessionKey: event?.sessionKey ?? hookContext?.sessionKey,
+        });
       });
       api.on("before_model_resolve", interceptor);
 
@@ -112,7 +126,7 @@ export const CAPABILITIES = [
       });
 
       return {
-        hooks: ["before_model_resolve"],
+        hooks: ["session_start", "before_model_resolve"],
         intelligence: { enabled: config.intelligence.enabled },
       };
     },

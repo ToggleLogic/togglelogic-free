@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.3.2",
+  "version": "1.3.4",
   "description": "Free-tier model routing for OpenClaw: apply static routes, opt-in provider-constrained family aliases, a simple static cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no Intelligence engine or production model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. The separate source-available ToggleLogic Intelligence package can add capability-aware automatic selection; eligible startups register before commercial production use. ToggleLogic Free is source-available under License 2.0 (see LICENSE).",
   "activation": {
     "onStartup": true

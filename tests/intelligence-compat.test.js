@@ -30,6 +30,7 @@ test("pairwise release contract accepts exact compatible pair", async () => {
   assert.equal((await detectIntelligenceLayer(root, "", "1.3.0")).present, true);
   assert.equal((await detectIntelligenceLayer(root, "", "1.3.1")).present, true);
   assert.equal((await detectIntelligenceLayer(root, "", "1.3.2")).present, true);
+  assert.equal((await detectIntelligenceLayer(root, "", "1.3.4")).present, true);
 });
 
 test("pairwise release contract fails closed on ABI, version, and development state", async () => {
