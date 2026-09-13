@@ -46,6 +46,21 @@ function formatMoney(value) {
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
 }
 
+function providerLabel(ref) {
+  const provider = typeof ref === "string" ? ref.split("/", 1)[0].toLowerCase() : "";
+  return ({ anthropic: "Anthropic", openai: "OpenAI", google: "Google", xai: "xAI" })[provider] || "the external AI provider";
+}
+
+function formatApprovalInvitation(item) {
+  const estimatedCost = Number.isFinite(item.estimatedCostUsd) ? formatMoney(item.estimatedCostUsd) : "currently unavailable";
+  return (
+    `ToggleLogic is ready to continue with ${item.modelRef}. ` +
+    `Estimated AI cost: ${estimatedCost}. ` +
+    `Once you approve, I’ll send this request and active SAM context to ${providerLabel(item.modelRef)} for one use. ` +
+    "Reply “Yes, proceed” or “No”."
+  );
+}
+
 function isLocalProvider(provider, ref) {
   return provider === "ollama" || (typeof ref === "string" && ref.startsWith("ollama/"));
 }
@@ -207,13 +222,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       outcome: "block",
       reason: "owner_approval_required",
       category: "model_escalation",
-      message:
-        `ToggleLogic recommends ${item.modelRef} because this task requires ${item.tier.replaceAll("_", " ")}.\n` +
-        `Reason: ${item.reason}\n` +
-        `Estimated usage: ~${item.tokens.input} input / ~${item.tokens.output} output tokens.\n` +
-        `Estimated AI cost: ${formatMoney(item.estimatedCostUsd)}${item.priceSource ? ` (${item.priceSource})` : ""}.\n` +
-        `External-data boundary: ${cfg.externalDataNotice || "the request and active model context would be sent to the named provider"}.\n` +
-        `No external model has received the task. Reply “Yes, proceed” to approve this model once, or “No” to cancel.`,
+      message: formatApprovalInvitation(item),
     };
   }
 
@@ -346,7 +355,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     }
 
     const key = event?.sessionKey || keyOf(ctx);
-    const pendingItem = key ? pending.get(key) : null;
+    const executionPendingItem = key ? pending.get(key) : null;
     const receipt = {
       ref,
       provider: usageState.provider || null,
@@ -354,7 +363,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       input: Number.isFinite(usage.input) ? usage.input : null,
       output: Number.isFinite(usage.output) ? usage.output : null,
       local,
-      approved: pendingItem?.status === "approved" || pendingItem?.status === "consumed",
+      approved: executionPendingItem?.status === "approved" || executionPendingItem?.status === "consumed",
       actualCostUsd,
       priceSource,
     };
@@ -370,6 +379,10 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
 
   load();
   prune();
+  function pendingInvitation(ctx) {
+    const item = pending.get(keyOf(ctx));
+    return item?.status === "awaiting" ? formatApprovalInvitation(item) : null;
+  }
   return {
     beforeRouting,
     afterRouting,
@@ -378,9 +391,10 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     observeOutput,
     appendReceipt,
     prepareReplyPayload,
+    pendingInvitation,
     _pending: pending,
     _receipts: receipts,
   };
 }
 
-export const _internals = { splitRef, tokenEstimate, formatMoney, formatReceipt, correlationKeys, YES, NO };
+export const _internals = { splitRef, tokenEstimate, formatMoney, formatReceipt, formatApprovalInvitation, correlationKeys, YES, NO };

@@ -2,6 +2,18 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.1-rc.1 — 2026-09-13
+
+- Claim governed escalation before model resolution with a short,
+  deterministic, positive invitation to approve one external use, avoiding
+  OpenClaw's generic negative block envelope.
+- Keep the proposed model, estimated AI cost, external data boundary, and
+  explicit yes/no choice while omitting internal tier and token details.
+- Preserve the fail-closed `before_agent_run` gate; no external model receives
+  the request before owner approval.
+- Cache ordinary preflight routing decisions for the normal model-resolution
+  hook so Intelligence classifies each logical turn only once.
+
 ## 1.4.0 — 2026-09-13
 
 - Add an opt-in governed-escalation lifecycle that keeps configured ordinary

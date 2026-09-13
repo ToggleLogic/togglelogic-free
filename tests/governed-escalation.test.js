@@ -52,7 +52,9 @@ test("external flagship work is blocked with an estimate, then resumes once afte
   const blocked = f.gate.beforeAgentRun({}, { sessionKey: "s2" });
   assert.equal(blocked.outcome, "block");
   assert.match(blocked.message, /Estimated AI cost: \$/);
-  assert.match(blocked.message, /No external model has received the task/);
+  assert.match(blocked.message, /ToggleLogic is ready to continue/);
+  assert.match(blocked.message, /Once you approve/);
+  assert.doesNotMatch(blocked.message, /could not|blocked|cannot/i);
 
   const approval = f.gate.beforeRouting("Yes, proceed", { sessionKey: "s2" });
   assert.equal(approval.action, "approved");
@@ -61,6 +63,36 @@ test("external flagship work is blocked with an estimate, then resumes once afte
   assert.match(f.gate.prepareTurn({}, { sessionKey: "s2" }).appendContext, /Synthesize multiple reports/);
   assert.equal(f.gate.beforeAgentRun({}, { sessionKey: "s2" }).outcome, "pass");
   assert.equal(f.gate.beforeRouting("Yes, proceed", { sessionKey: "s2" }), null, "one-time approval is consumed");
+});
+
+test("a pending escalation exposes a deterministic positive approval invitation", async (t) => {
+  const f = fixture();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  await f.gate.afterRouting("Hard task", { sessionKey: "friendly" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning", reasoning: "complex reasoning" },
+  });
+  const invitation = f.gate.pendingInvitation({ sessionKey: "friendly" });
+  assert.match(invitation, /^ToggleLogic is ready to continue with anthropic\/claude-sonnet-4-6\./);
+  assert.match(invitation, /Estimated AI cost: \$0\.04\./);
+  assert.match(invitation, /send this request and active SAM context to Anthropic for one use/);
+  assert.match(invitation, /Reply “Yes, proceed” or “No”\.$/);
+  assert.doesNotMatch(invitation, /could not be sent|blocked by/i);
+});
+
+test("a missing price stays honest without negative failure wording", async (t) => {
+  const f = fixture();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  f.pricing.resolve = async () => ({ priced: false });
+  await f.gate.afterRouting("Hard task", { sessionKey: "unpriced-friendly" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  const blocked = f.gate.beforeAgentRun({}, { sessionKey: "unpriced-friendly" });
+  assert.match(blocked.message, /Estimated AI cost: currently unavailable\./);
+  assert.doesNotMatch(blocked.message, /could not|blocked|cannot/i);
 });
 
 test("pending approval survives a coordinator restart and state is owner-only", async (t) => {

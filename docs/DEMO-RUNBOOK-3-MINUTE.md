@@ -29,9 +29,10 @@ Send this synthetic prompt to the governed demonstration host:
 > framework. Output exactly four bullet points, each no more than 12 words. No
 > heading, table, introduction, conclusion, or prose outside the four bullets.
 
-ToggleLogic should respond immediately without calling an external model. Point
-out the recommended model, reason, estimated tokens and cost, data boundary, and
-the statement that no external model has received the task.
+ToggleLogic should respond immediately without calling an external model. Its
+short approval invitation names the proposed model and estimated AI cost, then
+states that the request and active SAM context will be sent to the named
+provider once the owner approves one use.
 
 ### 1:05–1:20 — Make the decision visible
 
@@ -62,7 +63,7 @@ what information may leave, what it should cost, and who must approve it.”
 
 - No false fallback banner.
 - No external call before approval.
-- The approval prompt names the proposed model, estimate, and boundary.
+- The approval prompt positively names the proposed model, estimate, and boundary.
 - Exactly one approved external execution occurs.
 - Public pricing is labeled as an estimate, never actual provider billing.
 - The next ordinary turn returns to local execution.

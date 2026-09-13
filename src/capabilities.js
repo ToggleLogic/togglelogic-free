@@ -116,6 +116,7 @@ export const CAPABILITIES = [
       });
       api.on("before_model_resolve", interceptor, { priority: 100 });
       if (governedEscalation) {
+        api.on("before_agent_reply", (event, hookContext) => interceptor.preflight({ prompt: event?.cleanedBody || "" }, hookContext), { priority: 100 });
         api.on("before_agent_run", governedEscalation.beforeAgentRun, { priority: 100 });
         api.on("agent_turn_prepare", governedEscalation.prepareTurn, { priority: 100 });
         api.on("llm_output", governedEscalation.observeOutput, { priority: 100 });
@@ -142,7 +143,7 @@ export const CAPABILITIES = [
       });
 
       return {
-        hooks: ["session_start", "before_model_resolve", ...(governedEscalation ? ["before_agent_run", "agent_turn_prepare", "llm_output", "message_sending", "reply_payload_sending"] : [])],
+        hooks: ["session_start", "before_model_resolve", ...(governedEscalation ? ["before_agent_reply", "before_agent_run", "agent_turn_prepare", "llm_output", "message_sending", "reply_payload_sending"] : [])],
         intelligence: { enabled: config.intelligence.enabled },
       };
     },
