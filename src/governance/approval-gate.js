@@ -98,6 +98,17 @@ function providerLabel(ref) {
   return ({ anthropic: "Anthropic", openai: "OpenAI", google: "Google", xai: "xAI" })[provider] || "the external AI provider";
 }
 
+function modelLabel(ref) {
+  const model = typeof ref === "string" && ref.includes("/") ? ref.slice(ref.indexOf("/") + 1) : String(ref || "Unknown");
+  const claude = model.match(/^claude-(sonnet|haiku|opus)-(\d+)-(\d+)$/i);
+  if (claude) return `Claude ${claude[1][0].toUpperCase()}${claude[1].slice(1).toLowerCase()} ${claude[2]}.${claude[3]}`;
+  const glm = model.match(/^glm(\d+):(.+)$/i);
+  if (glm) return `GLM ${glm[1]} ${glm[2].toUpperCase()}`;
+  const gemma = model.match(/^gemma(\d+):(.+)$/i);
+  if (gemma) return `Gemma ${gemma[1]}${gemma[2].toLowerCase() === "latest" ? "" : ` ${gemma[2].toUpperCase()}`}`;
+  return model;
+}
+
 function formatApprovalInvitation(item) {
   const estimatedCost = Number.isFinite(item.estimatedCostUsd) ? formatMoney(item.estimatedCostUsd) : "currently unavailable";
   return (
@@ -124,20 +135,28 @@ function isLocalProvider(provider, ref) {
 }
 
 function formatReceipt(content, receipt) {
-  const location = receipt.local
-    ? "LOCAL (Ollama; selected by ToggleLogic policy; no external AI model)"
-    : "EXTERNAL AI MODEL";
-  const approval = receipt.approved ? " | owner approval: verified once" : "";
+  const lines = [
+    "Receipt",
+    `Model: ${modelLabel(receipt.ref)}`,
+    receipt.local ? "Location: Local (no external AI)" : `Location: ${providerLabel(receipt.ref)} cloud`,
+  ];
+  if (receipt.approved) lines.push("Approval: Confirmed for one use");
+  lines.push(`Usage: ${receipt.input ?? "unknown"} in / ${receipt.output ?? "unknown"} out`);
   let cost;
   if (receipt.actualCostUsd === null) {
-    cost = "AI cost: unavailable—not $0";
+    cost = "**Cost: Unavailable**";
   } else {
-    const amount = `${formatMoney(receipt.actualCostUsd)}${receipt.priceSource ? ` (${receipt.priceSource})` : ""}`;
-    if (receipt.local) cost = `external AI provider cost: ${amount}`;
-    else if (receipt.priceSource === "openclaw-runtime") cost = `runtime-reported AI cost: ${amount}`;
-    else cost = `estimated AI cost: ${amount}`;
+    const amount = receipt.local ? "$0.00" : formatMoney(receipt.actualCostUsd);
+    if (receipt.local) cost = `**External AI cost: ${amount}**`;
+    else if (receipt.priceSource === "openclaw-runtime") cost = `**Reported cost: ${amount}**`;
+    else cost = `**Estimated cost: ${amount}**`;
   }
-  return `${content}\n\n—\nToggleLogic execution receipt: ${receipt.ref} | ${location}${approval} | tokens: ${receipt.input ?? "unknown"} in / ${receipt.output ?? "unknown"} out | ${cost}`;
+  lines.push(cost);
+  return `${content}\n\n—\n${lines.join("\n")}`;
+}
+
+function hasReceipt(value) {
+  return typeof value === "string" && value.includes("\nReceipt\nModel:");
 }
 
 export function createApprovalGate({ config, pricing, now = () => Date.now() } = {}) {
@@ -351,7 +370,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     const key = keyOf(ctx);
     const receipt = key ? receipts.get(key) : null;
     if (!receipt || !receipt.ref || typeof event?.content !== "string") return;
-    if (event.content.includes("ToggleLogic execution receipt:")) {
+    if (hasReceipt(event.content)) {
       clearReceipt(receipt);
       return;
     }
@@ -395,7 +414,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       payload.isStatusNotice
     ) return;
 
-    if (payload.text.includes("ToggleLogic execution receipt:")) {
+    if (hasReceipt(payload.text)) {
       const existing = correlationKeys(event, ctx).map((key) => receipts.get(key)).find(Boolean);
       clearReceipt(existing);
       return;
@@ -492,6 +511,8 @@ export const _internals = {
   formatReceipt,
   formatApprovalInvitation,
   formatApprovalConfirmation,
+  modelLabel,
+  hasReceipt,
   correlationKeys,
   normalizeDecisionPhrase,
   YES_PHRASES,

@@ -218,10 +218,10 @@ test("execution receipt reports actual runtime model, location, usage, and cost"
     usage: { input: 100, output: 25 },
   }, { sessionKey: "s5", runId: "r5" });
   const result = f.gate.appendReceipt({ content: "Done." }, { sessionKey: "s5" });
-  assert.match(result.content, /ollama\/gemma4:latest/);
-  assert.match(result.content, /LOCAL/);
-  assert.match(result.content, /100 in \/ 25 out/);
-  assert.match(result.content, /external AI provider cost: \$0\.0000/);
+  assert.match(result.content, /\nReceipt\nModel: Gemma 4\n/);
+  assert.match(result.content, /Location: Local \(no external AI\)/);
+  assert.match(result.content, /Usage: 100 in \/ 25 out/);
+  assert.match(result.content, /\*\*External AI cost: \$0\.00\*\*/);
 });
 
 test("OpenClaw policy reroute is not mislabeled as a model fallback", async (t) => {
@@ -271,17 +271,17 @@ test("delivery-time runtime evidence adds one local execution receipt", async (t
   };
   const result = await f.gate.prepareReplyPayload(event, { sessionKey: "s8" });
   assert.equal(result.payload.delivery.mode, "normal");
-  assert.match(result.payload.text, /ollama\/gemma4:latest/);
-  assert.match(result.payload.text, /selected by ToggleLogic policy; no external AI model/);
-  assert.match(result.payload.text, /123 in \/ 45 out/);
-  assert.match(result.payload.text, /external AI provider cost: \$0\.0000 \(local-provider-api\)/);
+  assert.match(result.payload.text, /Model: Gemma 4/);
+  assert.match(result.payload.text, /Location: Local \(no external AI\)/);
+  assert.match(result.payload.text, /Usage: 123 in \/ 45 out/);
+  assert.match(result.payload.text, /\*\*External AI cost: \$0\.00\*\*/);
 
   const duplicate = await f.gate.prepareReplyPayload({
     ...event,
     payload: { text: result.payload.text },
   }, { sessionKey: "s8" });
   assert.equal(duplicate, undefined);
-  assert.equal((result.payload.text.match(/ToggleLogic execution receipt:/g) || []).length, 1);
+  assert.equal((result.payload.text.match(/\nReceipt\nModel:/g) || []).length, 1);
 });
 
 test("delivery receipt records one-time approval and runtime external cost", async (t) => {
@@ -309,9 +309,10 @@ test("delivery receipt records one-time approval and runtime external cost", asy
       usage: { input: 2000, output: 1200 },
     },
   }, { sessionKey: "s9" });
-  assert.match(result.payload.text, /EXTERNAL AI MODEL/);
-  assert.match(result.payload.text, /owner approval: verified once/);
-  assert.match(result.payload.text, /runtime-reported AI cost: \$0\.02 \(openclaw-runtime\)/);
+  assert.match(result.payload.text, /Model: Claude Sonnet 4\.6/);
+  assert.match(result.payload.text, /Location: Anthropic cloud/);
+  assert.match(result.payload.text, /Approval: Confirmed for one use/);
+  assert.match(result.payload.text, /\*\*Reported cost: \$0\.02\*\*/);
   assert.equal(f.gate._pending.has("s9"), false);
 });
 
@@ -344,7 +345,7 @@ test("OpenClaw 2026.9.4 dual-hook delivery emits one receipt and drains correlat
   }, ctx);
   assert.equal(f.gate._receipts.size, 0);
   assert.equal(f.gate.appendReceipt({ content: prepared.payload.text }, ctx), undefined);
-  assert.equal((prepared.payload.text.match(/ToggleLogic execution receipt:/g) || []).length, 1);
+  assert.equal((prepared.payload.text.match(/\nReceipt\nModel:/g) || []).length, 1);
 });
 
 test("public catalog pricing is labeled as an estimate, never actual provider billing", async (t) => {
@@ -362,7 +363,7 @@ test("public catalog pricing is labeled as an estimate, never actual provider bi
       usage: { input: 100, output: 200 },
     },
   }, { sessionKey: "s11" });
-  assert.match(result.payload.text, /estimated AI cost: \$0\.0033 \(test-prices\)/);
+  assert.match(result.payload.text, /\*\*Estimated cost: \$0\.0033\*\*/);
   assert.doesNotMatch(result.payload.text, /actual AI cost/i);
 });
 
@@ -382,9 +383,9 @@ test("external runtime zero with positive usage falls back to a labeled estimate
       usage: { input: 1421, output: 684 },
     },
   }, { sessionKey: "runtime-zero" });
-  assert.match(result.payload.text, /estimated AI cost: \$0\.01 \(test-prices\)/);
-  assert.doesNotMatch(result.payload.text, /runtime-reported AI cost/);
-  assert.doesNotMatch(result.payload.text, /AI cost: \$0\.0000/);
+  assert.match(result.payload.text, /\*\*Estimated cost: \$0\.01\*\*/);
+  assert.doesNotMatch(result.payload.text, /Reported cost/);
+  assert.doesNotMatch(result.payload.text, /cost: \$0\.0000/i);
 });
 
 test("tiny positive external costs never render as zero", () => {
@@ -415,6 +416,6 @@ test("unavailable external pricing is explicit and never represented as zero", a
       usage: { input: 100, output: 200 },
     },
   }, { sessionKey: "s12" });
-  assert.match(result.payload.text, /AI cost: unavailable—not \$0/);
-  assert.doesNotMatch(result.payload.text, /AI cost: \$0(?:\.0+)?(?:\D|$)/);
+  assert.match(result.payload.text, /\*\*Cost: Unavailable\*\*/);
+  assert.doesNotMatch(result.payload.text, /cost: \$0(?:\.0+)?(?:\D|$)/i);
 });

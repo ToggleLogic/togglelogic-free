@@ -43,9 +43,9 @@ a direct confirmation. Reply `Yes` only after that confirmation is correct.
 
 ### 1:30–2:30 — Show governed execution
 
-The result should contain only four short bullets and remain under 90 words. Show the execution
-receipt: runtime model, external boundary, one-time approval, tokens, and a
-clearly labeled runtime-reported or estimated AI cost.
+The result should contain only four short bullets and remain under 90 words.
+Show the short multiline receipt: friendly model name, location, one-time
+approval, usage, and a clearly labeled cost on its own final line.
 
 ### 2:30–2:50 — Prove the approval did not stick
 

@@ -2,6 +2,14 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.1-rc.5 — 2026-09-13
+
+- Replace the dense, pipe-delimited technical receipt with a short multiline
+  summary for people: friendly model name, location, approval, usage, and cost.
+- Put the cost on its own emphasized final line and keep pricing-source and
+  exact model-reference evidence in the machine-readable audit trail.
+- Shorten the heading from `ToggleLogic execution receipt` to `Receipt`.
+
 ## 1.4.1-rc.4 — 2026-09-13
 
 - Reject a zero runtime-cost claim for an external model when runtime evidence
