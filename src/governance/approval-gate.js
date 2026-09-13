@@ -10,8 +10,54 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveOpenClawPath } from "../path-utils.js";
 
-const YES = /^(yes|yes please|proceed|please proceed|go ahead|please go ahead|do it|yes[, ]+proceed)[.! ]*$/i;
-const NO = /^(no|no thanks|cancel|stop|do not proceed|don't proceed)[.! ]*$/i;
+const YES_PHRASES = new Set([
+  "yes",
+  "yes please",
+  "yes proceed",
+  "yes please proceed",
+  "yes approved",
+  "yes approve it",
+  "yes go ahead",
+  "yes please go ahead",
+  "yes go for it",
+  "yes please go for it",
+  "yes do it",
+  "approved",
+  "approve it",
+  "i approve",
+  "i approve it",
+  "i approve this",
+  "you have my approval",
+  "proceed",
+  "please proceed",
+  "go ahead",
+  "please go ahead",
+  "go for it",
+  "please go for it",
+  "do it",
+]);
+const NO_PHRASES = new Set([
+  "no",
+  "no thanks",
+  "cancel",
+  "stop",
+  "do not proceed",
+  "please do not proceed",
+  "don't proceed",
+  "not approved",
+  "do not approve",
+  "do not do it",
+]);
+
+function normalizeDecisionPhrase(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[.,!?;:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function splitRef(ref) {
   const i = typeof ref === "string" ? ref.indexOf("/") : -1;
@@ -43,7 +89,45 @@ function tokenEstimate(prompt, outputTokens) {
 
 function formatMoney(value) {
   if (!Number.isFinite(value)) return "unavailable (execution remains blocked)";
+  if (value > 0 && value < 0.0001) return "<$0.0001";
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+}
+
+function providerLabel(ref) {
+  const provider = typeof ref === "string" ? ref.split("/", 1)[0].toLowerCase() : "";
+  return ({ anthropic: "Anthropic", openai: "OpenAI", google: "Google", xai: "xAI" })[provider] || "the external AI provider";
+}
+
+function modelLabel(ref) {
+  const model = typeof ref === "string" && ref.includes("/") ? ref.slice(ref.indexOf("/") + 1) : String(ref || "Unknown");
+  const claude = model.match(/^claude-(sonnet|haiku|opus)-(\d+)-(\d+)$/i);
+  if (claude) return `Claude ${claude[1][0].toUpperCase()}${claude[1].slice(1).toLowerCase()} ${claude[2]}.${claude[3]}`;
+  const glm = model.match(/^glm(\d+):(.+)$/i);
+  if (glm) return `GLM ${glm[1]} ${glm[2].toUpperCase()}`;
+  const gemma = model.match(/^gemma(\d+):(.+)$/i);
+  if (gemma) return `Gemma ${gemma[1]}${gemma[2].toLowerCase() === "latest" ? "" : ` ${gemma[2].toUpperCase()}`}`;
+  return model;
+}
+
+function formatApprovalInvitation(item) {
+  const estimatedCost = Number.isFinite(item.estimatedCostUsd) ? formatMoney(item.estimatedCostUsd) : "currently unavailable";
+  return (
+    `ToggleLogic is ready to continue with ${item.modelRef}. ` +
+    `Estimated AI cost: ${estimatedCost}. ` +
+    `Once you approve, I’ll send this request and active SAM context to ${providerLabel(item.modelRef)} for one use. ` +
+    "Reply naturally; I’ll confirm your approval before anything is sent."
+  );
+}
+
+function formatApprovalConfirmation(item) {
+  const estimatedCost = Number.isFinite(item.estimatedCostUsd) ? formatMoney(item.estimatedCostUsd) : "currently unavailable";
+  const interpretation = item.interpretation === "affirmative"
+    ? "I understood that as approval."
+    : "I’m not certain whether you meant to approve this.";
+  return (
+    `${interpretation} Just to confirm: do you approve sending this request and active SAM context to ${providerLabel(item.modelRef)} ` +
+    `for one use with ${item.modelRef}, at an estimated AI cost of ${estimatedCost}? Reply “Yes” or “No”.`
+  );
 }
 
 function isLocalProvider(provider, ref) {
@@ -51,20 +135,27 @@ function isLocalProvider(provider, ref) {
 }
 
 function formatReceipt(content, receipt) {
-  const location = receipt.local
-    ? "LOCAL (Ollama; selected by ToggleLogic policy; no external AI model)"
-    : "EXTERNAL AI MODEL";
-  const approval = receipt.approved ? " | owner approval: verified once" : "";
+  const lines = [
+    "Receipt",
+    `Model: ${modelLabel(receipt.ref)}`,
+    receipt.local ? "Location: Local (no external AI)" : `Location: ${providerLabel(receipt.ref)} cloud`,
+  ];
+  lines.push(`Usage: ${receipt.input ?? "unknown"} in / ${receipt.output ?? "unknown"} out`);
   let cost;
   if (receipt.actualCostUsd === null) {
-    cost = "AI cost: unavailable—not $0";
+    cost = "**Cost: Unavailable**";
   } else {
-    const amount = `${formatMoney(receipt.actualCostUsd)}${receipt.priceSource ? ` (${receipt.priceSource})` : ""}`;
-    if (receipt.local) cost = `external AI provider cost: ${amount}`;
-    else if (receipt.priceSource === "openclaw-runtime") cost = `runtime-reported AI cost: ${amount}`;
-    else cost = `estimated AI cost: ${amount}`;
+    const amount = receipt.local ? "$0.00" : formatMoney(receipt.actualCostUsd);
+    if (receipt.local) cost = `**External AI cost: ${amount}**`;
+    else if (receipt.priceSource === "openclaw-runtime") cost = `**Reported cost: ${amount}**`;
+    else cost = `**Estimated cost: ${amount}**`;
   }
-  return `${content}\n\n—\nToggleLogic execution receipt: ${receipt.ref} | ${location}${approval} | tokens: ${receipt.input ?? "unknown"} in / ${receipt.output ?? "unknown"} out | ${cost}`;
+  lines.push(cost);
+  return `${content}\n\n—\n${lines.join("\n")}`;
+}
+
+function hasReceipt(value) {
+  return typeof value === "string" && value.includes("\nReceipt\nModel:");
 }
 
 export function createApprovalGate({ config, pricing, now = () => Date.now() } = {}) {
@@ -133,20 +224,50 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       save();
       return null;
     }
-    if (YES.test(String(prompt || "").trim())) {
+    const decisionPhrase = normalizeDecisionPhrase(prompt);
+    if (item.status === "approved") {
+      const currentRun = ctx?.runId || ctx?.turnId || null;
+      const sameRun = Boolean(item.approvalRunId && currentRun && item.approvalRunId === currentRun);
+      const sameImmediateDecision =
+        !item.approvalRunId &&
+        decisionPhrase === item.approvalDecision &&
+        Number.isFinite(item.approvedAt) &&
+        now() - item.approvedAt <= 30_000;
+      if (sameRun || sameImmediateDecision) {
+        return { action: "approved", shortCircuit: true, override: splitRef(item.modelRef), item };
+      }
+      pending.delete(key);
+      save();
+      return null;
+    }
+    if (item.status === "denied") {
+      pending.delete(key);
+      save();
+      return null;
+    }
+
+    const isYes = YES_PHRASES.has(decisionPhrase);
+    const isNo = NO_PHRASES.has(decisionPhrase);
+
+    if (item.status === "confirming" && isYes) {
       item.status = "approved";
       item.approvedAt = now();
+      item.approvalDecision = decisionPhrase;
+      item.approvalRunId = ctx?.runId || ctx?.turnId || null;
       save();
       return { action: "approved", shortCircuit: true, override: splitRef(item.modelRef), item };
     }
-    if (NO.test(String(prompt || "").trim())) {
+    if (isNo) {
       item.status = "denied";
       save();
       return { action: "denied", shortCircuit: true, override: splitRef(localRef), item };
     }
-    pending.delete(key);
+
+    item.status = "confirming";
+    item.confirmationRequestedAt ||= now();
+    item.interpretation = isYes ? "affirmative" : "uncertain";
     save();
-    return null;
+    return { action: "confirmation_required", shortCircuit: true, override: splitRef(localRef), item };
   }
 
   async function afterRouting(prompt, ctx, result) {
@@ -198,6 +319,14 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       save();
       return { outcome: "pass" };
     }
+    if (item.status === "consumed") {
+      return {
+        outcome: "block",
+        reason: "owner_approval_already_used",
+        category: "model_escalation",
+        message: "This approval has already been used. Please request a new approval to run the task again.",
+      };
+    }
     if (item.status === "denied") {
       pending.delete(keyOf(ctx));
       save();
@@ -207,13 +336,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       outcome: "block",
       reason: "owner_approval_required",
       category: "model_escalation",
-      message:
-        `ToggleLogic recommends ${item.modelRef} because this task requires ${item.tier.replaceAll("_", " ")}.\n` +
-        `Reason: ${item.reason}\n` +
-        `Estimated usage: ~${item.tokens.input} input / ~${item.tokens.output} output tokens.\n` +
-        `Estimated AI cost: ${formatMoney(item.estimatedCostUsd)}${item.priceSource ? ` (${item.priceSource})` : ""}.\n` +
-        `External-data boundary: ${cfg.externalDataNotice || "the request and active model context would be sent to the named provider"}.\n` +
-        `No external model has received the task. Reply “Yes, proceed” to approve this model once, or “No” to cancel.`,
+      message: item.status === "confirming" ? formatApprovalConfirmation(item) : formatApprovalInvitation(item),
     };
   }
 
@@ -268,7 +391,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     const key = keyOf(ctx);
     const receipt = key ? receipts.get(key) : null;
     if (!receipt || !receipt.ref || typeof event?.content !== "string") return;
-    if (event.content.includes("ToggleLogic execution receipt:")) {
+    if (hasReceipt(event.content)) {
       clearReceipt(receipt);
       return;
     }
@@ -312,7 +435,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       payload.isStatusNotice
     ) return;
 
-    if (payload.text.includes("ToggleLogic execution receipt:")) {
+    if (hasReceipt(payload.text)) {
       const existing = correlationKeys(event, ctx).map((key) => receipts.get(key)).find(Boolean);
       clearReceipt(existing);
       return;
@@ -329,24 +452,30 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     const local = isLocalProvider(usageState.provider, ref);
     let actualCostUsd = null;
     let priceSource = null;
+    const hasPositiveUsage =
+      (Number.isFinite(usage.input) && usage.input > 0) ||
+      (Number.isFinite(usage.output) && usage.output > 0);
     if (local) {
       actualCostUsd = 0;
       priceSource = "local-provider-api";
-    } else if (Number.isFinite(usageState.turnUsd)) {
+    } else if (Number.isFinite(usageState.turnUsd) && usageState.turnUsd > 0) {
       actualCostUsd = usageState.turnUsd;
       priceSource = "openclaw-runtime";
-    } else {
+    } else if (hasPositiveUsage) {
       try {
         const price = await pricing.resolve(ref);
         if (price?.priced) {
-          actualCostUsd = pricing.costUsd(price, usage);
-          priceSource = price.source || null;
+          const estimate = pricing.costUsd(price, usage);
+          if (Number.isFinite(estimate) && estimate > 0) {
+            actualCostUsd = estimate;
+            priceSource = price.source || null;
+          }
         }
       } catch { /* unavailable stays explicit in the receipt */ }
     }
 
     const key = event?.sessionKey || keyOf(ctx);
-    const pendingItem = key ? pending.get(key) : null;
+    const executionPendingItem = key ? pending.get(key) : null;
     const receipt = {
       ref,
       provider: usageState.provider || null,
@@ -354,7 +483,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       input: Number.isFinite(usage.input) ? usage.input : null,
       output: Number.isFinite(usage.output) ? usage.output : null,
       local,
-      approved: pendingItem?.status === "approved" || pendingItem?.status === "consumed",
+      approved: executionPendingItem?.status === "approved" || executionPendingItem?.status === "consumed",
       actualCostUsd,
       priceSource,
     };
@@ -370,6 +499,18 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
 
   load();
   prune();
+  function pendingInvitation(ctx) {
+    const key = keyOf(ctx);
+    const item = pending.get(key);
+    if (item?.status === "awaiting") return formatApprovalInvitation(item);
+    if (item?.status === "confirming") return formatApprovalConfirmation(item);
+    if (item?.status === "denied") {
+      pending.delete(key);
+      save();
+      return "Cancelled. No external AI model received the task.";
+    }
+    return null;
+  }
   return {
     beforeRouting,
     afterRouting,
@@ -378,9 +519,23 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     observeOutput,
     appendReceipt,
     prepareReplyPayload,
+    pendingInvitation,
     _pending: pending,
     _receipts: receipts,
   };
 }
 
-export const _internals = { splitRef, tokenEstimate, formatMoney, formatReceipt, correlationKeys, YES, NO };
+export const _internals = {
+  splitRef,
+  tokenEstimate,
+  formatMoney,
+  formatReceipt,
+  formatApprovalInvitation,
+  formatApprovalConfirmation,
+  modelLabel,
+  hasReceipt,
+  correlationKeys,
+  normalizeDecisionPhrase,
+  YES_PHRASES,
+  NO_PHRASES,
+};

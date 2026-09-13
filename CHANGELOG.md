@@ -2,6 +2,79 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.1 — 2026-09-13
+
+- Replace OpenClaw's generic negative escalation block with a short, positive
+  invitation before any external model receives the request.
+- Add natural, two-stage consent: ToggleLogic makes SAM's interpretation
+  visible, repeats the provider, model, context boundary, one-use scope, and
+  estimate, and requires a final explicit yes/no decision.
+- Reject false-zero external runtime costs when positive token usage proves
+  work occurred; use a labeled public-rate estimate or report unavailable.
+- Replace the dense technical execution line with a short multiline receipt
+  showing a friendly model name, location, usage, and emphasized cost.
+- Preserve exact provider references, pricing sources, routing evidence, and
+  one-use approval evidence in machine-readable audit data.
+- Bind an approved execution to its confirmation turn so an interrupted
+  approval cannot attach itself to a later unrelated message; retries after
+  consumption fail closed with a clear explanation.
+- Validate the release on OpenClaw 2026.9.4 with 75 passing tests and live
+  Telegram canaries covering local routing, consent, external execution, cost,
+  and the final receipt presentation.
+
+## 1.4.1-rc.6 — 2026-09-13
+
+- Remove the redundant one-use approval line from the human-facing receipt.
+- Retain approval scope and verification in the machine-readable audit trail.
+
+## 1.4.1-rc.5 — 2026-09-13
+
+- Replace the dense, pipe-delimited technical receipt with a short multiline
+  summary for people: friendly model name, location, approval, usage, and cost.
+- Put the cost on its own emphasized final line and keep pricing-source and
+  exact model-reference evidence in the machine-readable audit trail.
+- Shorten the heading from `ToggleLogic execution receipt` to `Receipt`.
+
+## 1.4.1-rc.4 — 2026-09-13
+
+- Reject a zero runtime-cost claim for an external model when runtime evidence
+  shows positive token usage.
+- Fall back to a labeled public-catalog estimate when pricing is available;
+  otherwise report cost as unavailable rather than presenting a false zero.
+- Render tiny positive costs as `<$0.0001` instead of rounding them to `$0.0000`.
+
+## 1.4.1-rc.3 — 2026-09-13
+
+- Add a two-stage consent state for external-model use: an initial natural
+  affirmative or uncertain reply produces a plain-language confirmation, and
+  only the following explicit approval authorizes the one-time execution.
+- Keep uncertain replies paused instead of silently discarding the governed
+  request or allowing a model to infer authorization.
+- Repeat the provider, model, context boundary, one-use scope, and estimated
+  cost in the final confirmation question.
+- State whether SAM interpreted the first response as affirmative or uncertain,
+  while leaving authorization exclusively to the second explicit answer.
+
+## 1.4.1-rc.2 — 2026-09-13
+
+- Accept common explicit approval phrases, including `Yes, approved`,
+  `Approved`, and `Go for it`, while an external-model approval is pending.
+- Keep authorization deterministic and fail-closed: ambiguous replies do not
+  approve external execution, and approval remains valid for one use only.
+- Tell the owner in the invitation that natural approval wording is accepted.
+
+## 1.4.1-rc.1 — 2026-09-13
+
+- Claim governed escalation before model resolution with a short,
+  deterministic, positive invitation to approve one external use, avoiding
+  OpenClaw's generic negative block envelope.
+- Keep the proposed model, estimated AI cost, external data boundary, and
+  explicit yes/no choice while omitting internal tier and token details.
+- Preserve the fail-closed `before_agent_run` gate; no external model receives
+  the request before owner approval.
+- Cache ordinary preflight routing decisions for the normal model-resolution
+  hook so Intelligence classifies each logical turn only once.
+
 ## 1.4.0 — 2026-09-13
 
 - Add an opt-in governed-escalation lifecycle that keeps configured ordinary

@@ -94,9 +94,18 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
   // chain. Classify the logical turn once; subsequent passes must preserve the
   // host's candidate instead of routing every fallback back to the failed model.
   const recentTurns = new Map();
+  const preflightResults = new Map();
   const FALLBACK_WINDOW_MS = 60_000;
 
-  return async function beforeModelResolve(event, hookContext) {
+  function turnFingerprint(event, hookContext) {
+    const prompt = typeof event?.prompt === "string" ? event.prompt : "";
+    const sessionKey = normalizeOptionalString(hookContext?.sessionKey);
+    return prompt && sessionKey
+      ? crypto.createHash("sha256").update(`${sessionKey}\0${prompt}`).digest("hex")
+      : null;
+  }
+
+  async function resolveBeforeModel(event, hookContext) {
     const decision = newDecision({ event, hookContext, mode: config.mode, version });
 
     _emit(audit, EVENTS.ROUTING_HOOK_FIRE, {
@@ -259,14 +268,9 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       return PASSTHROUGH;
     }
 
-    const prompt = typeof event?.prompt === "string" ? event.prompt : "";
-    const sessionKey = normalizeOptionalString(hookContext?.sessionKey);
-    if (prompt && sessionKey) {
+    const fingerprint = turnFingerprint(event, hookContext);
+    if (fingerprint) {
       const now = Date.now();
-      const fingerprint = crypto
-        .createHash("sha256")
-        .update(`${sessionKey}\0${prompt}`)
-        .digest("hex");
       for (const [key, at] of recentTurns) {
         if (now - at > FALLBACK_WINDOW_MS) recentTurns.delete(key);
       }
@@ -397,5 +401,36 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     });
 
     return override;
+  }
+
+  async function beforeModelResolve(event, hookContext) {
+    const fingerprint = turnFingerprint(event, hookContext);
+    const cached = fingerprint ? preflightResults.get(fingerprint) : null;
+    if (cached && Date.now() - cached.createdAt <= FALLBACK_WINDOW_MS) {
+      preflightResults.delete(fingerprint);
+      return cached.override;
+    }
+    if (fingerprint) preflightResults.delete(fingerprint);
+    return resolveBeforeModel(event, hookContext);
+  }
+
+  beforeModelResolve.preflight = async (event, hookContext) => {
+    const fingerprint = turnFingerprint(event, hookContext);
+    const override = await resolveBeforeModel(event, hookContext);
+    const invitation = governedEscalation?.pendingInvitation(hookContext);
+    if (invitation) {
+      if (fingerprint) recentTurns.delete(fingerprint);
+      return { handled: true, reply: { text: invitation }, reason: "togglelogic_owner_approval_required" };
+    }
+    if (fingerprint) {
+      const now = Date.now();
+      for (const [key, value] of preflightResults) {
+        if (now - value.createdAt > FALLBACK_WINDOW_MS) preflightResults.delete(key);
+      }
+      preflightResults.set(fingerprint, { override, createdAt: now });
+    }
+    return { handled: false };
   };
+
+  return beforeModelResolve;
 }

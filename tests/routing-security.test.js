@@ -18,6 +18,7 @@ function harness(config, extras = {}) {
     config, hostConfig: extras.hostConfig ?? {}, logger: { write: async () => {} }, audit: { emit() {} },
     seam: extras.seam ?? { status: () => "unavailable", classify: async () => null }, version: "test",
     familyResolver: extras.familyResolver, configuredProviders: extras.configuredProviders ?? [],
+    governedEscalation: extras.governedEscalation ?? null,
   });
 }
 
@@ -94,4 +95,59 @@ test("interceptor classifies a logical turn once and preserves host fallback can
   assert.deepEqual(first, { providerOverride: "xai", modelOverride: "grok" });
   assert.deepEqual(fallback, {});
   assert.equal(calls, 1, "fallback pass must not re-enter Intelligence");
+});
+
+test("preflight returns a deterministic approval reply before model resolution", async () => {
+  let calls = 0;
+  let awaiting = false;
+  const seam = {
+    status: () => "available",
+    classify: async () => {
+      calls += 1;
+      return {
+        providerOverride: "anthropic",
+        modelOverride: "claude-sonnet-4-6",
+        details: { required_tier: "flagship_reasoning", recommended_model_ref: "anthropic/claude-sonnet-4-6" },
+      };
+    },
+  };
+  const governedEscalation = {
+    beforeRouting: () => null,
+    afterRouting: async () => {
+      awaiting = true;
+      return {
+        action: "approval_required",
+        override: { providerOverride: "ollama", modelOverride: "glm4:9b" },
+        item: { modelRef: "anthropic/claude-sonnet-4-6", estimatedCostUsd: 0.04 },
+      };
+    },
+    pendingInvitation: () => awaiting ? "ToggleLogic is ready to continue. Estimated AI cost: $0.04." : null,
+  };
+  const config = normalizeConfig({ mode: "intelligence" });
+  const interceptor = harness(config, { seam, governedEscalation });
+  const result = await interceptor.preflight({ prompt: "Complex strategy task" }, { sessionKey: "preflight-gated" });
+  assert.deepEqual(result, {
+    handled: true,
+    reply: { text: "ToggleLogic is ready to continue. Estimated AI cost: $0.04." },
+    reason: "togglelogic_owner_approval_required",
+  });
+  assert.equal(calls, 1);
+});
+
+test("ordinary preflight classification is consumed once by model resolution", async () => {
+  let calls = 0;
+  const seam = {
+    status: () => "available",
+    classify: async () => {
+      calls += 1;
+      return { providerOverride: "ollama", modelOverride: "glm4:9b", details: { required_tier: "general_purpose" } };
+    },
+  };
+  const config = normalizeConfig({ mode: "intelligence" });
+  const interceptor = harness(config, { seam });
+  const event = { prompt: "Summarize these notes" };
+  const ctx = { sessionKey: "preflight-local" };
+  assert.deepEqual(await interceptor.preflight(event, ctx), { handled: false });
+  assert.deepEqual(await interceptor(event, ctx), { providerOverride: "ollama", modelOverride: "glm4:9b" });
+  assert.equal(calls, 1);
 });
