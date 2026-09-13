@@ -65,6 +65,54 @@ test("external flagship work is blocked with an estimate, then resumes once afte
   assert.equal(f.gate.beforeRouting("Yes, proceed", { sessionKey: "s2" }), null, "one-time approval is consumed");
 });
 
+test("common explicit approval phrases authorize the same one-time execution", async (t) => {
+  const phrases = [
+    "Yes, approved.",
+    "Approved",
+    "Approve it!",
+    "I approve this.",
+    "Go for it.",
+    "Yes, go for it!",
+    "Please go ahead",
+  ];
+  for (const [index, phrase] of phrases.entries()) {
+    const f = fixture();
+    t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+    await f.gate.afterRouting("Hard task", { sessionKey: `natural-${index}` }, {
+      selectedProvider: "anthropic",
+      selectedModel: "claude-sonnet-4-6",
+      selectionDetails: { required_tier: "flagship_reasoning" },
+    });
+    const result = f.gate.beforeRouting(phrase, { sessionKey: `natural-${index}` });
+    assert.equal(result.action, "approved", phrase);
+    assert.deepEqual(result.override, {
+      providerOverride: "anthropic",
+      modelOverride: "claude-sonnet-4-6",
+    });
+    assert.equal(f.gate.beforeAgentRun({}, { sessionKey: `natural-${index}` }).outcome, "pass");
+    assert.equal(
+      f.gate.beforeRouting(phrase, { sessionKey: `natural-${index}` }),
+      null,
+      `one-time approval must be consumed for: ${phrase}`,
+    );
+  }
+});
+
+test("ambiguous and negated replies never authorize an external execution", async (t) => {
+  const phrases = ["Maybe", "Not approved", "Do not do it", "Approve it later", "Go for it tomorrow"];
+  for (const [index, phrase] of phrases.entries()) {
+    const f = fixture();
+    t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+    await f.gate.afterRouting("Hard task", { sessionKey: `reject-${index}` }, {
+      selectedProvider: "anthropic",
+      selectedModel: "claude-sonnet-4-6",
+      selectionDetails: { required_tier: "flagship_reasoning" },
+    });
+    const result = f.gate.beforeRouting(phrase, { sessionKey: `reject-${index}` });
+    assert.notEqual(result?.action, "approved", phrase);
+  }
+});
+
 test("a pending escalation exposes a deterministic positive approval invitation", async (t) => {
   const f = fixture();
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
@@ -77,7 +125,8 @@ test("a pending escalation exposes a deterministic positive approval invitation"
   assert.match(invitation, /^ToggleLogic is ready to continue with anthropic\/claude-sonnet-4-6\./);
   assert.match(invitation, /Estimated AI cost: \$0\.04\./);
   assert.match(invitation, /send this request and active SAM context to Anthropic for one use/);
-  assert.match(invitation, /Reply “Yes, proceed” or “No”\.$/);
+  assert.match(invitation, /“Yes, proceed” or “Go for it”/);
+  assert.match(invitation, /or say “No”\.$/);
   assert.doesNotMatch(invitation, /could not be sent|blocked by/i);
 });
 

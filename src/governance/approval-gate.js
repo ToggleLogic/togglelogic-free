@@ -10,8 +10,54 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveOpenClawPath } from "../path-utils.js";
 
-const YES = /^(yes|yes please|proceed|please proceed|go ahead|please go ahead|do it|yes[, ]+proceed)[.! ]*$/i;
-const NO = /^(no|no thanks|cancel|stop|do not proceed|don't proceed)[.! ]*$/i;
+const YES_PHRASES = new Set([
+  "yes",
+  "yes please",
+  "yes proceed",
+  "yes please proceed",
+  "yes approved",
+  "yes approve it",
+  "yes go ahead",
+  "yes please go ahead",
+  "yes go for it",
+  "yes please go for it",
+  "yes do it",
+  "approved",
+  "approve it",
+  "i approve",
+  "i approve it",
+  "i approve this",
+  "you have my approval",
+  "proceed",
+  "please proceed",
+  "go ahead",
+  "please go ahead",
+  "go for it",
+  "please go for it",
+  "do it",
+]);
+const NO_PHRASES = new Set([
+  "no",
+  "no thanks",
+  "cancel",
+  "stop",
+  "do not proceed",
+  "please do not proceed",
+  "don't proceed",
+  "not approved",
+  "do not approve",
+  "do not do it",
+]);
+
+function normalizeDecisionPhrase(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[.,!?;:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function splitRef(ref) {
   const i = typeof ref === "string" ? ref.indexOf("/") : -1;
@@ -57,7 +103,7 @@ function formatApprovalInvitation(item) {
     `ToggleLogic is ready to continue with ${item.modelRef}. ` +
     `Estimated AI cost: ${estimatedCost}. ` +
     `Once you approve, I’ll send this request and active SAM context to ${providerLabel(item.modelRef)} for one use. ` +
-    "Reply “Yes, proceed” or “No”."
+    "Reply with approval—such as “Yes, proceed” or “Go for it”—or say “No”."
   );
 }
 
@@ -148,13 +194,14 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       save();
       return null;
     }
-    if (YES.test(String(prompt || "").trim())) {
+    const decisionPhrase = normalizeDecisionPhrase(prompt);
+    if (YES_PHRASES.has(decisionPhrase)) {
       item.status = "approved";
       item.approvedAt = now();
       save();
       return { action: "approved", shortCircuit: true, override: splitRef(item.modelRef), item };
     }
-    if (NO.test(String(prompt || "").trim())) {
+    if (NO_PHRASES.has(decisionPhrase)) {
       item.status = "denied";
       save();
       return { action: "denied", shortCircuit: true, override: splitRef(localRef), item };
@@ -397,4 +444,14 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
   };
 }
 
-export const _internals = { splitRef, tokenEstimate, formatMoney, formatReceipt, formatApprovalInvitation, correlationKeys, YES, NO };
+export const _internals = {
+  splitRef,
+  tokenEstimate,
+  formatMoney,
+  formatReceipt,
+  formatApprovalInvitation,
+  correlationKeys,
+  normalizeDecisionPhrase,
+  YES_PHRASES,
+  NO_PHRASES,
+};

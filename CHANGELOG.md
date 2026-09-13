@@ -2,6 +2,14 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.1-rc.2 — 2026-09-13
+
+- Accept common explicit approval phrases, including `Yes, approved`,
+  `Approved`, and `Go for it`, while an external-model approval is pending.
+- Keep authorization deterministic and fail-closed: ambiguous replies do not
+  approve external execution, and approval remains valid for one use only.
+- Tell the owner in the invitation that natural approval wording is accepted.
+
 ## 1.4.1-rc.1 — 2026-09-13
 
 - Claim governed escalation before model resolution with a short,
