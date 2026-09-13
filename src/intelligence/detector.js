@@ -35,7 +35,7 @@ const MIN_COMPATIBLE_VERSION = "1.0.0-alpha.2";
  */
 export const INTELLIGENCE_SEAM_ABI = 1;
 
-export async function detectIntelligenceLayer(configuredPath, registryPath, pluginVersion = "") {
+export async function detectIntelligenceLayer(configuredPath, registryPath, pluginVersion = "", options = {}) {
   const resolvedPath = resolveOpenClawPath(configuredPath ?? "~/togglelogic-intelligence");
 
   // 1. Path must exist and be a directory.
@@ -80,7 +80,9 @@ export async function detectIntelligenceLayer(configuredPath, registryPath, plug
   if (manifest.product !== "togglelogic-intelligence" || manifest.version !== version) {
     return { present: false, reason: "release manifest identity mismatch", resolvedPath, version };
   }
-  if (manifest.release_state !== "released") {
+  const acceptedReleaseState = manifest.release_state === "released" ||
+    (manifest.release_state === "release_candidate" && options.allowReleaseCandidate === true);
+  if (!acceptedReleaseState) {
     return { present: false, reason: `release state is ${manifest.release_state ?? "missing"}`, resolvedPath, version };
   }
   if (manifest.seam_abi !== INTELLIGENCE_SEAM_ABI) {

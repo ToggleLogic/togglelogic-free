@@ -89,7 +89,7 @@ function sameSelection(left, right) {
   return leftRef === rightRef;
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit, familyResolver, configuredProviders = [] }) {
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, familyResolver, configuredProviders = [], governedEscalation = null }) {
   // OpenClaw re-enters before_model_resolve for each candidate in its fallback
   // chain. Classify the logical turn once; subsequent passes must preserve the
   // host's candidate instead of routing every fallback back to the failed model.
@@ -112,6 +112,11 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     });
 
     let override = PASSTHROUGH;
+
+    const governedPrior = governedEscalation?.beforeRouting(event?.prompt, hookContext);
+    if (governedPrior?.shortCircuit) {
+      return governedPrior.override || PASSTHROUGH;
+    }
 
     // Owner override sits ABOVE everything else. The owner's explicit model
     // choice — written by deployment-side tooling to the configured state file —
@@ -310,6 +315,34 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       decision.selectedProvider = result.selectedProvider;
       decision.selectionReason = result.selectionReason;
       decision.selectionDetails = result.selectionDetails;
+      const governed = governedEscalation
+        ? await governedEscalation.afterRouting(event?.prompt, hookContext, result)
+        : null;
+      if (governed) {
+        if (governed.override) {
+          override = governed.override;
+          if (governed.action === "approval_required") {
+            // No model executes on this turn. Keep the proposed cloud model in
+            // selectionDetails, not in the executed-selection fields.
+            decision.selectedModel = null;
+            decision.selectedProvider = null;
+          } else {
+            decision.selectedModel = governed.modelRef ||
+              (override.providerOverride && override.modelOverride
+                ? `${override.providerOverride}/${override.modelOverride}`
+                : override.modelOverride) || decision.selectedModel;
+            decision.selectedProvider = override.providerOverride || null;
+          }
+        }
+        decision.selectionReason = governed.action;
+        decision.selectionDetails = {
+          ...(decision.selectionDetails || {}),
+          governed_action: governed.action,
+          proposed_model: governed.item?.modelRef || null,
+          estimated_cost_usd: governed.item?.estimatedCostUsd ?? null,
+          pricing_source: governed.item?.priceSource || null,
+        };
+      }
     } catch (err) {
       decision.selectionReason = "fallback";
       decision.selectionDetails = {

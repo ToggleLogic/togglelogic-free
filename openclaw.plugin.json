@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.3.4",
+  "version": "1.4.0",
   "description": "Free-tier model routing for OpenClaw: apply static routes, opt-in provider-constrained family aliases, a simple static cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no Intelligence engine or production model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. The separate source-available ToggleLogic Intelligence package can add capability-aware automatic selection; eligible startups register before commercial production use. ToggleLogic Free is source-available under License 2.0 (see LICENSE).",
   "activation": {
     "onStartup": true
@@ -75,6 +75,7 @@
           "registryPath": { "type": "string", "description": "Optional path to the licensed layer's normalized model registry. Config-driven (deployment DATA); when unset, defaults to a path relative to the layer (<path>/normalized.json). No workspace path is hardcoded. Tilde expansion supported." },
           "shadow": { "type": "boolean", "default": false, "description": "When true, evaluate and audit Intelligence decisions but never emit a model override. Use for a versioned canary before enabling live routing." },
           "fallbackOnError": { "type": "boolean", "default": true, "description": "If true, errors from the intelligence layer yield no override (OpenClaw falls back to its default selection)." }
+          ,"allowReleaseCandidate": { "type": "boolean", "default": false, "description": "Explicitly allow a private Intelligence release candidate for controlled canary use. Production default remains fail-closed to released builds." }
         }
       },
       "ownerOverride": {
@@ -109,7 +110,26 @@
             "additionalProperties": false,
             "description": "Cost visibility (llm_output observe-only). Reports per-model/per-day DOLLAR cost from dynamic public pricing; unpriced-loud, never $0.00; never enforces. Opt-in; default off. Also requires the gateway's plugins.entries.togglelogic.hooks.allowConversationAccess (llm_output is a conversation hook).",
             "properties": { "enabled": { "type": "boolean", "default": false, "description": "Whether to register the cost-visibility observer." } }
+          },
+          "governedEscalation": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "One-time owner approval gate for Intelligence-recommended external-model escalation. Requires routing and conversation access. Opt-in; default off.",
+            "properties": { "enabled": { "type": "boolean", "default": false, "description": "Whether to register pre-run escalation approval and execution-receipt hooks." } }
           }
+        }
+      },
+      "governedEscalation": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Governed escalation settings. General work can remain local; configured high-capability tiers are blocked before external model submission until the owner approves once.",
+        "properties": {
+          "localModel": { "type": "string", "minLength": 3, "pattern": "^[^/]+/.+$", "description": "Required local quarantine/model ref when governed escalation is enabled, for example ollama/gemma4:latest." },
+          "localTiers": { "type": "array", "uniqueItems": true, "items": { "type": "string", "enum": ["general_purpose", "tool_calling_strong", "terminal_capable", "flagship_reasoning"] }, "default": ["general_purpose"] },
+          "approvalTiers": { "type": "array", "uniqueItems": true, "items": { "type": "string", "enum": ["general_purpose", "tool_calling_strong", "terminal_capable", "flagship_reasoning"] }, "default": ["flagship_reasoning"] },
+          "ttlMinutes": { "type": "integer", "minimum": 1, "default": 10, "description": "Minutes an approval request may remain pending." },
+          "statePath": { "type": "string", "default": "~/.openclaw/togglelogic/governed-escalation.json", "description": "Mode-0600 local state used to resume the blocked original request after a gateway restart." },
+          "externalDataNotice": { "type": "string", "default": "the request and active model context would be sent to the named provider", "description": "Deployment-authored boundary notice shown before approval." }
         }
       },
       "audit": {
@@ -161,6 +181,30 @@
           "summaryEveryCalls": { "type": "integer", "default": 20, "minimum": 1, "description": "Emit a loud day-summary line to the cost log every N observed calls." }
         }
       }
-    }
+    },
+    "allOf": [
+      {
+        "if": {
+          "required": ["features"],
+          "properties": {
+            "features": {
+              "required": ["governedEscalation"],
+              "properties": {
+                "governedEscalation": {
+                  "required": ["enabled"],
+                  "properties": { "enabled": { "const": true } }
+                }
+              }
+            }
+          }
+        },
+        "then": {
+          "required": ["governedEscalation"],
+          "properties": {
+            "governedEscalation": { "required": ["localModel"] }
+          }
+        }
+      }
+    ]
   }
 }

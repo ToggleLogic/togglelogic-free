@@ -40,7 +40,9 @@ export function createIntelligenceSeam(
       try {
       // registryPath is config-driven (deployment DATA); detector defaults to a
       // path relative to the layer when unset. No workspace path hardcoded.
-        const result = await detectIntelligenceLayer(config.path, config.registryPath, pluginVersion);
+        const result = await detectIntelligenceLayer(config.path, config.registryPath, pluginVersion, {
+          allowReleaseCandidate: config.allowReleaseCandidate === true,
+        });
         detectionResult = result;
 
         if (result.present) {

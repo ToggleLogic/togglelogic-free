@@ -2,6 +2,66 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.0 — 2026-09-13
+
+- Add an opt-in governed-escalation lifecycle that keeps configured ordinary
+  work local and blocks configured external capability tiers until the owner
+  approves one execution.
+- Show the proposed model, reason, estimated usage, estimated AI cost, and
+  external-data boundary before any approved external request is submitted.
+- Resume the original request after approval and attach a delivery-time receipt
+  naming the runtime model, execution location, approval evidence, token usage,
+  and either runtime-reported cost, a labeled public-rate estimate, or an
+  explicit unavailable marker.
+- Suppress false fallback notices only when runtime evidence proves a
+  ToggleLogic policy reroute; preserve real and uncertain fallback warnings.
+- Bound transient receipt state, require an explicit local quarantine model,
+  and keep governed escalation disabled by default.
+- Validate on OpenClaw `2026.9.4` with 64 passing tests, independent review,
+  and a live block → approve → external receipt → return-to-local canary.
+
+## 1.4.0-rc.4 — 2026-09-13
+
+- Label public-catalog calculations as estimated AI cost rather than actual
+  provider billing.
+- Distinguish runtime-reported external cost from zero external-provider cost
+  for local Ollama execution.
+- Add a timed three-minute demonstration runbook with strict response limits.
+- Keep this release candidate private pending live canary evidence.
+
+## 1.4.0-rc.3 — 2026-09-13
+
+- Bound and drain transient execution-receipt correlation state across the
+  OpenClaw 2026.9.4 dual-hook delivery sequence.
+- Require an explicit provider/model local quarantine target whenever governed
+  escalation is enabled, preventing an empty local target on older hosts.
+- Add a regression that exercises `llm_output` → `reply_payload_sending` →
+  `message_sending` in host order and proves one receipt with no retained state.
+- Keep this release candidate private pending owner approval for deployment.
+
+## 1.4.0-rc.2 — 2026-09-13
+
+- Use OpenClaw 2026.9.4's delivery-time runtime evidence to attach the
+  governed-execution receipt to the final channel payload.
+- Suppress OpenClaw's fallback banner only when runtime evidence proves the
+  requested/resolved model difference was a ToggleLogic policy reroute and no
+  fallback occurred; preserve real and uncertain fallback notices.
+- Clarify local receipts as ToggleLogic policy selections with no external AI
+  model, while retaining exact runtime model, tokens, and cost evidence.
+- Keep this release candidate private while it is canaried on a controlled host.
+
+## 1.4.0-rc.1 — 2026-09-13
+
+- Add an opt-in governed-escalation lifecycle: local-first routing, a pre-run
+  estimate and explicit one-time owner approval before configured external
+  capability tiers, automatic resumption of the original request, and a
+  post-run execution receipt naming the runtime model, boundary, tokens, and
+  actual or explicitly unavailable cost.
+- Persist pending approval state locally with owner-only permissions so a
+  gateway restart cannot silently lose the governance decision.
+- Keep this release candidate private while it is canaried against a live SAM
+  deployment; no registry or public package release is implied.
+
 ## 1.3.4 — 2026-09-04
 
 - Add a bounded, privacy-safe new-session signal so a separately installed
