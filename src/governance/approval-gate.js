@@ -103,7 +103,18 @@ function formatApprovalInvitation(item) {
     `ToggleLogic is ready to continue with ${item.modelRef}. ` +
     `Estimated AI cost: ${estimatedCost}. ` +
     `Once you approve, I’ll send this request and active SAM context to ${providerLabel(item.modelRef)} for one use. ` +
-    "Reply with approval—such as “Yes, proceed” or “Go for it”—or say “No”."
+    "Reply naturally; I’ll confirm your approval before anything is sent."
+  );
+}
+
+function formatApprovalConfirmation(item) {
+  const estimatedCost = Number.isFinite(item.estimatedCostUsd) ? formatMoney(item.estimatedCostUsd) : "currently unavailable";
+  const interpretation = item.interpretation === "affirmative"
+    ? "I understood that as approval."
+    : "I’m not certain whether you meant to approve this.";
+  return (
+    `${interpretation} Just to confirm: do you approve sending this request and active SAM context to ${providerLabel(item.modelRef)} ` +
+    `for one use with ${item.modelRef}, at an estimated AI cost of ${estimatedCost}? Reply “Yes” or “No”.`
   );
 }
 
@@ -194,21 +205,36 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       save();
       return null;
     }
+    if (item.status === "approved") {
+      return { action: "approved", shortCircuit: true, override: splitRef(item.modelRef), item };
+    }
+    if (item.status === "denied") {
+      pending.delete(key);
+      save();
+      return null;
+    }
+
     const decisionPhrase = normalizeDecisionPhrase(prompt);
-    if (YES_PHRASES.has(decisionPhrase)) {
+    const isYes = YES_PHRASES.has(decisionPhrase);
+    const isNo = NO_PHRASES.has(decisionPhrase);
+
+    if (item.status === "confirming" && isYes) {
       item.status = "approved";
       item.approvedAt = now();
       save();
       return { action: "approved", shortCircuit: true, override: splitRef(item.modelRef), item };
     }
-    if (NO_PHRASES.has(decisionPhrase)) {
+    if (isNo) {
       item.status = "denied";
       save();
       return { action: "denied", shortCircuit: true, override: splitRef(localRef), item };
     }
-    pending.delete(key);
+
+    item.status = "confirming";
+    item.confirmationRequestedAt ||= now();
+    item.interpretation = isYes ? "affirmative" : "uncertain";
     save();
-    return null;
+    return { action: "confirmation_required", shortCircuit: true, override: splitRef(localRef), item };
   }
 
   async function afterRouting(prompt, ctx, result) {
@@ -269,7 +295,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       outcome: "block",
       reason: "owner_approval_required",
       category: "model_escalation",
-      message: formatApprovalInvitation(item),
+      message: item.status === "confirming" ? formatApprovalConfirmation(item) : formatApprovalInvitation(item),
     };
   }
 
@@ -427,8 +453,16 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
   load();
   prune();
   function pendingInvitation(ctx) {
-    const item = pending.get(keyOf(ctx));
-    return item?.status === "awaiting" ? formatApprovalInvitation(item) : null;
+    const key = keyOf(ctx);
+    const item = pending.get(key);
+    if (item?.status === "awaiting") return formatApprovalInvitation(item);
+    if (item?.status === "confirming") return formatApprovalConfirmation(item);
+    if (item?.status === "denied") {
+      pending.delete(key);
+      save();
+      return "Cancelled. No external AI model received the task.";
+    }
+    return null;
   }
   return {
     beforeRouting,
@@ -450,6 +484,7 @@ export const _internals = {
   formatMoney,
   formatReceipt,
   formatApprovalInvitation,
+  formatApprovalConfirmation,
   correlationKeys,
   normalizeDecisionPhrase,
   YES_PHRASES,

@@ -2,6 +2,18 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.1-rc.3 — 2026-09-13
+
+- Add a two-stage consent state for external-model use: an initial natural
+  affirmative or uncertain reply produces a plain-language confirmation, and
+  only the following explicit approval authorizes the one-time execution.
+- Keep uncertain replies paused instead of silently discarding the governed
+  request or allowing a model to infer authorization.
+- Repeat the provider, model, context boundary, one-use scope, and estimated
+  cost in the final confirmation question.
+- State whether SAM interpreted the first response as affirmative or uncertain,
+  while leaving authorization exclusively to the second explicit answer.
+
 ## 1.4.1-rc.2 — 2026-09-13
 
 - Accept common explicit approval phrases, including `Yes, approved`,

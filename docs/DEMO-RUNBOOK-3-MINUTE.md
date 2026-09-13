@@ -34,12 +34,14 @@ short approval invitation names the proposed model and estimated AI cost, then
 states that the request and active SAM context will be sent to the named
 provider once the owner approves one use.
 
-### 1:05–1:20 — Make the decision visible
+### 1:05–1:30 — Make the decision visible
 
 Say: “The model cannot approve itself. The owner decides whether this task and
-context may cross the boundary.” Then approve once with `Yes, proceed`.
+context may cross the boundary.” Reply naturally with `Go for it`. ToggleLogic
+should restate the provider, model, context boundary, one-use scope, and cost as
+a direct confirmation. Reply `Yes` only after that confirmation is correct.
 
-### 1:20–2:30 — Show governed execution
+### 1:30–2:30 — Show governed execution
 
 The result should contain only four short bullets and remain under 90 words. Show the execution
 receipt: runtime model, external boundary, one-time approval, tokens, and a
@@ -63,7 +65,8 @@ what information may leave, what it should cost, and who must approve it.”
 
 - No false fallback banner.
 - No external call before approval.
-- The approval prompt positively names the proposed model, estimate, and boundary.
+- Natural wording produces a separate, explicit yes/no confirmation.
+- The final confirmation names the model, provider, estimate, and context boundary.
 - Exactly one approved external execution occurs.
 - Public pricing is labeled as an estimate, never actual provider billing.
 - The next ordinary turn returns to local execution.

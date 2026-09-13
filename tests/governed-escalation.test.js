@@ -56,7 +56,13 @@ test("external flagship work is blocked with an estimate, then resumes once afte
   assert.match(blocked.message, /Once you approve/);
   assert.doesNotMatch(blocked.message, /could not|blocked|cannot/i);
 
-  const approval = f.gate.beforeRouting("Yes, proceed", { sessionKey: "s2" });
+  const interpreted = f.gate.beforeRouting("Go for it", { sessionKey: "s2" });
+  assert.equal(interpreted.action, "confirmation_required");
+  const confirmation = f.gate.pendingInvitation({ sessionKey: "s2" });
+  assert.match(confirmation, /^I understood that as approval\. Just to confirm:/);
+  assert.match(confirmation, /Anthropic/);
+  assert.match(confirmation, /estimated AI cost of \$0\.04/);
+  const approval = f.gate.beforeRouting("Yes", { sessionKey: "s2" });
   assert.equal(approval.action, "approved");
   assert.deepEqual(approval.override, { providerOverride: "anthropic", modelOverride: "claude-sonnet-4-6" });
   assert.match(f.gate.prepareTurn({}, { sessionKey: "s2" }).appendContext, /ORIGINAL REQUEST/);
@@ -83,9 +89,12 @@ test("common explicit approval phrases authorize the same one-time execution", a
       selectedModel: "claude-sonnet-4-6",
       selectionDetails: { required_tier: "flagship_reasoning" },
     });
-    const result = f.gate.beforeRouting(phrase, { sessionKey: `natural-${index}` });
-    assert.equal(result.action, "approved", phrase);
-    assert.deepEqual(result.override, {
+    const interpreted = f.gate.beforeRouting(phrase, { sessionKey: `natural-${index}` });
+    assert.equal(interpreted.action, "confirmation_required", phrase);
+    assert.match(f.gate.pendingInvitation({ sessionKey: `natural-${index}` }), /^I understood that as approval\. Just to confirm:/);
+    const approved = f.gate.beforeRouting("Yes", { sessionKey: `natural-${index}` });
+    assert.equal(approved.action, "approved", phrase);
+    assert.deepEqual(approved.override, {
       providerOverride: "anthropic",
       modelOverride: "claude-sonnet-4-6",
     });
@@ -99,7 +108,7 @@ test("common explicit approval phrases authorize the same one-time execution", a
 });
 
 test("ambiguous and negated replies never authorize an external execution", async (t) => {
-  const phrases = ["Maybe", "Not approved", "Do not do it", "Approve it later", "Go for it tomorrow"];
+  const phrases = ["Maybe", "Approve it later", "Go for it tomorrow"];
   for (const [index, phrase] of phrases.entries()) {
     const f = fixture();
     t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
@@ -109,7 +118,28 @@ test("ambiguous and negated replies never authorize an external execution", asyn
       selectionDetails: { required_tier: "flagship_reasoning" },
     });
     const result = f.gate.beforeRouting(phrase, { sessionKey: `reject-${index}` });
-    assert.notEqual(result?.action, "approved", phrase);
+    assert.equal(result.action, "confirmation_required", phrase);
+    assert.match(f.gate.pendingInvitation({ sessionKey: `reject-${index}` }), /^I’m not certain whether you meant to approve this\. Just to confirm:/);
+    assert.equal(f.gate.beforeRouting("Still thinking", { sessionKey: `reject-${index}` }).action, "confirmation_required");
+    assert.notEqual(f.gate._pending.get(`reject-${index}`).status, "approved");
+  }
+});
+
+test("clear negative replies cancel at either consent stage", async (t) => {
+  for (const [index, firstReply] of ["No", "Not approved"].entries()) {
+    const f = fixture();
+    t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+    await f.gate.afterRouting("Hard task", { sessionKey: `negative-${index}` }, {
+      selectedProvider: "anthropic",
+      selectedModel: "claude-sonnet-4-6",
+      selectionDetails: { required_tier: "flagship_reasoning" },
+    });
+    if (index === 1) {
+      assert.equal(f.gate.beforeRouting("Go for it", { sessionKey: `negative-${index}` }).action, "confirmation_required");
+    }
+    assert.equal(f.gate.beforeRouting(firstReply, { sessionKey: `negative-${index}` }).action, "denied");
+    assert.match(f.gate.pendingInvitation({ sessionKey: `negative-${index}` }), /^Cancelled\./);
+    assert.equal(f.gate._pending.has(`negative-${index}`), false);
   }
 });
 
@@ -125,8 +155,8 @@ test("a pending escalation exposes a deterministic positive approval invitation"
   assert.match(invitation, /^ToggleLogic is ready to continue with anthropic\/claude-sonnet-4-6\./);
   assert.match(invitation, /Estimated AI cost: \$0\.04\./);
   assert.match(invitation, /send this request and active SAM context to Anthropic for one use/);
-  assert.match(invitation, /“Yes, proceed” or “Go for it”/);
-  assert.match(invitation, /or say “No”\.$/);
+  assert.match(invitation, /Reply naturally/);
+  assert.match(invitation, /confirm your approval before anything is sent/);
   assert.doesNotMatch(invitation, /could not be sent|blocked by/i);
 });
 
@@ -154,7 +184,11 @@ test("pending approval survives a coordinator restart and state is owner-only", 
   });
   assert.equal(fs.statSync(f.statePath).mode & 0o777, 0o600);
   const restarted = createApprovalGate({ config: f.config, pricing: f.pricing });
-  const approval = restarted.beforeRouting("Proceed", { sessionKey: "s3" });
+  const interpreted = restarted.beforeRouting("Proceed", { sessionKey: "s3" });
+  assert.equal(interpreted.action, "confirmation_required");
+  const restartedAgain = createApprovalGate({ config: f.config, pricing: f.pricing });
+  assert.match(restartedAgain.pendingInvitation({ sessionKey: "s3" }), /^I understood that as approval\. Just to confirm:/);
+  const approval = restartedAgain.beforeRouting("Yes", { sessionKey: "s3" });
   assert.equal(approval.action, "approved");
 });
 
@@ -258,7 +292,8 @@ test("delivery receipt records one-time approval and runtime external cost", asy
     selectedModel: "claude-sonnet-4-6",
     selectionDetails: { required_tier: "flagship_reasoning" },
   });
-  f.gate.beforeRouting("Yes, proceed", { sessionKey: "s9" });
+  f.gate.beforeRouting("Go for it", { sessionKey: "s9" });
+  f.gate.beforeRouting("Yes", { sessionKey: "s9" });
   f.gate.beforeAgentRun({}, { sessionKey: "s9" });
   const result = await f.gate.prepareReplyPayload({
     kind: "final",
