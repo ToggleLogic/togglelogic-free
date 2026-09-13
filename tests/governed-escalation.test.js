@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { createApprovalGate } from "../src/governance/approval-gate.js";
+import { createApprovalGate, _internals } from "../src/governance/approval-gate.js";
 
 function fixture(overrides = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "togglelogic-gate-"));
@@ -366,6 +366,32 @@ test("public catalog pricing is labeled as an estimate, never actual provider bi
   assert.doesNotMatch(result.payload.text, /actual AI cost/i);
 });
 
+test("external runtime zero with positive usage falls back to a labeled estimate", async (t) => {
+  const f = fixture();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  const result = await f.gate.prepareReplyPayload({
+    kind: "final",
+    sessionKey: "runtime-zero",
+    payload: { text: "Result." },
+    usageState: {
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      resolvedRef: "anthropic/claude-sonnet-4-6",
+      fallbackUsed: false,
+      turnUsd: 0,
+      usage: { input: 1421, output: 684 },
+    },
+  }, { sessionKey: "runtime-zero" });
+  assert.match(result.payload.text, /estimated AI cost: \$0\.01 \(test-prices\)/);
+  assert.doesNotMatch(result.payload.text, /runtime-reported AI cost/);
+  assert.doesNotMatch(result.payload.text, /AI cost: \$0\.0000/);
+});
+
+test("tiny positive external costs never render as zero", () => {
+  assert.equal(_internals.formatMoney(0.00001), "<$0.0001");
+  assert.equal(_internals.formatMoney(0), "$0.0000");
+});
+
 test("unavailable external pricing is explicit and never represented as zero", async (t) => {
   const f = fixture();
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
@@ -385,6 +411,7 @@ test("unavailable external pricing is explicit and never represented as zero", a
       model: "unpriced-model",
       resolvedRef: "external-provider/unpriced-model",
       fallbackUsed: false,
+      turnUsd: 0,
       usage: { input: 100, output: 200 },
     },
   }, { sessionKey: "s12" });

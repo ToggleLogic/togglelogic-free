@@ -2,6 +2,14 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.1-rc.4 — 2026-09-13
+
+- Reject a zero runtime-cost claim for an external model when runtime evidence
+  shows positive token usage.
+- Fall back to a labeled public-catalog estimate when pricing is available;
+  otherwise report cost as unavailable rather than presenting a false zero.
+- Render tiny positive costs as `<$0.0001` instead of rounding them to `$0.0000`.
+
 ## 1.4.1-rc.3 — 2026-09-13
 
 - Add a two-stage consent state for external-model use: an initial natural

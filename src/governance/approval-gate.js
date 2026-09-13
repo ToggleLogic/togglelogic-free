@@ -89,6 +89,7 @@ function tokenEstimate(prompt, outputTokens) {
 
 function formatMoney(value) {
   if (!Number.isFinite(value)) return "unavailable (execution remains blocked)";
+  if (value > 0 && value < 0.0001) return "<$0.0001";
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
 }
 
@@ -411,18 +412,24 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     const local = isLocalProvider(usageState.provider, ref);
     let actualCostUsd = null;
     let priceSource = null;
+    const hasPositiveUsage =
+      (Number.isFinite(usage.input) && usage.input > 0) ||
+      (Number.isFinite(usage.output) && usage.output > 0);
     if (local) {
       actualCostUsd = 0;
       priceSource = "local-provider-api";
-    } else if (Number.isFinite(usageState.turnUsd)) {
+    } else if (Number.isFinite(usageState.turnUsd) && usageState.turnUsd > 0) {
       actualCostUsd = usageState.turnUsd;
       priceSource = "openclaw-runtime";
-    } else {
+    } else if (hasPositiveUsage) {
       try {
         const price = await pricing.resolve(ref);
         if (price?.priced) {
-          actualCostUsd = pricing.costUsd(price, usage);
-          priceSource = price.source || null;
+          const estimate = pricing.costUsd(price, usage);
+          if (Number.isFinite(estimate) && estimate > 0) {
+            actualCostUsd = estimate;
+            priceSource = price.source || null;
+          }
         }
       } catch { /* unavailable stays explicit in the receipt */ }
     }
