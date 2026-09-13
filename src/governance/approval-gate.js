@@ -140,7 +140,6 @@ function formatReceipt(content, receipt) {
     `Model: ${modelLabel(receipt.ref)}`,
     receipt.local ? "Location: Local (no external AI)" : `Location: ${providerLabel(receipt.ref)} cloud`,
   ];
-  if (receipt.approved) lines.push("Approval: Confirmed for one use");
   lines.push(`Usage: ${receipt.input ?? "unknown"} in / ${receipt.output ?? "unknown"} out`);
   let cost;
   if (receipt.actualCostUsd === null) {

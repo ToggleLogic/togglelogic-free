@@ -2,6 +2,11 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.1-rc.6 — 2026-09-13
+
+- Remove the redundant one-use approval line from the human-facing receipt.
+- Retain approval scope and verification in the machine-readable audit trail.
+
 ## 1.4.1-rc.5 — 2026-09-13
 
 - Replace the dense, pipe-delimited technical receipt with a short multiline

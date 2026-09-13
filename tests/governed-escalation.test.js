@@ -311,7 +311,7 @@ test("delivery receipt records one-time approval and runtime external cost", asy
   }, { sessionKey: "s9" });
   assert.match(result.payload.text, /Model: Claude Sonnet 4\.6/);
   assert.match(result.payload.text, /Location: Anthropic cloud/);
-  assert.match(result.payload.text, /Approval: Confirmed for one use/);
+  assert.doesNotMatch(result.payload.text, /Approval:/);
   assert.match(result.payload.text, /\*\*Reported cost: \$0\.02\*\*/);
   assert.equal(f.gate._pending.has("s9"), false);
 });

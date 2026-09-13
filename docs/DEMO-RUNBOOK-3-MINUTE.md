@@ -44,8 +44,9 @@ a direct confirmation. Reply `Yes` only after that confirmation is correct.
 ### 1:30–2:30 — Show governed execution
 
 The result should contain only four short bullets and remain under 90 words.
-Show the short multiline receipt: friendly model name, location, one-time
-approval, usage, and a clearly labeled cost on its own final line.
+Show the short multiline receipt: friendly model name, location, usage, and a
+clearly labeled cost on its own final line. One-use approval evidence remains
+in the audit trail rather than repeating in the person-facing receipt.
 
 ### 2:30–2:50 — Prove the approval did not stick
 
