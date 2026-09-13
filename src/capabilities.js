@@ -1,7 +1,7 @@
 /*
  * ToggleLogic (Free Tier) — Capability Registry.
  * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
- * License (see LICENSE); all rights reserved.
+ * License 2.0 (see LICENSE); all rights reserved.
  * PATENT PENDING. The benchmark Intelligence engine + Toggle Registry are NOT
  * in this package.
  *
@@ -21,6 +21,8 @@ import { createOwnerOverrideAskHandler } from "./capture/owner-override-ask.js";
 import { createCostObserver } from "./usage/cost-observer.js";
 import { FamilyResolver } from "./routing/family-resolver.js";
 import { createNewSessionTracker } from "./routing/new-session-tracker.js";
+import { createApprovalGate } from "./governance/approval-gate.js";
+import { createPricing } from "./usage/pricing.js";
 
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 
@@ -82,6 +84,12 @@ export const CAPABILITIES = [
       const configuredProviders = configuredProvidersFromApiConfig(api && api.config);
       const familyResolver = new FamilyResolver(config.familyResolution, fallbackLogger);
       const newSessions = createNewSessionTracker();
+      const governedEscalation = config.features.governedEscalation.enabled
+        ? createApprovalGate({
+            config: config.governedEscalation,
+            pricing: createPricing(config.costVisibility.pricing, fallbackLogger),
+          })
+        : null;
       const seam = createIntelligenceSeam(
         config.intelligence,
         fallbackLogger,
@@ -98,6 +106,7 @@ export const CAPABILITIES = [
         audit,
         familyResolver,
         configuredProviders,
+        governedEscalation,
       });
       api.on("session_start", (event, hookContext) => {
         newSessions.mark({
@@ -105,7 +114,14 @@ export const CAPABILITIES = [
           sessionKey: event?.sessionKey ?? hookContext?.sessionKey,
         });
       });
-      api.on("before_model_resolve", interceptor);
+      api.on("before_model_resolve", interceptor, { priority: 100 });
+      if (governedEscalation) {
+        api.on("before_agent_run", governedEscalation.beforeAgentRun, { priority: 100 });
+        api.on("agent_turn_prepare", governedEscalation.prepareTurn, { priority: 100 });
+        api.on("llm_output", governedEscalation.observeOutput, { priority: 100 });
+        api.on("message_sending", governedEscalation.appendReceipt, { priority: 100 });
+        api.on("reply_payload_sending", governedEscalation.prepareReplyPayload, { priority: 100 });
+      }
 
       // Lazy intelligence detection (no-op without a licensed layer present).
       seam.detect().catch((err) => {
@@ -126,7 +142,7 @@ export const CAPABILITIES = [
       });
 
       return {
-        hooks: ["session_start", "before_model_resolve"],
+        hooks: ["session_start", "before_model_resolve", ...(governedEscalation ? ["before_agent_run", "agent_turn_prepare", "llm_output", "message_sending", "reply_payload_sending"] : [])],
         intelligence: { enabled: config.intelligence.enabled },
       };
     },

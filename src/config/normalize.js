@@ -1,7 +1,7 @@
 /*
  * ToggleLogic (Free Tier) — config normalization.
  * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
- * License (see LICENSE). PATENT PENDING.
+ * License 2.0 (see LICENSE). PATENT PENDING.
  *
  * Runtime config resolver: fills defaults, coerces defensively, returns a
  * trusted shape. On anything malformed it falls back to a safe default rather
@@ -38,11 +38,13 @@ export const DEFAULTS = Object.freeze({
     registryPath: "",
     shadow: false,
     fallbackOnError: true,
+    allowReleaseCandidate: false,
   }),
   features: Object.freeze({
     routing: Object.freeze({ enabled: false }),
     ownerOverrideAsk: Object.freeze({ enabled: false }),
     costVisibility: Object.freeze({ enabled: false }),
+    governedEscalation: Object.freeze({ enabled: false }),
   }),
   audit: Object.freeze({
     enabled: true,
@@ -74,6 +76,14 @@ export const DEFAULTS = Object.freeze({
       userPriceOverridePath: "",
     }),
     summaryEveryCalls: 20,
+  }),
+  governedEscalation: Object.freeze({
+    localModel: "",
+    localTiers: Object.freeze(["general_purpose"]),
+    approvalTiers: Object.freeze(["flagship_reasoning"]),
+    ttlMinutes: 10,
+    statePath: "~/.openclaw/togglelogic/governed-escalation.json",
+    externalDataNotice: "the request and active model context would be sent to the named provider",
   }),
 });
 
@@ -115,11 +125,13 @@ export function normalizeConfig(raw) {
           : "",
       shadow: intelligence.shadow === true,
       fallbackOnError: intelligence.fallbackOnError !== false,
+      allowReleaseCandidate: intelligence.allowReleaseCandidate === true,
     },
     features: {
       routing: normalizeFeatureEntry(features.routing, DEFAULTS.features.routing),
       ownerOverrideAsk: normalizeFeatureEntry(features.ownerOverrideAsk, DEFAULTS.features.ownerOverrideAsk),
       costVisibility: normalizeFeatureEntry(features.costVisibility, DEFAULTS.features.costVisibility),
+      governedEscalation: normalizeFeatureEntry(features.governedEscalation, DEFAULTS.features.governedEscalation),
     },
     audit: {
       enabled: audit.enabled !== false,
@@ -134,6 +146,22 @@ export function normalizeConfig(raw) {
     },
     ownerOverride: normalizeOwnerOverrideEntry(r.ownerOverride),
     costVisibility: normalizeCostVisibility(r.costVisibility),
+    governedEscalation: normalizeGovernedEscalation(r.governedEscalation),
+  };
+}
+
+function normalizeGovernedEscalation(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const validTier = (value) => ["general_purpose", "tool_calling_strong", "terminal_capable", "flagship_reasoning"].includes(value);
+  return {
+    localModel: typeof r.localModel === "string" ? r.localModel.trim() : "",
+    localTiers: Array.isArray(r.localTiers) ? [...new Set(r.localTiers.filter(validTier))] : [...DEFAULTS.governedEscalation.localTiers],
+    approvalTiers: Array.isArray(r.approvalTiers) ? [...new Set(r.approvalTiers.filter(validTier))] : [...DEFAULTS.governedEscalation.approvalTiers],
+    ttlMinutes: Number.isFinite(r.ttlMinutes) && r.ttlMinutes >= 1 ? Math.floor(r.ttlMinutes) : DEFAULTS.governedEscalation.ttlMinutes,
+    statePath: typeof r.statePath === "string" && r.statePath.length > 0 ? r.statePath : DEFAULTS.governedEscalation.statePath,
+    externalDataNotice: typeof r.externalDataNotice === "string" && r.externalDataNotice.length > 0
+      ? r.externalDataNotice
+      : DEFAULTS.governedEscalation.externalDataNotice,
   };
 }
 

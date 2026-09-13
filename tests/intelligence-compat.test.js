@@ -40,6 +40,12 @@ test("pairwise release contract fails closed on ABI, version, and development st
   }
 });
 
+test("release candidates require an explicit canary opt-in", async () => {
+  const root = await fixture({ release_state: "release_candidate" });
+  assert.equal((await detectIntelligenceLayer(root, "", "1.3.4")).present, false);
+  assert.equal((await detectIntelligenceLayer(root, "", "1.3.4", { allowReleaseCandidate: true })).present, true);
+});
+
 test("pairwise release contract fails closed when classifier bytes do not match manifest", async () => {
   const root = await fixture({ entrypoint_sha256: "0".repeat(64) });
   const result = await detectIntelligenceLayer(root, "", "1.3.1");

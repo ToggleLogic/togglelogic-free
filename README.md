@@ -45,14 +45,39 @@ Its public engine can be inspected and contributed to; eligible startups registe
 ## OpenClaw compatibility
 
 > **Backward-compatible with OpenClaw 2026.6.5 and later; validated through
-> OpenClaw 2026.9.1.**
+> OpenClaw 2026.9.4.**
 
 The minimum gateway version remains `>=2026.6.5`, and the plugin API floor
 remains `>=2026.5.2`. Those lower bounds are intentional: they preserve support
 for existing OpenClaw deployments and do not mean ToggleLogic depends on an
-obsolete host release. ToggleLogic Free 1.3.4 was packaged and passed its full
-release quality gate on OpenClaw `2026.9.1`. OpenClaw versions newer than the
+obsolete host release. ToggleLogic Free 1.4.0 was packaged and passed its full
+release quality gate on OpenClaw `2026.9.4`. OpenClaw versions newer than the
 stated validation point should be verified before production promotion.
+
+## Governed model escalation
+
+The opt-in `features.governedEscalation` capability keeps configured general
+work on a local model and places configured high-capability Intelligence tiers
+behind an owner decision. Before an external model receives the task, the gate
+shows the proposed model, estimated tokens and AI cost, why escalation is
+recommended, and what crosses the external-data boundary. A one-time approval
+resumes the original request; the result includes a receipt for the runtime
+model, execution location, token usage, approval evidence, and runtime-reported
+AI cost when supplied by the host, a clearly labeled public-rate estimate otherwise,
+or an explicit unavailable marker. Pending decisions are stored locally with
+owner-only permissions and expire on the configured TTL.
+When governed escalation is enabled, `governedEscalation.localModel` is required
+and must be a `provider/model` reference so unapproved work always has a declared
+local quarantine target.
+
+On OpenClaw 2026.9.4, the receipt uses the host's delivery-time runtime evidence.
+ToggleLogic suppresses a fallback banner only when that evidence explicitly says
+no fallback occurred and the model difference came from policy routing; real or
+uncertain fallback notices remain visible.
+
+Governed escalation is opt-in and disabled by default. ToggleLogic Free 1.4.0
+was promoted after private canary validation; installing the release does not
+activate routing, external escalation, or conversation access by itself.
 
 ## Install (from ClawHub)
 
