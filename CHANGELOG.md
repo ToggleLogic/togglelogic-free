@@ -2,6 +2,26 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.1 — 2026-09-13
+
+- Replace OpenClaw's generic negative escalation block with a short, positive
+  invitation before any external model receives the request.
+- Add natural, two-stage consent: ToggleLogic makes SAM's interpretation
+  visible, repeats the provider, model, context boundary, one-use scope, and
+  estimate, and requires a final explicit yes/no decision.
+- Reject false-zero external runtime costs when positive token usage proves
+  work occurred; use a labeled public-rate estimate or report unavailable.
+- Replace the dense technical execution line with a short multiline receipt
+  showing a friendly model name, location, usage, and emphasized cost.
+- Preserve exact provider references, pricing sources, routing evidence, and
+  one-use approval evidence in machine-readable audit data.
+- Bind an approved execution to its confirmation turn so an interrupted
+  approval cannot attach itself to a later unrelated message; retries after
+  consumption fail closed with a clear explanation.
+- Validate the release on OpenClaw 2026.9.4 with 75 passing tests and live
+  Telegram canaries covering local routing, consent, external execution, cost,
+  and the final receipt presentation.
+
 ## 1.4.1-rc.6 — 2026-09-13
 
 - Remove the redundant one-use approval line from the human-facing receipt.

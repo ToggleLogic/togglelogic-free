@@ -224,8 +224,21 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       save();
       return null;
     }
+    const decisionPhrase = normalizeDecisionPhrase(prompt);
     if (item.status === "approved") {
-      return { action: "approved", shortCircuit: true, override: splitRef(item.modelRef), item };
+      const currentRun = ctx?.runId || ctx?.turnId || null;
+      const sameRun = Boolean(item.approvalRunId && currentRun && item.approvalRunId === currentRun);
+      const sameImmediateDecision =
+        !item.approvalRunId &&
+        decisionPhrase === item.approvalDecision &&
+        Number.isFinite(item.approvedAt) &&
+        now() - item.approvedAt <= 30_000;
+      if (sameRun || sameImmediateDecision) {
+        return { action: "approved", shortCircuit: true, override: splitRef(item.modelRef), item };
+      }
+      pending.delete(key);
+      save();
+      return null;
     }
     if (item.status === "denied") {
       pending.delete(key);
@@ -233,13 +246,14 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       return null;
     }
 
-    const decisionPhrase = normalizeDecisionPhrase(prompt);
     const isYes = YES_PHRASES.has(decisionPhrase);
     const isNo = NO_PHRASES.has(decisionPhrase);
 
     if (item.status === "confirming" && isYes) {
       item.status = "approved";
       item.approvedAt = now();
+      item.approvalDecision = decisionPhrase;
+      item.approvalRunId = ctx?.runId || ctx?.turnId || null;
       save();
       return { action: "approved", shortCircuit: true, override: splitRef(item.modelRef), item };
     }
@@ -304,6 +318,14 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       item.consumedAt = now();
       save();
       return { outcome: "pass" };
+    }
+    if (item.status === "consumed") {
+      return {
+        outcome: "block",
+        reason: "owner_approval_already_used",
+        category: "model_escalation",
+        message: "This approval has already been used. Please request a new approval to run the task again.",
+      };
     }
     if (item.status === "denied") {
       pending.delete(keyOf(ctx));

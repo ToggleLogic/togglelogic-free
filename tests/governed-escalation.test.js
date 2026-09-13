@@ -71,6 +71,39 @@ test("external flagship work is blocked with an estimate, then resumes once afte
   assert.equal(f.gate.beforeRouting("Yes, proceed", { sessionKey: "s2" }), null, "one-time approval is consumed");
 });
 
+test("an interrupted approval cannot attach itself to a later unrelated turn", async (t) => {
+  const f = fixture();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  await f.gate.afterRouting("Original hard task", { sessionKey: "interrupted" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  assert.equal(f.gate.beforeRouting("Go for it", { sessionKey: "interrupted" }).action, "confirmation_required");
+  assert.equal(f.gate.beforeRouting("Yes", { sessionKey: "interrupted", runId: "approval-run" }).action, "approved");
+  const restarted = createApprovalGate({ config: f.config, pricing: f.pricing });
+  assert.equal(restarted.beforeRouting("What is on my calendar?", { sessionKey: "interrupted", runId: "later-run" }), null);
+  assert.equal(restarted._pending.has("interrupted"), false);
+});
+
+test("a consumed approval fails closed with a clear retry message", async (t) => {
+  const f = fixture();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  await f.gate.afterRouting("Hard task", { sessionKey: "consumed-retry" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  f.gate.beforeRouting("Go for it", { sessionKey: "consumed-retry" });
+  f.gate.beforeRouting("Yes", { sessionKey: "consumed-retry" });
+  assert.equal(f.gate.beforeAgentRun({}, { sessionKey: "consumed-retry" }).outcome, "pass");
+  const retry = f.gate.beforeAgentRun({}, { sessionKey: "consumed-retry" });
+  assert.equal(retry.outcome, "block");
+  assert.equal(retry.reason, "owner_approval_already_used");
+  assert.match(retry.message, /already been used/);
+  assert.doesNotMatch(retry.message, /ready to continue/);
+});
+
 test("common explicit approval phrases authorize the same one-time execution", async (t) => {
   const phrases = [
     "Yes, approved.",
