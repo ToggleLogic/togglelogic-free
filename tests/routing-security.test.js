@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { normalizeConfig } from "../src/config/normalize.js";
+import { createApprovalGate } from "../src/governance/approval-gate.js";
 import { createInterceptor } from "../src/routing/interceptor.js";
 import { resolveOwnerOverride } from "../src/routing/owner-override.js";
 import { isProtectedUserSessionSelection, readSessionSelection } from "../src/routing/session-store.js";
@@ -76,6 +77,30 @@ test("interceptor fallback policy passes through or rethrows as configured", asy
   assert.deepEqual(await harness(config, { seam: throwingSeam })({ prompt: "hello" }, {}), {});
   config = normalizeConfig({ mode: "intelligence", intelligence: { fallbackOnError: false } });
   await assert.rejects(() => harness(config, { seam: throwingSeam })({ prompt: "hello" }, {}), /classifier failed/);
+});
+
+test("governed Intelligence no-decision preserves the host model end to end", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tl-no-decision-"));
+  try {
+    const config = normalizeConfig({ mode: "intelligence" });
+    const seam = { status: () => "available", classify: async () => null };
+    const governedEscalation = createApprovalGate({
+      config: {
+        localModel: "ollama/glm4:9b",
+        localTiers: ["general_purpose"],
+        approvalTiers: ["flagship_reasoning"],
+        statePath: path.join(directory, "state.json"),
+      },
+      pricing: { resolve: async () => ({ priced: false }), costUsd: () => null },
+    });
+    const result = await harness(config, { seam, governedEscalation })(
+      { prompt: "Review this video and report what it actually says" },
+      { sessionKey: "existing-session", modelProviderId: "anthropic", modelId: "claude-haiku-4-5" },
+    );
+    assert.deepEqual(result, {});
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("interceptor classifies a logical turn once and preserves host fallback candidates", async () => {

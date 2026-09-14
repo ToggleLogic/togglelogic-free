@@ -2,6 +2,44 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.5.0 — 2026-09-14
+
+- Make governed escalation portable across agent products by removing
+  SAM-specific wording from the routing core.
+- Let deployments configure their exact approval and denial phrases,
+  external-data notice, and optional friendly provider/model names.
+- Keep owner authentication, business-action execution, and action receipts in
+  the host or deployment layer instead of implying the router can provide them.
+- Add a public integration responsibility contract explaining the boundaries
+  among OpenClaw, ToggleLogic, an agent deployment, and external services.
+- Preserve the deterministic, one-use, fail-closed approval state machine and
+  all existing routing, audit, and honest-cost behavior.
+- Validate the stable build with 82 passing tests, package inspection, an
+  independent code review, and a live SAM-HQ canary on OpenClaw `2026.9.4`.
+
+## 1.5.0-rc.1 — 2026-09-14
+
+- Remove SAM-specific wording from governed escalation and make the default
+  approval experience deployment-neutral.
+- Move accepted approval/denial phrases, external-data wording, and friendly
+  provider/model names into deployment-supplied configuration.
+- Keep the deterministic, one-use, fail-closed approval state machine in the
+  router while leaving owner-language interpretation and presentation policy to
+  the integrating deployment.
+- Add a public integration responsibility contract covering host truth, router
+  choice, deployment intent/proof, business-action receipts, common failure
+  modes, and conformance tests.
+- Preserve routing-core behavior, including no-decision passthrough and honest
+  unavailable-cost reporting.
+
+## 1.4.2-rc.1 — 2026-09-14
+
+- Preserve OpenClaw's configured model when ToggleLogic Intelligence returns no
+  routing decision; an absent capability tier no longer silently selects the
+  governed local model.
+- Add unit and end-to-end regressions reproducing the no-decision routing
+  failure while retaining explicit local routing for configured local tiers.
+
 ## 1.4.1 — 2026-09-13
 
 - Replace OpenClaw's generic negative escalation block with a short, positive

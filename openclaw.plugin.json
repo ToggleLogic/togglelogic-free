@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Free-tier model routing for OpenClaw: apply static routes, opt-in provider-constrained family aliases, a simple static cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no Intelligence engine or production model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. The separate source-available ToggleLogic Intelligence package can add capability-aware automatic selection; eligible startups register before commercial production use. ToggleLogic Free is source-available under License 2.0 (see LICENSE).",
   "activation": {
     "onStartup": true
@@ -129,7 +129,25 @@
           "approvalTiers": { "type": "array", "uniqueItems": true, "items": { "type": "string", "enum": ["general_purpose", "tool_calling_strong", "terminal_capable", "flagship_reasoning"] }, "default": ["flagship_reasoning"] },
           "ttlMinutes": { "type": "integer", "minimum": 1, "default": 10, "description": "Minutes an approval request may remain pending." },
           "statePath": { "type": "string", "default": "~/.openclaw/togglelogic/governed-escalation.json", "description": "Mode-0600 local state used to resume the blocked original request after a gateway restart." },
-          "externalDataNotice": { "type": "string", "default": "the request and active model context would be sent to the named provider", "description": "Deployment-authored boundary notice shown before approval." }
+          "externalDataNotice": { "type": "string", "default": "this request and active conversation context will be sent to the selected external provider", "description": "Deployment-authored boundary notice shown before approval. ToggleLogic displays this text but does not infer the deployment's data policy." },
+          "approvalLanguage": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Deployment-authored exact phrases normalized to affirmative or negative decisions. Defaults are intentionally strict; add locale- and product-specific wording here rather than changing router code.",
+            "properties": {
+              "affirmative": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "default": ["yes"] },
+              "negative": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "default": ["no"] }
+            }
+          },
+          "displayNames": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Optional deployment-authored labels used only in human-facing notices and receipts. Exact provider/model references remain in audit data.",
+            "properties": {
+              "providers": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 }, "default": {} },
+              "models": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 }, "default": {} }
+            }
+          }
         }
       },
       "audit": {
@@ -152,7 +170,7 @@
             "additionalProperties": false,
             "description": "Privacy-safe local fleet attribution. Values are non-secret slugs written only to the local cost ledger; ToggleLogic never sends them to Motherboard or any ToggleLogic service.",
             "properties": {
-              "deploymentId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "Stable deployment slug, for example sam-andy or sam-cf. When omitted, the local hostname is used." },
+              "deploymentId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "Stable deployment slug, for example acme-assistant or support-agent-01. When omitted, the local hostname is used." },
               "costCenter": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "Optional non-secret billing cost-center slug. Do not place names, email addresses, account numbers, or credentials here." }
             }
           },

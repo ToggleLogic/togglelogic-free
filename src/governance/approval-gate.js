@@ -10,44 +10,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveOpenClawPath } from "../path-utils.js";
 
-const YES_PHRASES = new Set([
-  "yes",
-  "yes please",
-  "yes proceed",
-  "yes please proceed",
-  "yes approved",
-  "yes approve it",
-  "yes go ahead",
-  "yes please go ahead",
-  "yes go for it",
-  "yes please go for it",
-  "yes do it",
-  "approved",
-  "approve it",
-  "i approve",
-  "i approve it",
-  "i approve this",
-  "you have my approval",
-  "proceed",
-  "please proceed",
-  "go ahead",
-  "please go ahead",
-  "go for it",
-  "please go for it",
-  "do it",
-]);
-const NO_PHRASES = new Set([
-  "no",
-  "no thanks",
-  "cancel",
-  "stop",
-  "do not proceed",
-  "please do not proceed",
-  "don't proceed",
-  "not approved",
-  "do not approve",
-  "do not do it",
-]);
+const DEFAULT_AFFIRMATIVE_PHRASES = Object.freeze(["yes"]);
+const DEFAULT_NEGATIVE_PHRASES = Object.freeze(["no"]);
+const DEFAULT_EXTERNAL_DATA_NOTICE =
+  "this request and active conversation context will be sent to the selected external provider";
 
 function normalizeDecisionPhrase(value) {
   return String(value || "")
@@ -57,6 +23,25 @@ function normalizeDecisionPhrase(value) {
     .replace(/[.,!?;:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function phraseSet(values, fallback) {
+  const source = Array.isArray(values) && values.length > 0 ? values : fallback;
+  const phrases = new Set(source.map(normalizeDecisionPhrase).filter(Boolean));
+  return phrases.size > 0
+    ? phrases
+    : new Set(fallback.map(normalizeDecisionPhrase).filter(Boolean));
+}
+
+function configuredName(map, keys, fallback) {
+  if (map && typeof map === "object") {
+    for (const key of keys) {
+      if (typeof key !== "string") continue;
+      const value = map[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  return fallback;
 }
 
 function splitRef(ref) {
@@ -93,40 +78,39 @@ function formatMoney(value) {
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
 }
 
-function providerLabel(ref) {
+function providerLabel(ref, displayNames = {}) {
   const provider = typeof ref === "string" ? ref.split("/", 1)[0].toLowerCase() : "";
-  return ({ anthropic: "Anthropic", openai: "OpenAI", google: "Google", xai: "xAI" })[provider] || "the external AI provider";
+  return configuredName(displayNames.providers, [provider], provider || "the external AI provider");
 }
 
-function modelLabel(ref) {
+function modelLabel(ref, displayNames = {}) {
   const model = typeof ref === "string" && ref.includes("/") ? ref.slice(ref.indexOf("/") + 1) : String(ref || "Unknown");
-  const claude = model.match(/^claude-(sonnet|haiku|opus)-(\d+)-(\d+)$/i);
-  if (claude) return `Claude ${claude[1][0].toUpperCase()}${claude[1].slice(1).toLowerCase()} ${claude[2]}.${claude[3]}`;
-  const glm = model.match(/^glm(\d+):(.+)$/i);
-  if (glm) return `GLM ${glm[1]} ${glm[2].toUpperCase()}`;
-  const gemma = model.match(/^gemma(\d+):(.+)$/i);
-  if (gemma) return `Gemma ${gemma[1]}${gemma[2].toLowerCase() === "latest" ? "" : ` ${gemma[2].toUpperCase()}`}`;
-  return model;
+  return configuredName(displayNames.models, [ref, model], model);
 }
 
-function formatApprovalInvitation(item) {
+function formatApprovalInvitation(item, presentation = {}) {
   const estimatedCost = Number.isFinite(item.estimatedCostUsd) ? formatMoney(item.estimatedCostUsd) : "currently unavailable";
+  const externalDataNotice = presentation.externalDataNotice || DEFAULT_EXTERNAL_DATA_NOTICE;
   return (
     `ToggleLogic is ready to continue with ${item.modelRef}. ` +
     `Estimated AI cost: ${estimatedCost}. ` +
-    `Once you approve, I’ll send this request and active SAM context to ${providerLabel(item.modelRef)} for one use. ` +
-    "Reply naturally; I’ll confirm your approval before anything is sent."
+    `Once you approve, ${externalDataNotice} for one use. ` +
+    "Reply with an approval or denial; I’ll confirm the decision before anything is sent."
   );
 }
 
-function formatApprovalConfirmation(item) {
+function formatApprovalConfirmation(item, presentation = {}) {
   const estimatedCost = Number.isFinite(item.estimatedCostUsd) ? formatMoney(item.estimatedCostUsd) : "currently unavailable";
+  const externalDataNotice = presentation.externalDataNotice || DEFAULT_EXTERNAL_DATA_NOTICE;
   const interpretation = item.interpretation === "affirmative"
     ? "I understood that as approval."
     : "I’m not certain whether you meant to approve this.";
+  const affirmative = presentation.decisionHint?.affirmative || "yes";
+  const negative = presentation.decisionHint?.negative || "no";
   return (
-    `${interpretation} Just to confirm: do you approve sending this request and active SAM context to ${providerLabel(item.modelRef)} ` +
-    `for one use with ${item.modelRef}, at an estimated AI cost of ${estimatedCost}? Reply “Yes” or “No”.`
+    `${interpretation} Just to confirm: do you approve? If approved, ${externalDataNotice} for one use with ` +
+    `${modelLabel(item.modelRef, presentation.displayNames)}, at an estimated AI cost of ${estimatedCost}. ` +
+    `Reply “${affirmative}” or “${negative}”.`
   );
 }
 
@@ -134,11 +118,11 @@ function isLocalProvider(provider, ref) {
   return provider === "ollama" || (typeof ref === "string" && ref.startsWith("ollama/"));
 }
 
-function formatReceipt(content, receipt) {
+function formatReceipt(content, receipt, displayNames = {}) {
   const lines = [
     "Receipt",
-    `Model: ${modelLabel(receipt.ref)}`,
-    receipt.local ? "Location: Local (no external AI)" : `Location: ${providerLabel(receipt.ref)} cloud`,
+    `Model: ${modelLabel(receipt.ref, displayNames)}`,
+    receipt.local ? "Location: Local (no external AI)" : `Location: ${providerLabel(receipt.ref, displayNames)} cloud`,
   ];
   lines.push(`Usage: ${receipt.input ?? "unknown"} in / ${receipt.output ?? "unknown"} out`);
   let cost;
@@ -168,6 +152,18 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
   const localRef = cfg.localModel || "";
   const localTiers = new Set(Array.isArray(cfg.localTiers) ? cfg.localTiers : ["general_purpose"]);
   const approvalTiers = new Set(Array.isArray(cfg.approvalTiers) ? cfg.approvalTiers : ["flagship_reasoning"]);
+  const affirmativePhrases = phraseSet(cfg.approvalLanguage?.affirmative, DEFAULT_AFFIRMATIVE_PHRASES);
+  const negativePhrases = phraseSet(cfg.approvalLanguage?.negative, DEFAULT_NEGATIVE_PHRASES);
+  const presentation = {
+    externalDataNotice: typeof cfg.externalDataNotice === "string" && cfg.externalDataNotice.trim()
+      ? cfg.externalDataNotice.trim().replace(/[.!?]+$/, "")
+      : DEFAULT_EXTERNAL_DATA_NOTICE,
+    displayNames: cfg.displayNames && typeof cfg.displayNames === "object" ? cfg.displayNames : {},
+    decisionHint: {
+      affirmative: affirmativePhrases.values().next().value,
+      negative: negativePhrases.values().next().value,
+    },
+  };
   const outputByTier = { general_purpose: 500, tool_calling_strong: 900, terminal_capable: 1400, flagship_reasoning: 2500 };
 
   function load() {
@@ -246,8 +242,8 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       return null;
     }
 
-    const isYes = YES_PHRASES.has(decisionPhrase);
-    const isNo = NO_PHRASES.has(decisionPhrase);
+    const isNo = negativePhrases.has(decisionPhrase);
+    const isYes = !isNo && affirmativePhrases.has(decisionPhrase);
 
     if (item.status === "confirming" && isYes) {
       item.status = "approved";
@@ -278,7 +274,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
         ? `${result.selectedProvider}/${result.selectedModel}`
         : result?.selectedModel);
 
-    if (localRef && (!tier || localTiers.has(tier))) {
+    if (localRef && tier && localTiers.has(tier)) {
       return { action: "local", override: splitRef(localRef), modelRef: localRef, tier };
     }
     if (!key || !modelRef || !approvalTiers.has(tier)) return null;
@@ -336,7 +332,9 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       outcome: "block",
       reason: "owner_approval_required",
       category: "model_escalation",
-      message: item.status === "confirming" ? formatApprovalConfirmation(item) : formatApprovalInvitation(item),
+      message: item.status === "confirming"
+        ? formatApprovalConfirmation(item, presentation)
+        : formatApprovalInvitation(item, presentation),
     };
   }
 
@@ -401,7 +399,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       pending.delete(key);
       save();
     }
-    return { content: formatReceipt(event.content, receipt) };
+    return { content: formatReceipt(event.content, receipt, presentation.displayNames) };
   }
 
   async function prepareReplyPayload(event, ctx) {
@@ -494,7 +492,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     }
     const observed = correlationKeys(event, ctx).map((candidate) => receipts.get(candidate)).find(Boolean);
     clearReceipt(observed);
-    return { payload: { ...payload, text: formatReceipt(payload.text, receipt) } };
+    return { payload: { ...payload, text: formatReceipt(payload.text, receipt, presentation.displayNames) } };
   }
 
   load();
@@ -502,8 +500,8 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
   function pendingInvitation(ctx) {
     const key = keyOf(ctx);
     const item = pending.get(key);
-    if (item?.status === "awaiting") return formatApprovalInvitation(item);
-    if (item?.status === "confirming") return formatApprovalConfirmation(item);
+    if (item?.status === "awaiting") return formatApprovalInvitation(item, presentation);
+    if (item?.status === "confirming") return formatApprovalConfirmation(item, presentation);
     if (item?.status === "denied") {
       pending.delete(key);
       save();
@@ -536,6 +534,6 @@ export const _internals = {
   hasReceipt,
   correlationKeys,
   normalizeDecisionPhrase,
-  YES_PHRASES,
-  NO_PHRASES,
+  DEFAULT_AFFIRMATIVE_PHRASES,
+  DEFAULT_NEGATIVE_PHRASES,
 };

@@ -31,15 +31,17 @@ Send this synthetic prompt to the governed demonstration host:
 
 ToggleLogic should respond immediately without calling an external model. Its
 short approval invitation names the proposed model and estimated AI cost, then
-states that the request and active SAM context will be sent to the named
-provider once the owner approves one use.
+states the deployment-configured context and external-data boundary for the
+proposed one-use execution.
 
 ### 1:05–1:30 — Make the decision visible
 
 Say: “The model cannot approve itself. The owner decides whether this task and
-context may cross the boundary.” Reply naturally with `Go for it`. ToggleLogic
-should restate the provider, model, context boundary, one-use scope, and cost as
-a direct confirmation. Reply `Yes` only after that confirmation is correct.
+context may cross the boundary.” Reply with the first configured affirmative
+phrase. ToggleLogic should restate the model, context boundary, one-use scope,
+and cost as a direct confirmation, then show the exact affirmative and negative
+phrases accepted for the final decision. Reply with the displayed affirmative
+phrase only after that confirmation is correct.
 
 ### 1:30–2:30 — Show governed execution
 
@@ -66,7 +68,7 @@ what information may leave, what it should cost, and who must approve it.”
 
 - No false fallback banner.
 - No external call before approval.
-- Natural wording produces a separate, explicit yes/no confirmation.
+- The configured wording produces a separate, explicit final confirmation.
 - The final confirmation names the model, provider, estimate, and context boundary.
 - Exactly one approved external execution occurs.
 - Public pricing is labeled as an estimate, never actual provider billing.

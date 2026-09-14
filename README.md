@@ -50,7 +50,7 @@ Its public engine can be inspected and contributed to; eligible startups registe
 The minimum gateway version remains `>=2026.6.5`, and the plugin API floor
 remains `>=2026.5.2`. Those lower bounds are intentional: they preserve support
 for existing OpenClaw deployments and do not mean ToggleLogic depends on an
-obsolete host release. ToggleLogic Free 1.4.1 was packaged and passed its full
+obsolete host release. ToggleLogic Free 1.5.0 was packaged and passed its full
 release quality gate on OpenClaw `2026.9.4`. OpenClaw versions newer than the
 stated validation point should be verified before production promotion.
 
@@ -60,12 +60,16 @@ The opt-in `features.governedEscalation` capability keeps configured general
 work on a local model and places configured high-capability Intelligence tiers
 behind an owner decision. Before an external model receives the task, the gate
 shows the proposed model, estimated AI cost, and what crosses the external-data
-boundary. SAM interprets a natural reply, ToggleLogic repeats the decision in a
-plain yes/no confirmation, and only that final confirmation authorizes one
-execution. The result includes a concise receipt naming the model, location,
-token usage, and cost. Exact provider references, pricing sources, and approval
-evidence remain in machine-readable audit data. Pending decisions are stored
-locally with owner-only permissions and expire on the configured TTL.
+boundary. The deployment supplies its accepted approval/denial phrases, data
+boundary wording, and optional provider/model display names. ToggleLogic applies
+those normalized decisions, repeats the decision in a plain yes/no confirmation,
+and only that final confirmation authorizes one execution. The result includes a
+concise receipt naming the model, location, token usage, and cost. Exact provider
+references, pricing sources, and approval evidence remain in machine-readable
+audit data. Pending decisions are stored locally with owner-only permissions and
+expire on the configured TTL. ToggleLogic's defaults are intentionally strict and
+deployment-neutral: exact `Yes` / `No`, generic context wording, and raw model
+references.
 Approved execution is bound to its confirmation turn; interruption cannot carry
 that approval onto a later unrelated message.
 When governed escalation is enabled, `governedEscalation.localModel` is required
@@ -77,9 +81,14 @@ ToggleLogic suppresses a fallback banner only when that evidence explicitly says
 no fallback occurred and the model difference came from policy routing; real or
 uncertain fallback notices remain visible.
 
-Governed escalation is opt-in and disabled by default. ToggleLogic Free 1.4.1
+Governed escalation is opt-in and disabled by default. ToggleLogic Free 1.5.0
 was promoted after private canary validation; installing the release does not
 activate routing, external escalation, or conversation access by itself.
+
+See [Who Guarantees What](./docs/INTEGRATION-RESPONSIBILITY-CONTRACT.md) for the
+host/router/deployment responsibility contract, business examples, failure modes,
+conformance tests, and the rule that a router cannot manufacture a capability or
+execution receipt.
 
 ## Install (from ClawHub)
 
@@ -228,8 +237,8 @@ conversation hook):
       "features": { "costVisibility": { "enabled": true } },
       "costVisibility": {
         "attribution": {
-          "deploymentId": "sam-andy",
-          "costCenter": "andy"
+          "deploymentId": "acme-assistant",
+          "costCenter": "customer-success"
         }
       }
     }
