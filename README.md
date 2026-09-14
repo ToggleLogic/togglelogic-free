@@ -50,7 +50,7 @@ Its public engine can be inspected and contributed to; eligible startups registe
 The minimum gateway version remains `>=2026.6.5`, and the plugin API floor
 remains `>=2026.5.2`. Those lower bounds are intentional: they preserve support
 for existing OpenClaw deployments and do not mean ToggleLogic depends on an
-obsolete host release. ToggleLogic Free 1.4.1 was packaged and passed its full
+obsolete host release. ToggleLogic Free 1.5.0 was packaged and passed its full
 release quality gate on OpenClaw `2026.9.4`. OpenClaw versions newer than the
 stated validation point should be verified before production promotion.
 
@@ -81,7 +81,7 @@ ToggleLogic suppresses a fallback banner only when that evidence explicitly says
 no fallback occurred and the model difference came from policy routing; real or
 uncertain fallback notices remain visible.
 
-Governed escalation is opt-in and disabled by default. ToggleLogic Free 1.4.1
+Governed escalation is opt-in and disabled by default. ToggleLogic Free 1.5.0
 was promoted after private canary validation; installing the release does not
 activate routing, external escalation, or conversation access by itself.
 

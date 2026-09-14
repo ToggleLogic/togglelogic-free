@@ -2,6 +2,21 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.5.0 — 2026-09-14
+
+- Make governed escalation portable across agent products by removing
+  SAM-specific wording from the routing core.
+- Let deployments configure their exact approval and denial phrases,
+  external-data notice, and optional friendly provider/model names.
+- Keep owner authentication, business-action execution, and action receipts in
+  the host or deployment layer instead of implying the router can provide them.
+- Add a public integration responsibility contract explaining the boundaries
+  among OpenClaw, ToggleLogic, an agent deployment, and external services.
+- Preserve the deterministic, one-use, fail-closed approval state machine and
+  all existing routing, audit, and honest-cost behavior.
+- Validate the stable build with 82 passing tests, package inspection, an
+  independent code review, and a live SAM-HQ canary on OpenClaw `2026.9.4`.
+
 ## 1.5.0-rc.1 — 2026-09-14
 
 - Remove SAM-specific wording from governed escalation and make the default
