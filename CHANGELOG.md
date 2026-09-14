@@ -2,6 +2,22 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.5.1 — 2026-09-14
+
+- Add an opt-in ordered host plan spanning a primary model family and fallback
+  families while leaving concrete execution and configuration writes with the
+  OpenClaw host/deployment.
+- Add per-family `acceptedModels` allowlists so catalog discovery cannot promote
+  an unaccepted child.
+- Resolve the full family ladder atomically and report unresolved or duplicate
+  rungs without silently shortening or reordering it.
+- Audit whether the resolved family ladder matches OpenClaw's configured
+  primary and fallback chain.
+- Preserve the same-turn guard that lets OpenClaw advance through its concrete
+  fallback candidates without ToggleLogic reclassifying the task.
+- Add a public architecture diagram and integration guidance. This relationship
+  may be protected by our patent pending.
+
 ## 1.5.0 — 2026-09-14
 
 - Make governed escalation portable across agent products by removing

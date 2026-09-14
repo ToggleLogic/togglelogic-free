@@ -31,6 +31,7 @@ export const DEFAULTS = Object.freeze({
     catalogPath: "~/.openclaw/togglelogic/pricing-cache.json",
     maxAgeHours: 48,
     aliases: Object.freeze({}),
+    hostPlan: Object.freeze({ primary: "", fallbacks: Object.freeze([]) }),
   }),
   intelligence: Object.freeze({
     enabled: true,
@@ -214,6 +215,11 @@ function normalizeFamilyResolution(raw) {
         family,
         providers,
         strategy: value.strategy === "newest" ? "newest" : "lowest_cost",
+        ...(Array.isArray(value.acceptedModels) ? {
+          acceptedModels: [...new Set(value.acceptedModels
+            .map((item) => String(item).trim().toLowerCase())
+            .filter((item) => /^[^/\s]+\/[^/\s]+$/.test(item)))],
+        } : {}),
         ...(Number.isFinite(value.maxInputPerM) && value.maxInputPerM > 0 ? { maxInputPerM: value.maxInputPerM } : {}),
         ...(Number.isFinite(value.maxOutputPerM) && value.maxOutputPerM > 0 ? { maxOutputPerM: value.maxOutputPerM } : {}),
       };
@@ -224,7 +230,18 @@ function normalizeFamilyResolution(raw) {
     catalogPath: typeof r.catalogPath === "string" && r.catalogPath.length > 0 ? r.catalogPath : DEFAULTS.familyResolution.catalogPath,
     maxAgeHours: Number.isFinite(r.maxAgeHours) && r.maxAgeHours >= 1 ? r.maxAgeHours : DEFAULTS.familyResolution.maxAgeHours,
     aliases,
+    hostPlan: normalizeFamilyHostPlan(r.hostPlan, aliases),
   };
+}
+
+function normalizeFamilyHostPlan(raw, aliases) {
+  const r = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const validAlias = (value) => typeof value === "string" && Object.hasOwn(aliases, value);
+  const primary = validAlias(r.primary) ? r.primary : "";
+  const fallbacks = Array.isArray(r.fallbacks)
+    ? [...new Set(r.fallbacks.filter(validAlias))].filter((alias) => alias !== primary)
+    : [];
+  return { primary, fallbacks };
 }
 
 function normalizeCostVisibility(raw) {

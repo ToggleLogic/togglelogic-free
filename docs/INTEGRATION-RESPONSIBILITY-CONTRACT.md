@@ -73,6 +73,8 @@ not the proof source. That is the correct boundary, not a limitation to hide.
 - Run business tools and return structured results to the deployment.
 - Gate conversation access behind explicit permission and maintain a versioned
   hook contract.
+- Execute its configured concrete primary/fallback chain in order and expose
+  which candidate actually ran.
 
 ### The deployment or agent policy MUST
 
@@ -84,6 +86,17 @@ not the proof source. That is the correct boundary, not a limitation to hide.
   document claims.
 - Prevent stale claims from an earlier task from being presented as current work.
 - Own application wording, provider labels, model labels, and external-data notice.
+- Own model-family acceptance records and materialize accepted children into
+  the host's concrete primary/fallback fields before startup.
+
+### Ordered family fallbacks
+
+The durable policy may name an ordered series of model families while the host
+runtime requires concrete model references. ToggleLogic may resolve and audit
+that plan, but it does not mutate host configuration. Discovery is not
+acceptance, and an unresolved rung must not be silently removed, reordered, or
+replaced across family boundaries. See
+[Model-family fallback architecture](./MODEL-FAMILY-FALLBACK-ARCHITECTURE.md).
 
 ## A router cannot manufacture host capabilities or execution receipts
 
