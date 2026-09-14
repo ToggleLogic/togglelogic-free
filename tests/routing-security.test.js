@@ -122,6 +122,47 @@ test("interceptor classifies a logical turn once and preserves host fallback can
   assert.equal(calls, 1, "fallback pass must not re-enter Intelligence");
 });
 
+test("interceptor preserves the complete ordered host fallback ladder after one classification", async () => {
+  let calls = 0;
+  const seam = {
+    status: () => "available",
+    classify: async () => {
+      calls += 1;
+      return {
+        providerOverride: "google",
+        modelOverride: "gemini-3.5-flash",
+        details: { matched_rule: "general" },
+      };
+    },
+  };
+  const config = normalizeConfig({ mode: "intelligence" });
+  const interceptor = harness(config, { seam });
+  const event = { prompt: "prepare the requested customer update" };
+  const candidates = [
+    ["google", "gemini-3.5-flash"],
+    ["anthropic", "claude-haiku-4-5"],
+    ["anthropic", "claude-sonnet-4-6"],
+    ["xai", "grok-4.3"],
+  ];
+
+  const first = await interceptor(event, {
+    sessionKey: "session-ordered-fallback",
+    modelProviderId: candidates[0][0],
+    modelId: candidates[0][1],
+  });
+  assert.deepEqual(first, { providerOverride: "google", modelOverride: "gemini-3.5-flash" });
+
+  for (const [modelProviderId, modelId] of candidates.slice(1)) {
+    const fallback = await interceptor(event, {
+      sessionKey: "session-ordered-fallback",
+      modelProviderId,
+      modelId,
+    });
+    assert.deepEqual(fallback, {}, `${modelProviderId}/${modelId} must remain available to OpenClaw`);
+  }
+  assert.equal(calls, 1, "the fallback ladder must not re-enter Intelligence");
+});
+
 test("preflight returns a deterministic approval reply before model resolution", async () => {
   let calls = 0;
   let awaiting = false;
