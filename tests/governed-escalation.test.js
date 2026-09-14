@@ -39,6 +39,16 @@ test("ordinary work is routed to the configured local model without approval", a
   assert.equal(f.gate.beforeAgentRun({}, { sessionKey: "s1" }).outcome, "pass");
 });
 
+test("an Intelligence no-decision preserves the host model instead of forcing local", async (t) => {
+  const f = fixture();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  const result = await f.gate.afterRouting("Review the linked video", { sessionKey: "no-decision" }, {
+    selectionDetails: { reasoning: "intelligence declined" },
+  });
+  assert.equal(result, null);
+  assert.equal(f.gate.beforeAgentRun({}, { sessionKey: "no-decision" }).outcome, "pass");
+});
+
 test("external flagship work is blocked with an estimate, then resumes once after approval", async (t) => {
   const f = fixture();
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));

@@ -278,7 +278,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
         ? `${result.selectedProvider}/${result.selectedModel}`
         : result?.selectedModel);
 
-    if (localRef && (!tier || localTiers.has(tier))) {
+    if (localRef && tier && localTiers.has(tier)) {
       return { action: "local", override: splitRef(localRef), modelRef: localRef, tier };
     }
     if (!key || !modelRef || !approvalTiers.has(tier)) return null;

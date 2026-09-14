@@ -2,6 +2,14 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.4.2-rc.1 — 2026-09-14
+
+- Preserve OpenClaw's configured model when ToggleLogic Intelligence returns no
+  routing decision; an absent capability tier no longer silently selects the
+  governed local model.
+- Add unit and end-to-end regressions reproducing the no-decision routing
+  failure while retaining explicit local routing for configured local tiers.
+
 ## 1.4.1 — 2026-09-13
 
 - Replace OpenClaw's generic negative escalation block with a short, positive
