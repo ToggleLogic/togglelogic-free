@@ -83,7 +83,12 @@ export const DEFAULTS = Object.freeze({
     approvalTiers: Object.freeze(["flagship_reasoning"]),
     ttlMinutes: 10,
     statePath: "~/.openclaw/togglelogic/governed-escalation.json",
-    externalDataNotice: "the request and active model context would be sent to the named provider",
+    externalDataNotice: "this request and active conversation context will be sent to the selected external provider",
+    approvalLanguage: Object.freeze({
+      affirmative: Object.freeze(["yes"]),
+      negative: Object.freeze(["no"]),
+    }),
+    displayNames: Object.freeze({ providers: Object.freeze({}), models: Object.freeze({}) }),
   }),
 });
 
@@ -162,7 +167,36 @@ function normalizeGovernedEscalation(raw) {
     externalDataNotice: typeof r.externalDataNotice === "string" && r.externalDataNotice.length > 0
       ? r.externalDataNotice
       : DEFAULTS.governedEscalation.externalDataNotice,
+    approvalLanguage: {
+      affirmative: normalizePhraseList(r.approvalLanguage?.affirmative, DEFAULTS.governedEscalation.approvalLanguage.affirmative),
+      negative: normalizePhraseList(r.approvalLanguage?.negative, DEFAULTS.governedEscalation.approvalLanguage.negative),
+    },
+    displayNames: {
+      providers: normalizeDisplayNames(r.displayNames?.providers),
+      models: normalizeDisplayNames(r.displayNames?.models),
+    },
   };
+}
+
+function normalizePhraseList(value, fallback) {
+  if (!Array.isArray(value) || value.length === 0) return [...fallback];
+  const phrases = [...new Set(value.map((item) => String(item).trim()).filter((item) => (
+    item && item
+      .toLowerCase()
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[.,!?;:]+/g, " ")
+      .trim()
+  )))];
+  return phrases.length > 0 ? phrases : [...fallback];
+}
+
+function normalizeDisplayNames(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const names = {};
+  for (const [key, label] of Object.entries(value)) {
+    if (typeof label === "string" && label.trim()) names[key] = label.trim();
+  }
+  return names;
 }
 
 function normalizeFamilyResolution(raw) {

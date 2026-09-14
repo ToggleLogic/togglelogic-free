@@ -2,6 +2,21 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.5.0-rc.1 — 2026-09-14
+
+- Remove SAM-specific wording from governed escalation and make the default
+  approval experience deployment-neutral.
+- Move accepted approval/denial phrases, external-data wording, and friendly
+  provider/model names into deployment-supplied configuration.
+- Keep the deterministic, one-use, fail-closed approval state machine in the
+  router while leaving owner-language interpretation and presentation policy to
+  the integrating deployment.
+- Add a public integration responsibility contract covering host truth, router
+  choice, deployment intent/proof, business-action receipts, common failure
+  modes, and conformance tests.
+- Preserve routing-core behavior, including no-decision passthrough and honest
+  unavailable-cost reporting.
+
 ## 1.4.2-rc.1 — 2026-09-14
 
 - Preserve OpenClaw's configured model when ToggleLogic Intelligence returns no

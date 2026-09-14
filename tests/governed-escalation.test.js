@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { createApprovalGate, _internals } from "../src/governance/approval-gate.js";
+import { normalizeConfig } from "../src/config/normalize.js";
 
 function fixture(overrides = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "togglelogic-gate-"));
@@ -23,6 +24,21 @@ function fixture(overrides = {}) {
     approvalTiers: ["flagship_reasoning"],
     ttlMinutes: 10,
     statePath,
+    externalDataNotice: "this request and active Test Agent context will be sent to Anthropic",
+    approvalLanguage: {
+      affirmative: [
+        "yes", "yes approved", "approved", "approve it", "i approve this",
+        "go for it", "yes go for it", "please go ahead", "proceed",
+      ],
+      negative: ["no", "not approved"],
+    },
+    displayNames: {
+      providers: { anthropic: "Anthropic" },
+      models: {
+        "ollama/gemma4:latest": "Gemma 4",
+        "anthropic/claude-sonnet-4-6": "Claude Sonnet 4.6",
+      },
+    },
     ...overrides,
   };
   return { dir, statePath, pricing, config, gate: createApprovalGate({ config, pricing }) };
@@ -197,10 +213,98 @@ test("a pending escalation exposes a deterministic positive approval invitation"
   const invitation = f.gate.pendingInvitation({ sessionKey: "friendly" });
   assert.match(invitation, /^ToggleLogic is ready to continue with anthropic\/claude-sonnet-4-6\./);
   assert.match(invitation, /Estimated AI cost: \$0\.04\./);
-  assert.match(invitation, /send this request and active SAM context to Anthropic for one use/);
-  assert.match(invitation, /Reply naturally/);
-  assert.match(invitation, /confirm your approval before anything is sent/);
+  assert.match(invitation, /this request and active Test Agent context will be sent to Anthropic for one use/);
+  assert.match(invitation, /Reply with an approval or denial/);
+  assert.match(invitation, /confirm the decision before anything is sent/);
+  assert.doesNotMatch(invitation, /SAM/);
   assert.doesNotMatch(invitation, /could not be sent|blocked by/i);
+});
+
+test("default governed escalation is deployment-neutral and uses strict decisions", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "togglelogic-neutral-gate-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const base = fixture({
+    statePath: path.join(dir, "state.json"),
+    externalDataNotice: undefined,
+    approvalLanguage: undefined,
+    displayNames: undefined,
+  });
+  t.after(() => fs.rmSync(base.dir, { recursive: true, force: true }));
+  await base.gate.afterRouting("Hard task", { sessionKey: "neutral" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  const invitation = base.gate.pendingInvitation({ sessionKey: "neutral" });
+  assert.match(invitation, /active conversation context/);
+  assert.doesNotMatch(invitation, /SAM|Anthropic/);
+  assert.equal(base.gate.beforeRouting("Go for it", { sessionKey: "neutral" }).action, "confirmation_required");
+  assert.match(base.gate.pendingInvitation({ sessionKey: "neutral" }), /^I’m not certain/);
+  assert.equal(base.gate.beforeRouting("Yes", { sessionKey: "neutral" }).action, "approved");
+});
+
+test("governed presentation policy normalizes from deployment configuration", () => {
+  const config = normalizeConfig({
+    governedEscalation: {
+      externalDataNotice: "Acme context crosses the configured boundary",
+      approvalLanguage: {
+        affirmative: [" Approved ", "Approved", "Continue"],
+        negative: [" Stop "],
+      },
+      displayNames: {
+        providers: { vendor: " Vendor Cloud ", ignored: "" },
+        models: { "vendor/model": " Capable Model " },
+      },
+    },
+  }).governedEscalation;
+  assert.equal(config.externalDataNotice, "Acme context crosses the configured boundary");
+  assert.deepEqual(config.approvalLanguage.affirmative, ["Approved", "Continue"]);
+  assert.deepEqual(config.approvalLanguage.negative, ["Stop"]);
+  assert.deepEqual(config.displayNames.providers, { vendor: "Vendor Cloud" });
+  assert.deepEqual(config.displayNames.models, { "vendor/model": "Capable Model" });
+});
+
+test("a phrase configured in both decision lists fails closed as denial", async (t) => {
+  const f = fixture({
+    approvalLanguage: { affirmative: ["continue"], negative: ["continue"] },
+  });
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  await f.gate.afterRouting("Hard task", { sessionKey: "collision" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  assert.equal(f.gate.beforeRouting("Continue", { sessionKey: "collision" }).action, "denied");
+});
+
+test("confirmation displays and accepts the deployment's configured decision phrases", async (t) => {
+  const f = fixture({
+    approvalLanguage: { affirmative: ["approved"], negative: ["rejected"] },
+  });
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  await f.gate.afterRouting("Hard task", { sessionKey: "custom-language" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  assert.equal(f.gate.beforeRouting("Approved", { sessionKey: "custom-language" }).action, "confirmation_required");
+  assert.match(f.gate.pendingInvitation({ sessionKey: "custom-language" }), /Reply “approved” or “rejected”\./);
+  assert.equal(f.gate.beforeRouting("Approved", { sessionKey: "custom-language" }).action, "approved");
+});
+
+test("punctuation-only decision configuration falls back to strict safe defaults", async (t) => {
+  const f = fixture({
+    approvalLanguage: { affirmative: ["!!!"], negative: ["???"] },
+  });
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  await f.gate.afterRouting("Hard task", { sessionKey: "punctuation" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  assert.equal(f.gate.beforeRouting("Yes", { sessionKey: "punctuation" }).action, "confirmation_required");
+  assert.match(f.gate.pendingInvitation({ sessionKey: "punctuation" }), /Reply “yes” or “no”\./);
+  assert.equal(f.gate.beforeRouting("Yes", { sessionKey: "punctuation" }).action, "approved");
 });
 
 test("a missing price stays honest without negative failure wording", async (t) => {
