@@ -36,6 +36,8 @@ flowchart LR
     H --> A["Receipt: family + child + reason"]
 ```
 
+*This architecture may be protected by our patent pending.*
+
 The full portable contract, including discovery, acceptance, adjacent-line
 exclusion, and fail-closed verification, is documented in the
 [model-family routing architecture](https://github.com/ToggleLogic/togglelogic-free/blob/main/docs/MODEL-FAMILY-ROUTING-ARCHITECTURE.md).

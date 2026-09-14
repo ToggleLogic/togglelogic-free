@@ -4,6 +4,8 @@ Model releases change faster than most deployment configuration. A durable
 routing policy should therefore name a provider-constrained model lineage, not
 one numbered release that will soon become stale.
 
+*This architecture may be protected by our patent pending.*
+
 ```mermaid
 flowchart LR
     T["Host-supplied task label"] --> P["ToggleLogic routing policy"]
