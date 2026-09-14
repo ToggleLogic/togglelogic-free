@@ -54,12 +54,55 @@ function buildRuntimeConfigFromApiConfig(cfg) {
 
 export function configuredProvidersFromApiConfig(cfg) {
   try {
-    const providers = cfg?.models?.providers;
-    if (!providers || typeof providers !== "object") return [];
-    return Object.keys(providers).map((value) => value.toLowerCase()).sort();
+    const providers = new Set();
+    const configured = cfg?.models?.providers;
+    if (configured && typeof configured === "object") {
+      for (const value of Object.keys(configured)) providers.add(value.toLowerCase());
+    }
+    const addRef = (value) => {
+      if (typeof value !== "string") return;
+      const slash = value.indexOf("/");
+      if (slash > 0) providers.add(value.slice(0, slash).toLowerCase());
+    };
+    const defaults = cfg?.agents?.defaults;
+    if (defaults?.models && typeof defaults.models === "object") {
+      for (const ref of Object.keys(defaults.models)) addRef(ref);
+    }
+    const model = defaults?.model;
+    if (typeof model === "string") addRef(model);
+    else if (model && typeof model === "object") {
+      addRef(model.primary);
+      for (const ref of Array.isArray(model.fallbacks) ? model.fallbacks : []) addRef(ref);
+    }
+    return [...providers].sort();
   } catch {
     return [];
   }
+}
+
+export function hostModelChainFromApiConfig(cfg) {
+  const model = cfg?.agents?.defaults?.model;
+  if (typeof model === "string") return { primary: model, fallbacks: [] };
+  if (!model || typeof model !== "object") return { primary: null, fallbacks: [] };
+  return {
+    primary: typeof model.primary === "string" ? model.primary : null,
+    fallbacks: Array.isArray(model.fallbacks)
+      ? model.fallbacks.filter((value) => typeof value === "string")
+      : [],
+  };
+}
+
+export function compareHostFallbackPlan(resolved, host) {
+  if (!resolved || resolved.status === "disabled") return { status: "disabled" };
+  if (resolved.status !== "resolved") {
+    return { status: resolved.status, unresolvedAliases: resolved.unresolvedAliases ?? [] };
+  }
+  const expected = [resolved.primary, ...resolved.fallbacks];
+  const actual = [host?.primary, ...(host?.fallbacks ?? [])];
+  const aligned = expected.length === actual.length && expected.every((value, index) => (
+    String(value).toLowerCase() === String(actual[index] ?? "").toLowerCase()
+  ));
+  return { status: aligned ? "aligned" : "drift", expected, actual };
 }
 
 /**
@@ -83,6 +126,27 @@ export const CAPABILITIES = [
       const hostRuntimeConfig = buildRuntimeConfigFromApiConfig(api && api.config);
       const configuredProviders = configuredProvidersFromApiConfig(api && api.config);
       const familyResolver = new FamilyResolver(config.familyResolution, fallbackLogger);
+      const fallbackPlan = compareHostFallbackPlan(
+        familyResolver.resolveHostPlan(configuredProviders),
+        hostModelChainFromApiConfig(api && api.config),
+      );
+      audit.emit({
+        event: EVENTS.FALLBACK_PLAN_CHECK,
+        outcome: fallbackPlan.status === "aligned" || fallbackPlan.status === "disabled"
+          ? OUTCOMES.SUCCESS
+          : OUTCOMES.FAILURE,
+        principal: { source: "plugin-host" },
+        subject: { hostField: "agents.defaults.model" },
+        details: fallbackPlan,
+      });
+      if (!["aligned", "disabled"].includes(fallbackPlan.status)) {
+        try {
+          fallbackLogger?.warn?.(
+            `togglelogic: family fallback plan ${fallbackPlan.status}; ` +
+            "deployment tooling must materialize the accepted concrete model chain before startup"
+          );
+        } catch { /* ignore */ }
+      }
       const newSessions = createNewSessionTracker();
       const governedEscalation = config.features.governedEscalation.enabled
         ? createApprovalGate({
@@ -145,6 +209,7 @@ export const CAPABILITIES = [
       return {
         hooks: ["session_start", "before_model_resolve", ...(governedEscalation ? ["before_agent_reply", "before_agent_run", "agent_turn_prepare", "llm_output", "message_sending", "reply_payload_sending"] : [])],
         intelligence: { enabled: config.intelligence.enabled },
+        fallbackPlan: { status: fallbackPlan.status },
       };
     },
   },

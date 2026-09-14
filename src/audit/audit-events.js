@@ -35,6 +35,7 @@ export const EVENTS = Object.freeze({
   PLUGIN_REGISTER: "plugin.register",
   CONFIG_LOAD: "config.load",
   FEATURE_GATE: "feature.gate",
+  FALLBACK_PLAN_CHECK: "fallback.plan.check",
 
   // --- Dispatch capability ---
   DISPATCH_HOOK_FIRE: "dispatch.hook.fire",
@@ -96,6 +97,7 @@ export function controlsFor(event) {
     case EVENTS.PLUGIN_REGISTER:
     case EVENTS.CONFIG_LOAD:
     case EVENTS.FEATURE_GATE:
+    case EVENTS.FALLBACK_PLAN_CHECK:
       return ["AU-2", "AU-3", "CM-2", "CM-6"];
     case EVENTS.DISPATCH_ESTIMATE:
       return ["AU-2", "AU-3", "AU-12"];

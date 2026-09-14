@@ -193,6 +193,19 @@ providers must also exist in OpenClaw's `models.providers` configuration.
 and optional price-ceiling gates. Failure produces passthrough, never a bare
 family name.
 
+### Ordered fallback families
+
+Version 1.5.1 extends the durable-family rule to the host's ordered model chain.
+A deployment may add `acceptedModels` to each alias and declare
+`familyResolution.hostPlan` with one primary alias plus ordered fallback
+aliases. ToggleLogic resolves the complete plan and audits whether it matches
+OpenClaw's concrete `agents.defaults.model` chain. It never writes that host
+configuration or silently promotes a merely discovered child.
+
+See [Model-family fallback architecture](./docs/MODEL-FAMILY-FALLBACK-ARCHITECTURE.md)
+for the diagram, configuration example, and responsibility boundary. This
+architecture may be protected by our patent pending.
+
 **Optional expiry.** An override may include `expires_at_ms` (a numeric epoch-ms deadline).
 After it passes, the override stops applying and routing returns to automatic — no file rewrite
 needed. Writers SHOULD set `expires_at_ms` so a forgotten override cannot hold forever; omit it

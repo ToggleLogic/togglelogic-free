@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.5.0",
+  "version": "1.5.1-rc.1",
   "description": "Free-tier model routing for OpenClaw: apply static routes, opt-in provider-constrained family aliases, a simple static cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no Intelligence engine or production model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. The separate source-available ToggleLogic Intelligence package can add capability-aware automatic selection; eligible startups register before commercial production use. ToggleLogic Free is source-available under License 2.0 (see LICENSE).",
   "activation": {
     "onStartup": true
@@ -43,7 +43,7 @@
       "familyResolution": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Optional family aliases for configuredRoutes only. Disabled by default. Reads the deployment's cached public Models.dev catalog, restricts candidates to explicitly approved providers that are also configured in OpenClaw, and requires complete non-zero pricing. It never changes cheap mode.",
+        "description": "Optional family aliases for configured routes and a read-only host fallback-plan conformance check. Disabled by default. Reads the deployment's cached public Models.dev catalog, restricts candidates to explicitly approved providers and optionally accepted model refs, and requires complete non-zero pricing. ToggleLogic never writes the host fallback list.",
         "properties": {
           "enabled": { "type": "boolean", "default": false },
           "catalogPath": { "type": "string", "default": "~/.openclaw/togglelogic/pricing-cache.json", "description": "Deployment-local Models.dev cache. No catalog ships in this package." },
@@ -58,8 +58,28 @@
                 "family": { "type": "string", "minLength": 1 },
                 "providers": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$" } },
                 "strategy": { "type": "string", "enum": ["lowest_cost", "newest"], "default": "lowest_cost" },
+                "acceptedModels": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
+                  "description": "Optional deployment acceptance allowlist. When present, family resolution cannot select a child outside these concrete provider/model refs."
+                },
                 "maxInputPerM": { "type": "number", "exclusiveMinimum": 0 },
                 "maxOutputPerM": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            }
+          },
+          "hostPlan": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Durable primary and ordered fallback family aliases. ToggleLogic resolves and audits this plan against agents.defaults.model but never mutates host configuration; deployment tooling materializes the concrete children.",
+            "required": ["primary", "fallbacks"],
+            "properties": {
+              "primary": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$" },
+              "fallbacks": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$" }
               }
             }
           }

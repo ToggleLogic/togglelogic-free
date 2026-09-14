@@ -188,12 +188,19 @@ test("config: costVisibility defaults + feature toggle normalize", () => {
 test("config: family aliases normalize narrowly and remain disabled by default", () => {
   assert.equal(normalizeConfig({}).familyResolution.enabled, false);
   const config = normalizeConfig({ familyResolution: { enabled: true, aliases: {
-    grok: { family: "Grok", providers: ["XAI", "xai", "bad provider"], strategy: "newest", maxInputPerM: 5 },
+    grok: {
+      family: "Grok", providers: ["XAI", "xai", "bad provider"], strategy: "newest", maxInputPerM: 5,
+      acceptedModels: ["XAI/GROK-4.3", "invalid", "xai/grok-4.3"],
+    },
     "bad alias!": { family: "gpt", providers: ["openai"] },
-  } } });
+  }, hostPlan: { primary: "grok", fallbacks: ["grok", "missing"] } } });
   assert.deepEqual(config.familyResolution.aliases, {
-    grok: { family: "grok", providers: ["xai"], strategy: "newest", maxInputPerM: 5 },
+    grok: {
+      family: "grok", providers: ["xai"], strategy: "newest", maxInputPerM: 5,
+      acceptedModels: ["xai/grok-4.3"],
+    },
   });
+  assert.deepEqual(config.familyResolution.hostPlan, { primary: "grok", fallbacks: [] });
 });
 
 test("fleet attribution accepts portable slugs and rejects sensitive-looking values", () => {
