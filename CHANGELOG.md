@@ -12,6 +12,8 @@ All notable changes to ToggleLogic (Free Tier) are documented here.
   the host or deployment layer instead of implying the router can provide them.
 - Add a public integration responsibility contract explaining the boundaries
   among OpenClaw, ToggleLogic, an agent deployment, and external services.
+- Add a developer architecture note and diagram for durable model-family
+  routing, child resolution, and current-run family-plus-child receipts.
 - Preserve the deterministic, one-use, fail-closed approval state machine and
   all existing routing, audit, and honest-cost behavior.
 - Validate the stable build with 82 passing tests, package inspection, an

@@ -90,6 +90,11 @@ host/router/deployment responsibility contract, business examples, failure modes
 conformance tests, and the rule that a router cannot manufacture a capability or
 execution receipt.
 
+See [Model-Family Routing](./docs/MODEL-FAMILY-ROUTING-ARCHITECTURE.md) for the
+portable lineage → resolver → concrete-child architecture. It explains why a
+durable policy should not be pinned to a numbered model release and why every
+verification receipt should record both the selected family and executed child.
+
 ## Install (from ClawHub)
 
 ```

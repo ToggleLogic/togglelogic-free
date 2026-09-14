@@ -20,6 +20,26 @@ turn, and valid for one execution. ToggleLogic still chooses and records model
 routes; it does not authenticate an owner, manufacture an email or CRM action,
 or claim that an external action succeeded without a deployment-owned receipt.
 
+## Developer architecture note
+
+Do not hardcode a numbered model as the permanent routing target. Pin policy to
+a provider-constrained model lineage, resolve the current accepted child at the
+execution boundary, and record both values in the current-run receipt.
+
+```mermaid
+flowchart LR
+    T["Host task label"] --> P["ToggleLogic policy"]
+    P --> F["Durable model lineage"]
+    F --> R["Family resolver"]
+    R --> C["Current accepted child"]
+    C --> H["Host model execution"]
+    H --> A["Receipt: family + child + reason"]
+```
+
+The full portable contract, including discovery, acceptance, adjacent-line
+exclusion, and fail-closed verification, is documented in the
+[model-family routing architecture](https://github.com/ToggleLogic/togglelogic-free/blob/main/docs/MODEL-FAMILY-ROUTING-ARCHITECTURE.md).
+
 ## Validation
 
 - 82 automated tests passed.
