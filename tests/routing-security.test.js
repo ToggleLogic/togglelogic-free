@@ -20,6 +20,7 @@ function harness(config, extras = {}) {
     seam: extras.seam ?? { status: () => "unavailable", classify: async () => null }, version: "test",
     familyResolver: extras.familyResolver, configuredProviders: extras.configuredProviders ?? [],
     governedEscalation: extras.governedEscalation ?? null,
+    skillRouting: extras.skillRouting ?? null,
   });
 }
 
@@ -216,4 +217,56 @@ test("ordinary preflight classification is consumed once by model resolution", a
   assert.deepEqual(await interceptor.preflight(event, ctx), { handled: false });
   assert.deepEqual(await interceptor(event, ctx), { providerOverride: "ollama", modelOverride: "glm4:9b" });
   assert.equal(calls, 1);
+});
+
+test("educational skill preflight claims the turn before any model executes", async () => {
+  let classifierCalls = 0;
+  const seam = { status: () => "available", classify: async () => { classifierCalls += 1; return null; } };
+  const plan = { status: "education_required", teaching_authorized: true, planned_skills: [{ id: "meeting-prep" }] };
+  const skillRouting = {
+    structuredPlannedSkills: () => [{ id: "meeting-prep" }],
+    plan: async () => plan,
+    formatSkillPlan: () => "Choose a model for meeting-prep: 1, 2, or 3.",
+    consumeChoice: async () => null,
+  };
+  const interceptor = harness(normalizeConfig({ mode: "intelligence" }), { seam, skillRouting });
+  assert.deepEqual(
+    await interceptor.preflight({ prompt: "Prepare me" }, { sessionKey: "skill-education" }),
+    {
+      handled: true,
+      reply: { text: "Choose a model for meeting-prep: 1, 2, or 3." },
+      reason: "togglelogic_skill_education_required",
+    },
+  );
+  assert.equal(classifierCalls, 0);
+});
+
+test("owner-taught skill choice routes the continuation and outranks session routing", async () => {
+  const skillRouting = {
+    structuredPlannedSkills: () => [],
+    consumeChoice: async (prompt) => prompt === "3" ? {
+      override: { providerOverride: "google", modelOverride: "gemini-3.5-flash" },
+      modelRef: "google/gemini-3.5-flash",
+      details: {
+        matched_rule: "owner_taught_skill_profile",
+        planned_skills: [{ id: "meeting-prep" }],
+        model_lineage: "google/gemini-flash",
+        resolved_child: "google/gemini-3.5-flash",
+      },
+    } : null,
+  };
+  const interceptor = harness(normalizeConfig({ mode: "intelligence" }), { skillRouting });
+  assert.deepEqual(
+    await interceptor({ prompt: "3" }, { sessionKey: "skill-choice" }),
+    { providerOverride: "google", modelOverride: "gemini-3.5-flash" },
+  );
+});
+
+test("skill-profile write errors honor fail-open routing policy", async () => {
+  const skillRouting = {
+    structuredPlannedSkills: () => [],
+    consumeChoice: async () => { throw new Error("profile lock held"); },
+  };
+  const interceptor = harness(normalizeConfig({ mode: "passthrough" }), { skillRouting });
+  assert.deepEqual(await interceptor({ prompt: "TL-abcdef 2" }, { sessionKey: "skill-write-error" }), {});
 });

@@ -23,6 +23,11 @@ import { FamilyResolver } from "./routing/family-resolver.js";
 import { createNewSessionTracker } from "./routing/new-session-tracker.js";
 import { createApprovalGate } from "./governance/approval-gate.js";
 import { createPricing } from "./usage/pricing.js";
+import {
+  createSkillRoutingCoordinator,
+  createSkillRoutingRunTool,
+  createSkillRoutingTool,
+} from "./skill-routing/coordinator.js";
 
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 
@@ -33,8 +38,13 @@ import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
  * execution surface from the gateway's OWN config. Defensive: any shape issue
  * yields an empty map.
  */
-function buildRuntimeConfigFromApiConfig(cfg) {
-  const out = { byProvider: {}, byModel: {} };
+export function buildRuntimeConfigFromApiConfig(cfg) {
+  const out = { byProvider: {}, byModel: {}, acceptedModelRefs: [] };
+  const addAccepted = (ref) => {
+    if (typeof ref === "string" && ref.includes("/") && !out.acceptedModelRefs.includes(ref)) {
+      out.acceptedModelRefs.push(ref);
+    }
+  };
   try {
     const providers = (cfg && cfg.models && cfg.models.providers) || {};
     for (const [prov, v] of Object.entries(providers)) {
@@ -44,9 +54,16 @@ function buildRuntimeConfigFromApiConfig(cfg) {
     const models = cfg && cfg.agents && cfg.agents.defaults && cfg.agents.defaults.models;
     if (models) {
       for (const [ref, v] of Object.entries(models)) {
+        addAccepted(ref);
         const rt = v && v.agentRuntime && v.agentRuntime.id;
         if (typeof rt === "string" && rt) out.byModel[ref] = rt;
       }
+    }
+    const hostModel = cfg?.agents?.defaults?.model;
+    if (typeof hostModel === "string") addAccepted(hostModel);
+    else if (hostModel && typeof hostModel === "object") {
+      addAccepted(hostModel.primary);
+      for (const ref of Array.isArray(hostModel.fallbacks) ? hostModel.fallbacks : []) addAccepted(ref);
     }
   } catch (_) { /* fall back to engine defaults */ }
   return out;
@@ -161,6 +178,14 @@ export const CAPABILITIES = [
         version,
         newSessions.consume,
       );
+      const skillRouting = config.features.skillRouting.enabled
+        ? createSkillRoutingCoordinator({
+            seam,
+            config: config.skillRouting,
+            fallbackLogger,
+            shadow: config.intelligence.shadow,
+          })
+        : null;
       const interceptor = createInterceptor({
         config,
         hostConfig: api && api.config,
@@ -171,6 +196,7 @@ export const CAPABILITIES = [
         familyResolver,
         configuredProviders,
         governedEscalation,
+        skillRouting,
       });
       api.on("session_start", (event, hookContext) => {
         newSessions.mark({
@@ -179,8 +205,23 @@ export const CAPABILITIES = [
         });
       });
       api.on("before_model_resolve", interceptor, { priority: 100 });
+      if (skillRouting) {
+        api.registerTool(
+          (toolContext) => createSkillRoutingTool(skillRouting, toolContext),
+          { name: "togglelogic_skill_plan" },
+        );
+        api.registerTool(
+          (toolContext) => createSkillRoutingRunTool(skillRouting, api.runtime, config.skillRouting, toolContext),
+          { name: "togglelogic_skill_run" },
+        );
+      }
+      if (governedEscalation || skillRouting) {
+        api.on("before_agent_reply", (event, hookContext) => interceptor.preflight({
+          ...event,
+          prompt: event?.cleanedBody || event?.prompt || "",
+        }, hookContext), { priority: 100 });
+      }
       if (governedEscalation) {
-        api.on("before_agent_reply", (event, hookContext) => interceptor.preflight({ prompt: event?.cleanedBody || "" }, hookContext), { priority: 100 });
         api.on("before_agent_run", governedEscalation.beforeAgentRun, { priority: 100 });
         api.on("agent_turn_prepare", governedEscalation.prepareTurn, { priority: 100 });
         api.on("llm_output", governedEscalation.observeOutput, { priority: 100 });
@@ -207,9 +248,18 @@ export const CAPABILITIES = [
       });
 
       return {
-        hooks: ["session_start", "before_model_resolve", ...(governedEscalation ? ["before_agent_reply", "before_agent_run", "agent_turn_prepare", "llm_output", "message_sending", "reply_payload_sending"] : [])],
+        hooks: [
+          "session_start",
+          "before_model_resolve",
+          ...(governedEscalation || skillRouting ? ["before_agent_reply"] : []),
+          ...(governedEscalation ? ["before_agent_run", "agent_turn_prepare", "llm_output", "message_sending", "reply_payload_sending"] : []),
+        ],
         intelligence: { enabled: config.intelligence.enabled },
         fallbackPlan: { status: fallbackPlan.status },
+        skillRouting: {
+          enabled: Boolean(skillRouting),
+          tools: skillRouting ? ["togglelogic_skill_plan", "togglelogic_skill_run"] : [],
+        },
       };
     },
   },

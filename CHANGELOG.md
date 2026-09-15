@@ -2,6 +2,23 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.6.0 — 2026-09-15
+
+- Add the opt-in `togglelogic_skill_plan` simulator,
+  `togglelogic_skill_run` child-execution tool, and structured planned-skill
+  routing contract for the paired Intelligence 1.4 layer.
+- Add restart-safe educational choice state, exact owner selection handling,
+  and learned-route continuation without changing production defaults.
+- Add cost-parity presentation and lineage-plus-child receipts for skill
+  decisions.
+- Treat host-configured model refs as authoritative candidates when an embedded
+  profile's independent CLI reachability probe cannot see the gateway context.
+- Fail loudly on child execution timeout/error and structurally prevent nested
+  ToggleLogic child dispatch.
+- Fail closed when a pending owner choice was sender-bound but the reply lacks
+  the matching sender identity.
+- Keep the feature disabled by default pending shadow and production gates.
+
 ## 1.5.1 — 2026-09-14
 
 - Add an opt-in ordered host plan spanning a primary model family and fallback

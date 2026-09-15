@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { FamilyResolver } from "../src/routing/family-resolver.js";
 import {
+  buildRuntimeConfigFromApiConfig,
   compareHostFallbackPlan,
   configuredProvidersFromApiConfig,
   hostModelChainFromApiConfig,
@@ -199,6 +200,17 @@ test("configured providers come only from OpenClaw provider configuration", () =
     models: { "openai/gpt": {} },
   } } }), ["anthropic", "google", "openai", "xai"]);
   assert.deepEqual(configuredProvidersFromApiConfig({}), []);
+});
+
+test("host-configured model refs are authoritative routing candidates", () => {
+  const runtime = buildRuntimeConfigFromApiConfig({ agents: { defaults: {
+    model: { primary: "google/gemini", fallbacks: ["anthropic/haiku"] },
+    models: { "ollama/glm4:9b": {}, "openai/gpt": { agentRuntime: { id: "sandboxed" } } },
+  } } });
+  assert.deepEqual(runtime.acceptedModelRefs.sort(), [
+    "anthropic/haiku", "google/gemini", "ollama/glm4:9b", "openai/gpt",
+  ]);
+  assert.equal(runtime.byModel["openai/gpt"], "sandboxed");
 });
 
 test("host plan comparison reports alignment and drift without mutating host config", () => {

@@ -8,6 +8,7 @@ npm test
 node --check src/index.js
 node --check src/routing/family-resolver.js
 node --check src/routing/modes.js
+node --check src/skill-routing/coordinator.js
 node --check src/usage/pricing.js
 node - <<'NODE'
 const fs = require('node:fs');

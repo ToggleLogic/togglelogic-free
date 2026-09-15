@@ -32,6 +32,12 @@ you configure in OpenClaw.
 - **Optional model-family aliases.** Name a family for a configured route and
   resolve it only within providers you have approved. Resolution safely passes
   through when freshness, provider, or price requirements are not satisfied.
+- **Optional skill-aware routing (1.6).** With a compatible
+  Intelligence layer, SAM declares the exact skills it plans to invoke. A new
+  or changed skill produces owner-facing cost, benchmark, and Intelligence
+  choices; the learned strategy or model lineage is then reused without asking
+  again. Numbered model children remain execution-time resolutions, not durable
+  pins.
 
 ## What it does not do
 
@@ -123,6 +129,48 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
 
 Bring your own provider credentials. Set your routing policy. The evidence stays
 local.
+
+### Skill-aware routing (1.6)
+
+This capability is opt-in and requires ToggleLogic Intelligence 1.4. SAM uses
+`togglelogic_skill_run` for normal work: it plans the named skills and executes
+a learned route in a child run pinned to the current accepted lineage child.
+`togglelogic_skill_plan` is the read-only simulator. An integration can instead
+provide `plannedSkills` / `metadata.skillId` as structured hook data. Free never
+guesses a skill by inspecting prompt text.
+
+The execution tool runs only in an OpenClaw gateway request context. It keeps
+the child model's skill tools available, blocks nested ToggleLogic child
+dispatch structurally, fails loudly on child timeout/error, and records the actual child
+provider/model. Host-configured model refs are passed to Intelligence as
+authoritative accepted routing candidates.
+
+```json
+{
+  "plugins": { "entries": { "togglelogic": {
+    "enabled": true,
+    "hooks": { "allowConversationAccess": true },
+    "config": {
+      "mode": "intelligence",
+      "features": {
+        "routing": { "enabled": true },
+        "skillRouting": { "enabled": true }
+      },
+      "intelligence": {
+        "enabled": true,
+        "skillProfilesPath": "/absolute/path/to/skill-routing-profiles.json"
+      }
+    }
+  } } }
+}
+```
+
+Educational choices are bound to the authenticated owner, session, sender when
+available, short-lived plan, and one-time `TL-xxxxxx` token. The displayed
+token plus `1`, `2`, or `3` teaches the profile. Local inference is not reported as free:
+the Intelligence economic policy compares cloud estimates against explicit or
+amortized local hardware and operating cost. Installation and production
+activation remain separate actions.
 
 ## License, in brief
 

@@ -37,6 +37,7 @@ export const DEFAULTS = Object.freeze({
     enabled: true,
     path: "~/togglelogic-intelligence",
     registryPath: "",
+    skillProfilesPath: "",
     shadow: false,
     fallbackOnError: true,
     allowReleaseCandidate: false,
@@ -46,6 +47,7 @@ export const DEFAULTS = Object.freeze({
     ownerOverrideAsk: Object.freeze({ enabled: false }),
     costVisibility: Object.freeze({ enabled: false }),
     governedEscalation: Object.freeze({ enabled: false }),
+    skillRouting: Object.freeze({ enabled: false }),
   }),
   audit: Object.freeze({
     enabled: true,
@@ -91,6 +93,13 @@ export const DEFAULTS = Object.freeze({
     }),
     displayNames: Object.freeze({ providers: Object.freeze({}), models: Object.freeze({}) }),
   }),
+  skillRouting: Object.freeze({
+    pendingStatePath: "~/.openclaw/togglelogic/skill-routing-pending.json",
+    pendingTtlMinutes: 15,
+    defaultEstimatedTokens: 4000,
+    executionTimeoutSeconds: 600,
+    monthlyCloudSpendUsd: 0,
+  }),
 });
 
 export function normalizeConfig(raw) {
@@ -129,6 +138,10 @@ export function normalizeConfig(raw) {
         typeof intelligence.registryPath === "string" && intelligence.registryPath.length > 0
           ? intelligence.registryPath
           : "",
+      skillProfilesPath:
+        typeof intelligence.skillProfilesPath === "string" && intelligence.skillProfilesPath.length > 0
+          ? intelligence.skillProfilesPath
+          : "",
       shadow: intelligence.shadow === true,
       fallbackOnError: intelligence.fallbackOnError !== false,
       allowReleaseCandidate: intelligence.allowReleaseCandidate === true,
@@ -138,6 +151,7 @@ export function normalizeConfig(raw) {
       ownerOverrideAsk: normalizeFeatureEntry(features.ownerOverrideAsk, DEFAULTS.features.ownerOverrideAsk),
       costVisibility: normalizeFeatureEntry(features.costVisibility, DEFAULTS.features.costVisibility),
       governedEscalation: normalizeFeatureEntry(features.governedEscalation, DEFAULTS.features.governedEscalation),
+      skillRouting: normalizeFeatureEntry(features.skillRouting, DEFAULTS.features.skillRouting),
     },
     audit: {
       enabled: audit.enabled !== false,
@@ -153,6 +167,24 @@ export function normalizeConfig(raw) {
     ownerOverride: normalizeOwnerOverrideEntry(r.ownerOverride),
     costVisibility: normalizeCostVisibility(r.costVisibility),
     governedEscalation: normalizeGovernedEscalation(r.governedEscalation),
+    skillRouting: normalizeSkillRouting(r.skillRouting),
+  };
+}
+
+function normalizeSkillRouting(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const defaults = DEFAULTS.skillRouting;
+  return {
+    pendingStatePath: typeof r.pendingStatePath === "string" && r.pendingStatePath.length > 0
+      ? r.pendingStatePath : defaults.pendingStatePath,
+    pendingTtlMinutes: Number.isFinite(r.pendingTtlMinutes) && r.pendingTtlMinutes >= 1
+      ? Math.floor(r.pendingTtlMinutes) : defaults.pendingTtlMinutes,
+    defaultEstimatedTokens: Number.isFinite(r.defaultEstimatedTokens) && r.defaultEstimatedTokens >= 1
+      ? Math.floor(r.defaultEstimatedTokens) : defaults.defaultEstimatedTokens,
+    executionTimeoutSeconds: Number.isFinite(r.executionTimeoutSeconds) && r.executionTimeoutSeconds >= 30 && r.executionTimeoutSeconds <= 3600
+      ? Math.floor(r.executionTimeoutSeconds) : defaults.executionTimeoutSeconds,
+    monthlyCloudSpendUsd: Number.isFinite(r.monthlyCloudSpendUsd) && r.monthlyCloudSpendUsd >= 0
+      ? r.monthlyCloudSpendUsd : defaults.monthlyCloudSpendUsd,
   };
 }
 

@@ -1,10 +1,13 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Free-tier model routing for OpenClaw: apply static routes, opt-in provider-constrained family aliases, a simple static cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no Intelligence engine or production model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. The separate source-available ToggleLogic Intelligence package can add capability-aware automatic selection; eligible startups register before commercial production use. ToggleLogic Free is source-available under License 2.0 (see LICENSE).",
   "activation": {
     "onStartup": true
+  },
+  "contracts": {
+    "tools": ["togglelogic_skill_plan", "togglelogic_skill_run"]
   },
   "enabledByDefault": true,
   "configSchema": {
@@ -93,6 +96,7 @@
           "enabled": { "type": "boolean", "default": true, "description": "Whether to attempt to detect a separately licensed Intelligence installation at startup." },
           "path": { "type": "string", "default": "~/togglelogic-intelligence", "description": "Filesystem path where a compatible Intelligence installation is located. Tilde expansion supported." },
           "registryPath": { "type": "string", "description": "Optional path to the licensed layer's normalized model registry. Config-driven (deployment DATA); when unset, defaults to a path relative to the layer (<path>/normalized.json). No workspace path is hardcoded. Tilde expansion supported." },
+          "skillProfilesPath": { "type": "string", "description": "Optional path to owner-taught skill routing profiles. When unset, Intelligence uses ~/.openclaw/togglelogic/skill-routing-profiles.json. Tilde expansion supported." },
           "shadow": { "type": "boolean", "default": false, "description": "When true, evaluate and audit Intelligence decisions but never emit a model override. Use for a versioned canary before enabling live routing." },
           "fallbackOnError": { "type": "boolean", "default": true, "description": "If true, errors from the intelligence layer yield no override (OpenClaw falls back to its default selection)." }
           ,"allowReleaseCandidate": { "type": "boolean", "default": false, "description": "Explicitly allow a private Intelligence release candidate for controlled canary use. Production default remains fail-closed to released builds." }
@@ -136,7 +140,25 @@
             "additionalProperties": false,
             "description": "One-time owner approval gate for Intelligence-recommended external-model escalation. Requires routing and conversation access. Opt-in; default off.",
             "properties": { "enabled": { "type": "boolean", "default": false, "description": "Whether to register pre-run escalation approval and execution-receipt hooks." } }
+          },
+          "skillRouting": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Owner-taught, benchmark-backed routing by declared skill. Adds simulation and child-execution tools plus structured preflight support. Requires routing and a compatible Intelligence layer.",
+            "properties": { "enabled": { "type": "boolean", "default": false, "description": "Whether to enable skill planning and learned skill profiles." } }
           }
+        }
+      },
+      "skillRouting": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Runtime settings for the owner-taught skill routing coordinator. Model choice and benchmark logic remain in the separate Intelligence layer.",
+        "properties": {
+          "pendingStatePath": { "type": "string", "default": "~/.openclaw/togglelogic/skill-routing-pending.json", "description": "Mode-0600 restart-safe state for an unanswered educational choice." },
+          "pendingTtlMinutes": { "type": "integer", "minimum": 1, "default": 15 },
+          "defaultEstimatedTokens": { "type": "integer", "minimum": 1, "default": 4000 },
+          "executionTimeoutSeconds": { "type": "integer", "minimum": 30, "maximum": 3600, "default": 600 },
+          "monthlyCloudSpendUsd": { "type": "number", "minimum": 0, "default": 0, "description": "Deployment-supplied month-to-date cloud model spend used for preflight estimates and learned-profile budget eligibility. Update it from the authoritative billing or cost ledger." }
         }
       },
       "governedEscalation": {
