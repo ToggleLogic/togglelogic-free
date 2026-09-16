@@ -47,7 +47,18 @@ export function buildIndex({ modelsDev, fallback, userOverride } = {}) {
     // Half-null and 0/0 feed rows are incomplete placeholders, not priced calls.
     if (val.inputPerM == null || val.outputPerM == null) return;
     if (val.inputPerM <= 0 || val.outputPerM <= 0) return;
-    for (const k of keys) if (!idx.has(k)) idx.set(k, val);
+    // Cache-tier rates are OPTIONAL: keep them only when the source states a
+    // positive rate, so `costUsd` can price cache tokens from source truth
+    // instead of a proxy. A null cache rate is not an error — it just means the
+    // proxy multiplier applies and the basis is reported loudly.
+    const cleaned = {
+      inputPerM: val.inputPerM,
+      outputPerM: val.outputPerM,
+      source: val.source,
+      ...(Number.isFinite(val.cacheReadPerM) && val.cacheReadPerM > 0 ? { cacheReadPerM: val.cacheReadPerM } : {}),
+      ...(Number.isFinite(val.cacheWritePerM) && val.cacheWritePerM > 0 ? { cacheWritePerM: val.cacheWritePerM } : {}),
+    };
+    for (const k of keys) if (!idx.has(k)) idx.set(k, cleaned);
   };
 
   // 1) deployment-supplied override (DATA) — highest priority.
@@ -79,6 +90,10 @@ export function buildIndex({ modelsDev, fallback, userOverride } = {}) {
         insert(feedIndexKeys(p, mid), {
           inputPerM: num(cost.input),
           outputPerM: num(cost.output),
+          // Models.dev exposes cache tiers on many models; names vary, so accept
+          // the common spellings. Absent → proxy multiplier applies downstream.
+          cacheReadPerM: num(cost.cache_read ?? cost.cacheRead ?? cost.input_cache_read ?? cost.cached_input),
+          cacheWritePerM: num(cost.cache_write ?? cost.cacheWrite ?? cost.input_cache_write),
           source: "models.dev",
         });
       }
@@ -91,6 +106,8 @@ export function buildIndex({ modelsDev, fallback, userOverride } = {}) {
       insert(feedIndexKeys(e.p, e.m), {
         inputPerM: num(e.i),
         outputPerM: num(e.o),
+        cacheReadPerM: num(e.cr),
+        cacheWritePerM: num(e.cw),
         source: "bundled",
       });
     }
@@ -116,6 +133,18 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
   const refreshMs = Math.max(1, cfg.refreshHours ?? 24) * 3600 * 1000;
   const timeoutMs = Math.max(1000, cfg.timeoutMs ?? 15000);
   const sourceUrl = cfg.sourceUrl ?? MODELS_DEV_URL;
+  // Cache-token proxy multipliers, applied to the INPUT rate ONLY when the
+  // source has no explicit cache-tier rate. Documented, defensible defaults:
+  // cache READS bill at a discount (0.25x is the common cache-hit rate across
+  // Anthropic/Google/OpenAI); cache WRITES bill at ~1x input. This replaces the
+  // old "cache billed at full input rate" behaviour that overstated the
+  // 2026-09-15 incident cost ~1.9x. When a proxy is used the row/receipt carry
+  // cacheBasis:"input-rate-proxy" so ToggleLogic and the owner receipt reconcile
+  // on ONE calculation and never silently disagree.
+  const cacheReadMultiplier = Number.isFinite(cfg.cacheReadMultiplier) && cfg.cacheReadMultiplier >= 0
+    ? cfg.cacheReadMultiplier : 0.25;
+  const cacheWriteMultiplier = Number.isFinite(cfg.cacheWriteMultiplier) && cfg.cacheWriteMultiplier >= 0
+    ? cfg.cacheWriteMultiplier : 1.0;
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
   const now = deps.now ?? (() => Date.now());
 
@@ -205,7 +234,10 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
       if (v) {
         return {
           ref, provider: providerOf(ref), curated: true, priced: true,
-          inputPerM: v.inputPerM, outputPerM: v.outputPerM, source: v.source, matched: k,
+          inputPerM: v.inputPerM, outputPerM: v.outputPerM,
+          ...(Number.isFinite(v.cacheReadPerM) ? { cacheReadPerM: v.cacheReadPerM } : {}),
+          ...(Number.isFinite(v.cacheWritePerM) ? { cacheWritePerM: v.cacheWritePerM } : {}),
+          source: v.source, matched: k,
         };
       }
     }
@@ -213,21 +245,63 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
   }
 
   /**
-   * Dollar cost for a resolved price + token usage. Cache tokens are billed at the
-   * standard input rate here (a conservative, source-agnostic estimate — precise
-   * cache-tier pricing is a paid-registry concern). Returns null when unpriced.
+   * The ONE cache-token-aware cost calculation. Cache reads and writes are
+   * priced from SOURCE cache-tier rates when the feed supplies them; otherwise
+   * from the input rate times a documented proxy multiplier. The returned
+   * breakdown names the cache basis so every consumer (the cost log AND the
+   * owner-facing receipt) reconciles on this single function instead of each
+   * inventing its own cache math. Returns null (never a $0.00 stand-in) when the
+   * model is unpriced.
    */
-  function costUsd(priceInfo, usage) {
+  function costBreakdown(priceInfo, usage) {
     if (!priceInfo || !priceInfo.priced) return null;
     if (priceInfo.inputPerM == null || priceInfo.outputPerM == null) return null;
     if (priceInfo.inputPerM <= 0 || priceInfo.outputPerM <= 0) return null;
     const inTok = num(usage?.input) ?? 0;
     const outTok = num(usage?.output) ?? 0;
-    const cacheTok = (num(usage?.cacheRead) ?? 0) + (num(usage?.cacheWrite) ?? 0);
+    const cacheReadTok = num(usage?.cacheRead) ?? 0;
+    const cacheWriteTok = num(usage?.cacheWrite) ?? 0;
     const inRate = priceInfo.inputPerM;
     const outRate = priceInfo.outputPerM;
-    return ((inTok + cacheTok) * inRate + outTok * outRate) / 1e6;
+
+    const readRateKnown = Number.isFinite(priceInfo.cacheReadPerM) && priceInfo.cacheReadPerM > 0;
+    const writeRateKnown = Number.isFinite(priceInfo.cacheWritePerM) && priceInfo.cacheWritePerM > 0;
+    const readRate = readRateKnown ? priceInfo.cacheReadPerM : inRate * cacheReadMultiplier;
+    const writeRate = writeRateKnown ? priceInfo.cacheWritePerM : inRate * cacheWriteMultiplier;
+
+    const inputUsd = (inTok * inRate) / 1e6;
+    const outputUsd = (outTok * outRate) / 1e6;
+    const cacheReadUsd = (cacheReadTok * readRate) / 1e6;
+    const cacheWriteUsd = (cacheWriteTok * writeRate) / 1e6;
+    const total = inputUsd + outputUsd + cacheReadUsd + cacheWriteUsd;
+
+    const hasCache = cacheReadTok > 0 || cacheWriteTok > 0;
+    const cacheRatesKnown = (cacheReadTok === 0 || readRateKnown) && (cacheWriteTok === 0 || writeRateKnown);
+    const cacheBasis = !hasCache
+      ? "no-cache-tokens"
+      : cacheRatesKnown ? "source-cache-rate" : "input-rate-proxy";
+
+    return {
+      total, inputUsd, outputUsd, cacheReadUsd, cacheWriteUsd,
+      inTok, outTok, cacheReadTok, cacheWriteTok,
+      cacheReadRatePerM: hasCache ? readRate : null,
+      cacheWriteRatePerM: hasCache ? writeRate : null,
+      cacheBasis, cacheRatesKnown, source: priceInfo.source,
+    };
   }
 
-  return { resolve, costUsd, ensureIndex, buildIndex, _paths: { cachePath, overridePath, sourceUrl } };
+  /**
+   * Dollar total for a resolved price + usage — the single reconciled figure.
+   * Returns null when unpriced.
+   */
+  function costUsd(priceInfo, usage) {
+    const breakdown = costBreakdown(priceInfo, usage);
+    return breakdown ? breakdown.total : null;
+  }
+
+  return {
+    resolve, costUsd, costBreakdown, ensureIndex, buildIndex,
+    cacheMultipliers: { read: cacheReadMultiplier, write: cacheWriteMultiplier },
+    _paths: { cachePath, overridePath, sourceUrl },
+  };
 }

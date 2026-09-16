@@ -25,6 +25,7 @@ export async function createAdapter({
   intelligencePath,
   version,
   shadow = false,
+  skillProfilesPath = "",
   fallbackLogger,
   consumeNewSession = null,
 }) {
@@ -54,6 +55,9 @@ export async function createAdapter({
     }
   }
   let classifyFn = null;
+  let planSkillsFn = null;
+  let recordSkillChoiceFn = null;
+  let updateMonthlyCloudBudgetFn = null;
   let waitForReachabilityFn = null;
   try {
     const classifierUrl = new URL(
@@ -61,6 +65,9 @@ export async function createAdapter({
     ).href;
     const mod = await import(classifierUrl);
     classifyFn = mod.classify;
+    planSkillsFn = typeof mod.planSkills === "function" ? mod.planSkills : null;
+    recordSkillChoiceFn = typeof mod.recordSkillChoice === "function" ? mod.recordSkillChoice : null;
+    updateMonthlyCloudBudgetFn = typeof mod.updateMonthlyCloudBudget === "function" ? mod.updateMonthlyCloudBudget : null;
     waitForReachabilityFn = typeof mod.waitForReachability === "function"
       ? mod.waitForReachability
       : null;
@@ -111,7 +118,28 @@ export async function createAdapter({
         ...(runtimeConfig ? { runtimeConfig } : {}),
         routeGeneralPurposeOnMiss,
       };
-      let result = classifyFn(prompt, context);
+      let skillPlan = null;
+      if (planSkillsFn && Array.isArray(request?.plannedSkills) && request.plannedSkills.length > 0) {
+        skillPlan = planSkillsFn(prompt, {
+          ...context,
+          plannedSkills: request.plannedSkills,
+          estimatedTokens: request.estimatedTokens,
+          monthlyCloudSpendUsd: request.monthlyCloudSpendUsd,
+          // Deployment-owned capability requirements (routing constraints) combined
+          // with the task classifier and any learned profile inside planSkills.
+          ...(request.skillRequirements ? { skillRequirements: request.skillRequirements } : {}),
+          ...(skillProfilesPath ? { skillProfilesPath } : {}),
+        });
+      }
+      let result = skillPlan?.status === "selected" && skillPlan.selected_model_ref
+        ? {
+            ...skillPlan.task_decision,
+            recommended_model_ref: skillPlan.selected_model_ref,
+            matched_rule: `skill_profile:${skillPlan.planned_skills.map((item) => item.id).join(",")}`,
+            reasoning: `learned skill routing profile selected ${skillPlan.selected_lineage || skillPlan.strategy}`,
+            skill_routing: skillPlan,
+          }
+        : classifyFn(prompt, context);
       const key = sessionKey(request);
       const now = Date.now();
       pruneContinuity(now);
@@ -158,6 +186,7 @@ export async function createAdapter({
         family_routing: result.family_routing ?? null,
         pin_matched: result.pin_matched ?? null,
         pin_resolution: result.pin_resolution ?? null,
+        skill_routing: result.skill_routing ?? skillPlan,
       };
       if (shadow === true) return { shadow: true, details };
       return { ...override, details };
@@ -173,8 +202,45 @@ export async function createAdapter({
     }
   }
 
+  async function planSkillRoute(request, runtimeConfig) {
+    if (!planSkillsFn) return null;
+    const prompt = request?.prompt;
+    if (typeof prompt !== "string" || !prompt.trim()) return null;
+    if (!Array.isArray(request?.plannedSkills) || request.plannedSkills.length === 0) return null;
+    if (waitForReachabilityFn) await waitForReachabilityFn(10_000);
+    return planSkillsFn(prompt, {
+      runtimeConfig,
+      plannedSkills: request.plannedSkills,
+      estimatedTokens: request.estimatedTokens,
+      monthlyCloudSpendUsd: request.monthlyCloudSpendUsd,
+      // Deployment-owned capability requirements (routing constraints), combined
+      // with the task classifier and any learned profile inside planSkills.
+      ...(request.skillRequirements ? { skillRequirements: request.skillRequirements } : {}),
+      ...(skillProfilesPath ? { skillProfilesPath } : {}),
+    });
+  }
+
+  function recordSkillChoice(input, runtimeConfig) {
+    if (!recordSkillChoiceFn) throw new Error("installed Intelligence layer does not support skill-profile learning");
+    return recordSkillChoiceFn(input, {
+      runtimeConfig,
+      ...(skillProfilesPath ? { skillProfilesPath } : {}),
+    });
+  }
+
+  function updateMonthlyCloudBudget(monthlyBudgetUsd, runtimeConfig) {
+    if (!updateMonthlyCloudBudgetFn) throw new Error("installed Intelligence layer does not support budget updates");
+    return updateMonthlyCloudBudgetFn(monthlyBudgetUsd, {
+      runtimeConfig,
+      ...(skillProfilesPath ? { skillProfilesPath } : {}),
+    });
+  }
+
   return {
     classify,
+    planSkillRoute,
+    recordSkillChoice,
+    updateMonthlyCloudBudget,
     version,
     isStub: classifyFn === null,
   };

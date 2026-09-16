@@ -114,6 +114,9 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam, f
       const choice = await seam.classify({
         prompt: event?.prompt,
         attachments: event?.attachments,
+        plannedSkills: event?.plannedSkills,
+        estimatedTokens: event?.estimatedTokens,
+        monthlyCloudSpendUsd: event?.monthlyCloudSpendUsd,
         hookContext,
       });
       if (choice && choice.shadow === true) {

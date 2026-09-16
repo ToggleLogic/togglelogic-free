@@ -89,7 +89,7 @@ function sameSelection(left, right) {
   return leftRef === rightRef;
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit, familyResolver, configuredProviders = [], governedEscalation = null }) {
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, familyResolver, configuredProviders = [], governedEscalation = null, skillRouting = null }) {
   // OpenClaw re-enters before_model_resolve for each candidate in its fallback
   // chain. Classify the logical turn once; subsequent passes must preserve the
   // host's candidate instead of routing every fallback back to the failed model.
@@ -181,6 +181,13 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       });
       return override;
     }
+
+    // Skill routing is owned entirely by the guaranteed pre-execution gate at
+    // before_agent_reply (interceptor.preflight → skillRouting.handleGate). That
+    // hook fires first and short-circuits the turn with handled:true, so no
+    // resolved-skill turn ever reaches before_model_resolve. This hook therefore
+    // never routes on raw task text for a skill: models are assigned to resolved
+    // skills only, through the bounded child. See coordinator.handleGate.
 
     // Protected user/session pin sits ABOVE the classifier. When the owner has
     // pinned a model for this session (modelOverrideSource = "user", not an auto
@@ -304,6 +311,9 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       const effectiveMode = resolveEffectiveMode(config.mode, seam.status(), config);
       decision.mode = effectiveMode;
 
+      // Skill routing no longer feeds this hook: resolved-skill turns are gated
+      // and bounded-child-executed at before_agent_reply. This path is pure
+      // task-classification routing for non-skill turns.
       const result = await dispatchByMode({
         mode: effectiveMode,
         event,
@@ -416,6 +426,48 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
 
   beforeModelResolve.preflight = async (event, hookContext) => {
     const fingerprint = turnFingerprint(event, hookContext);
+
+    // THE GUARANTEED PRE-EXECUTION GATE. before_agent_reply fires before the
+    // model is resolved/called; returning handled:true here short-circuits the
+    // turn with zero downstream model/tool work. The coordinator resolves skills
+    // deterministically from the message text, enforces canary scope, and routes
+    // resolved skills through the bounded child — replacing the dead
+    // structuredPlannedSkills path that never fired in production.
+    if (skillRouting) {
+      let gate = null;
+      try {
+        gate = await skillRouting.handleGate(event, hookContext);
+      } catch (error) {
+        // handleGate is designed to fail closed internally and not throw for
+        // governed turns; this catch is defense-in-depth. If we can still tell
+        // this is an ACTIVE governed turn, FAIL CLOSED with a handled error
+        // rather than fall through to inline model routing (the incident path).
+        const msg = String(error?.message ?? error);
+        let active = false;
+        try { active = skillRouting.evaluateScope?.(hookContext)?.active === true; } catch { active = false; }
+        _emit(audit, EVENTS.ROUTING_DECISION, {
+          outcome: OUTCOMES.FAILURE,
+          principal: { source: "owner" },
+          subject: { hook: "before_agent_reply" },
+          details: { mode: "skill_routing_gate_error", error: msg.slice(0, 512), active, failClosed: active },
+        });
+        gate = active
+          ? { handled: true, reply: { text: `ToggleLogic could not safely route this governed request right now. To avoid running it unrouted, I've held this turn — please try again shortly.` }, reason: "skill_routing_gate_error" }
+          : null;
+      }
+      if (gate?.audit) {
+        _emit(audit, EVENTS.ROUTING_DECISION, {
+          outcome: gate.handled ? OUTCOMES.SUCCESS : OUTCOMES.NOOP,
+          principal: { source: "owner" },
+          subject: { hook: "before_agent_reply" },
+          details: gate.audit,
+        });
+      }
+      if (gate?.handled) {
+        if (fingerprint) recentTurns.delete(fingerprint);
+        return { handled: true, reply: gate.reply, reason: gate.reason };
+      }
+    }
     const override = await resolveBeforeModel(event, hookContext);
     const invitation = governedEscalation?.pendingInvitation(hookContext);
     if (invitation) {

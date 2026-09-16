@@ -14,6 +14,7 @@ test("public package and OpenClaw manifest share one release identity", () => {
   assert.ok(match, "src/index.js declares PLUGIN_VERSION");
   assert.equal(pkg.version, manifest.version);
   assert.equal(pkg.version, match[1]);
+  assert.deepEqual(manifest.contracts?.tools, ["togglelogic_skill_plan", "togglelogic_skill_run"]);
 });
 
 test("published compatibility metadata preserves the floor and records current validation", () => {

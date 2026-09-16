@@ -77,7 +77,9 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
       const usage = (event && event.usage) || {};
       const inTok = num(usage.input);
       const outTok = num(usage.output);
-      const cacheTok = num(usage.cacheRead) + num(usage.cacheWrite);
+      const cacheReadTok = num(usage.cacheRead);
+      const cacheWriteTok = num(usage.cacheWrite);
+      const cacheTok = cacheReadTok + cacheWriteTok;
 
       const price = await pricing.resolve(ref);
       const priced = !!(price && price.priced);
@@ -91,7 +93,20 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
       const usageValid =
         Number.isFinite(Number(usage.input)) && Number.isFinite(Number(usage.output));
       const costed = priced && usageValid;
-      const cost = costed ? pricing.costUsd(price, usage) : null;
+      // Single reconciled cost math (cache-token aware) shared with the receipt.
+      // Fall back to costUsd for minimal pricing deps that predate costBreakdown.
+      let breakdown = null;
+      if (costed) {
+        if (typeof pricing.costBreakdown === "function") {
+          breakdown = pricing.costBreakdown(price, usage);
+        } else {
+          const total = pricing.costUsd(price, usage);
+          breakdown = Number.isFinite(total)
+            ? { total, cacheBasis: "unavailable", cacheReadUsd: 0, cacheWriteUsd: 0, cacheReadRatePerM: null, cacheWriteRatePerM: null }
+            : null;
+        }
+      }
+      const cost = breakdown ? breakdown.total : null;
 
       const row = {
         schema: "togglelogic.fleet-usage.v1",
@@ -105,6 +120,8 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
         inputTok: inTok,
         outputTok: outTok,
         cacheTok,
+        cacheReadTok,
+        cacheWriteTok,
       };
       if (costed) {
         row.costUsd = round6(cost);
@@ -116,6 +133,15 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
         row.inputPerM = price.inputPerM;
         row.outputPerM = price.outputPerM;
         row.priceSource = price.source;
+        // Cache-token basis is stated LOUDLY so the log and the owner receipt
+        // (both derived from pricing.costBreakdown) reconcile on one number and
+        // never silently diverge. "input-rate-proxy" flags a source without an
+        // explicit cache-tier rate; "source-cache-rate" is provider-stated.
+        row.cacheBasis = breakdown.cacheBasis;
+        row.cacheReadUsd = round6(breakdown.cacheReadUsd);
+        row.cacheWriteUsd = round6(breakdown.cacheWriteUsd);
+        if (Number.isFinite(breakdown.cacheReadRatePerM)) row.cacheReadPerM = breakdown.cacheReadRatePerM;
+        if (Number.isFinite(breakdown.cacheWriteRatePerM)) row.cacheWritePerM = breakdown.cacheWriteRatePerM;
       } else if (priced) {
         // LOUD: the model IS priced, but usage is absent/non-finite — record it as
         // explicitly usage-missing, NEVER as costUsd: 0. Distinct reason from unpriced so

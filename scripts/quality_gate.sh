@@ -8,6 +8,18 @@ npm test
 node --check src/index.js
 node --check src/routing/family-resolver.js
 node --check src/routing/modes.js
+node --check src/skill-routing/coordinator.js
+node --check src/skill-routing/skill-inventory.js
+node --check src/skill-routing/intent-categories.js
+node --check src/skill-routing/intent-recipes.js
+node --check src/skill-routing/calendar-graph.js
+node --check src/skill-routing/calendar-bridge.js
+node --check src/skill-routing/child-tool-guard.js
+node --check src/skill-routing/resolver.js
+node --check src/skill-routing/skill-requirements.js
+node --check src/skill-routing/scope.js
+node --check src/skill-routing/skill-contracts.js
+node --check src/skill-routing/host-affordances.js
 node --check src/usage/pricing.js
 node - <<'NODE'
 const fs = require('node:fs');

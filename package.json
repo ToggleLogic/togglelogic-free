@@ -1,15 +1,18 @@
 {
   "name": "togglelogic",
-  "version": "1.5.1",
+  "version": "1.6.1-rc.11",
+  "private": true,
   "description": "Policy-based model routing for OpenClaw: configured task routes, a deployment-declared cheapest default, persistent owner overrides, local audit records, and cost estimates from public pricing. No prompt inspection. Bring your own provider credentials. Source-available and free for personal, internal, and qualifying startup commercial use. The separate ToggleLogic Intelligence engine is public for inspection and contribution, with registration before qualifying startup production use.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "quality": "bash scripts/quality_gate.sh"
+    "quality": "bash scripts/quality_gate.sh",
+    "inventory:generate": "node scripts/generate-skill-inventory.mjs",
+    "spend:generate": "node scripts/generate-spend-snapshot.mjs",
+    "runtime:refresh": "node scripts/togglelogic-runtime-refresh.mjs"
   },
   "license": "LicenseRef-ToggleLogic-Free-Startup-Commercial-2.0",
-  "private": false,
   "author": "Motherboard, Inc. (https://togglelogic.ai/)",
   "homepage": "https://togglelogic.ai/",
   "repository": {
@@ -33,6 +36,9 @@
   ],
   "files": [
     "src/",
+    "scripts/generate-skill-inventory.mjs",
+    "scripts/generate-spend-snapshot.mjs",
+    "scripts/togglelogic-runtime-refresh.mjs",
     "openclaw.plugin.json",
     "LICENSE",
     "NOTICE.md",
