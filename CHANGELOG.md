@@ -2,6 +2,15 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.6.2 — 2026-09-16 (security-review metadata; pairs with Intelligence 1.4.2)
+
+- Adds a permanent packaged security-review note documenting the plugin's
+  bounded subprocess, pricing-network, local-state, and credential boundaries.
+- Rebuilds the public artifact after ClawHub inconsistently marked 1.6.1
+  suspicious even though the equivalent rc.13 runtime scanned clean and local
+  validation reported zero issues.
+- Routing behavior is unchanged from 1.6.1.
+
 ## 1.6.1 — 2026-09-16 (owner-scoped release; pairs with Intelligence 1.4.1)
 
 - Promotes the tested owner-scoped 1.6 release candidate to stable distribution.
