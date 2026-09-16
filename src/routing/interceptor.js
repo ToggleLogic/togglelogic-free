@@ -182,54 +182,12 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       return override;
     }
 
-    // A numbered reply to an educational skill preflight is a fresh, explicit
-    // owner choice. Persist the learned profile and route this continuation to
-    // the concrete child resolved for the selected lineage/strategy. The global
-    // owner override remains above it; host fallback protection remains below.
-    if (skillRouting) {
-      let taught = null;
-      try {
-        taught = await skillRouting.consumeChoice(event?.prompt, hookContext);
-      } catch (error) {
-        _emit(audit, EVENTS.ROUTING_DECISION, {
-          outcome: OUTCOMES.FAILURE,
-          principal: { source: "owner" },
-          subject: { hook: "before_model_resolve" },
-          details: {
-            mode: "skill_profile_write_failed",
-            error: String(error?.message ?? error).slice(0, 512),
-            fallbackOnError: config.intelligence.fallbackOnError,
-          },
-          correlationId: decision.requestId,
-        });
-        if (!config.intelligence.fallbackOnError) throw error;
-      }
-      if (taught) {
-        decision.mode = "skill_routing";
-        decision.selectedModel = taught.modelRef;
-        decision.selectedProvider = taught.override.providerOverride ?? null;
-        decision.selectionReason = "owner_taught_skill_profile";
-        decision.selectionDetails = taught.details;
-        finalizeDecision(decision);
-        logger.write(decision).catch(() => {});
-        _emit(audit, EVENTS.ROUTING_DECISION, {
-          outcome: OUTCOMES.SUCCESS,
-          principal: { source: "owner" },
-          subject: { hook: "before_model_resolve" },
-          details: {
-            mode: decision.mode,
-            matched_rule: taught.details?.matched_rule ?? null,
-            planned_skills: taught.details?.planned_skills ?? [],
-            model_lineage: taught.details?.model_lineage ?? null,
-            resolved_child: taught.details?.resolved_child ?? taught.modelRef,
-            selectedModel: taught.modelRef,
-            selectionReason: decision.selectionReason,
-          },
-          correlationId: decision.requestId,
-        });
-        return taught.override;
-      }
-    }
+    // Skill routing is owned entirely by the guaranteed pre-execution gate at
+    // before_agent_reply (interceptor.preflight → skillRouting.handleGate). That
+    // hook fires first and short-circuits the turn with handled:true, so no
+    // resolved-skill turn ever reaches before_model_resolve. This hook therefore
+    // never routes on raw task text for a skill: models are assigned to resolved
+    // skills only, through the bounded child. See coordinator.handleGate.
 
     // Protected user/session pin sits ABOVE the classifier. When the owner has
     // pinned a model for this session (modelOverrideSource = "user", not an auto
@@ -353,18 +311,12 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       const effectiveMode = resolveEffectiveMode(config.mode, seam.status(), config);
       decision.mode = effectiveMode;
 
-      const plannedSkills = skillRouting?.structuredPlannedSkills(event, hookContext) || [];
-      const routedEvent = plannedSkills.length > 0 ? {
-        ...event,
-        plannedSkills,
-        estimatedTokens: Number.isFinite(event?.estimatedTokens)
-          ? event.estimatedTokens : config.skillRouting.defaultEstimatedTokens,
-        monthlyCloudSpendUsd: Number.isFinite(event?.monthlyCloudSpendUsd)
-          ? event.monthlyCloudSpendUsd : config.skillRouting.monthlyCloudSpendUsd,
-      } : event;
+      // Skill routing no longer feeds this hook: resolved-skill turns are gated
+      // and bounded-child-executed at before_agent_reply. This path is pure
+      // task-classification routing for non-skill turns.
       const result = await dispatchByMode({
         mode: effectiveMode,
-        event: routedEvent,
+        event,
         hookContext,
         config,
         seam,
@@ -474,43 +426,46 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
 
   beforeModelResolve.preflight = async (event, hookContext) => {
     const fingerprint = turnFingerprint(event, hookContext);
+
+    // THE GUARANTEED PRE-EXECUTION GATE. before_agent_reply fires before the
+    // model is resolved/called; returning handled:true here short-circuits the
+    // turn with zero downstream model/tool work. The coordinator resolves skills
+    // deterministically from the message text, enforces canary scope, and routes
+    // resolved skills through the bounded child — replacing the dead
+    // structuredPlannedSkills path that never fired in production.
     if (skillRouting) {
-      const plannedSkills = skillRouting.structuredPlannedSkills(event, hookContext);
-      if (plannedSkills.length > 0) {
-        try {
-          const skillPlan = await skillRouting.plan({
-            prompt: event?.prompt,
-            plannedSkills,
-            estimatedTokens: event?.estimatedTokens,
-            monthlyCloudSpendUsd: event?.monthlyCloudSpendUsd,
-          }, hookContext);
-          if (skillPlan?.status === "education_required" && skillPlan.teaching_authorized === true && !skillRouting.isShadow) {
-            if (fingerprint) recentTurns.delete(fingerprint);
-            return {
-              handled: true,
-              reply: { text: skillRouting.formatSkillPlan(skillPlan) },
-              reason: "togglelogic_skill_education_required",
-            };
-          }
-          if (!skillRouting.isShadow && ["profile_conflict", "requirements_conflict"].includes(skillPlan?.status)) {
-            if (fingerprint) recentTurns.delete(fingerprint);
-            return {
-              handled: true,
-              reply: { text: skillRouting.formatSkillPlan(skillPlan) },
-              reason: "togglelogic_skill_requirements_conflict",
-            };
-          }
-        } catch (error) {
-          _emit(audit, EVENTS.ROUTING_DECISION, {
-            outcome: OUTCOMES.FAILURE,
-            principal: { source: "agent" },
-            subject: { hook: "before_agent_reply" },
-            details: {
-              mode: "skill_routing_preflight_unavailable",
-              error: String(error?.message ?? error).slice(0, 512),
-            },
-          });
-        }
+      let gate = null;
+      try {
+        gate = await skillRouting.handleGate(event, hookContext);
+      } catch (error) {
+        // handleGate is designed to fail closed internally and not throw for
+        // governed turns; this catch is defense-in-depth. If we can still tell
+        // this is an ACTIVE governed turn, FAIL CLOSED with a handled error
+        // rather than fall through to inline model routing (the incident path).
+        const msg = String(error?.message ?? error);
+        let active = false;
+        try { active = skillRouting.evaluateScope?.(hookContext)?.active === true; } catch { active = false; }
+        _emit(audit, EVENTS.ROUTING_DECISION, {
+          outcome: OUTCOMES.FAILURE,
+          principal: { source: "owner" },
+          subject: { hook: "before_agent_reply" },
+          details: { mode: "skill_routing_gate_error", error: msg.slice(0, 512), active, failClosed: active },
+        });
+        gate = active
+          ? { handled: true, reply: { text: `ToggleLogic could not safely route this governed request right now. To avoid running it unrouted, I've held this turn — please try again shortly.` }, reason: "skill_routing_gate_error" }
+          : null;
+      }
+      if (gate?.audit) {
+        _emit(audit, EVENTS.ROUTING_DECISION, {
+          outcome: gate.handled ? OUTCOMES.SUCCESS : OUTCOMES.NOOP,
+          principal: { source: "owner" },
+          subject: { hook: "before_agent_reply" },
+          details: gate.audit,
+        });
+      }
+      if (gate?.handled) {
+        if (fingerprint) recentTurns.delete(fingerprint);
+        return { handled: true, reply: gate.reply, reason: gate.reason };
       }
     }
     const override = await resolveBeforeModel(event, hookContext);

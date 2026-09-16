@@ -8,6 +8,12 @@ const MAX_STATE_BYTES = 1024 * 1024;
 const MAX_PENDING_SESSIONS = 256;
 const MAX_SKILLS_PER_PLAN = 32;
 
+// The owner-directed fail-safe. On governed SAM, an actionable request that does
+// not resolve to an active installed skill returns this VERBATIM — it is never
+// silently passed to a general model. Named-unavailable skills return it too.
+export const NO_SKILL_FAILSAFE =
+  "I don't have a skill that relates to what you're asking me to do.";
+
 function cleanString(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -18,7 +24,7 @@ function sessionId(hookContext) {
 }
 
 function senderId(hookContext) {
-  const raw = cleanString(hookContext?.requesterSenderId || hookContext?.senderId);
+  const raw = cleanString(hookContext?.requesterSenderId || hookContext?.senderId || hookContext?.channelContext?.sender?.id);
   return raw ? crypto.createHash("sha256").update(raw).digest("hex") : null;
 }
 
@@ -55,12 +61,31 @@ export function structuredPlannedSkills(event = {}, hookContext = {}) {
 }
 
 function parseChoice(text, expectedToken) {
-  const match = String(text || "").trim().match(/^TL-([A-Fa-f0-9]{6})\s+([123])$/);
-  if (!match || match[1].toLowerCase() !== String(expectedToken || "").toLowerCase()) return null;
-  if (match[2] === "1") return "lowest_cost";
-  if (match[2] === "2") return "benchmark_best";
-  if (match[2] === "3") return "intelligence";
+  const normalized = String(text || "").trim();
+  const tokenMatch = normalized.match(/^TL-([A-Fa-f0-9]{6})\s+([123])$/);
+  const choice = tokenMatch
+    ? (tokenMatch[1].toLowerCase() === String(expectedToken || "").toLowerCase() ? tokenMatch[2] : null)
+    : (normalized.match(/^([123])$/)?.[1] || null);
+  if (choice === "1") return "lowest_cost";
+  if (choice === "2") return "benchmark_best";
+  if (choice === "3") return "intelligence";
   return null;
+}
+
+// A message that LOOKS like a token reply (TL-xxxxxx N) — used to distinguish a
+// wrong/replayed token from an ordinary turn so the gate can answer loudly
+// instead of silently falling through to inline execution.
+export function looksLikeChoiceReply(text) {
+  return /^TL-[A-Fa-f0-9]{6}\s+[0-9]+$/.test(String(text || "").trim());
+}
+
+export function parseMonthlyBudgetUpdate(text) {
+  const normalized = String(text || "").trim();
+  const match = normalized.match(/^(?:sam\s*[-,:]\s*)?(?:please\s+)?(?:set|change|increase|raise|update)\s+(?:my\s+)?(?:the\s+)?(?:togglelogic\s+)?(?:(?:monthly|cloud)\s+){0,2}budget(?:\s+from\s+\$?[0-9]+(?:\.[0-9]{1,2})?)?\s+to\s+\$?([0-9]+(?:\.[0-9]{1,2})?)(?:\s*(?:per\s+month|monthly|a\s+month))?[.!]?$/i);
+  if (!match) return null;
+  const monthlyBudgetUsd = Number(match[1]);
+  return Number.isFinite(monthlyBudgetUsd) && monthlyBudgetUsd >= 0 && monthlyBudgetUsd <= 1_000_000
+    ? monthlyBudgetUsd : null;
 }
 
 function modelOverride(modelRef) {
@@ -96,7 +121,7 @@ function money(value, location = "cloud") {
 
 export function formatSkillPlan(plan) {
   const skills = (plan?.planned_skills || []).map((item) => item.id).join(", ") || "none";
-  const lines = [`ToggleLogic skill preflight — planned skills: ${skills}`];
+  const lines = [`I’ll use these skills: ${skills}.`];
   if (plan?.status === "selected") {
     lines.push(`Learned profile: ${plan.strategy}; ${plan.selected_lineage || "lineage unavailable"} → ${plan.selected_model_ref}.`);
     return lines.join("\n");
@@ -109,13 +134,16 @@ export function formatSkillPlan(plan) {
     lines.push("An authenticated owner must start this teaching choice; no routing profile was staged.");
     return lines.join("\n");
   }
-  lines.push("This skill needs an owner-taught routing profile. Choose:");
+  lines.push("Choose a model policy:");
   const labels = { lowest_cost: "Lowest expected cost", benchmark_best: "Benchmark-best within budget", intelligence: "Let ToggleLogic Intelligence decide" };
   (plan.choices || []).forEach((item, index) => {
-    lines.push(`${index + 1}. ${labels[item.kind] || item.kind}: ${item.model_lineage || "unclassified lineage"} → ${item.resolved_child} (${item.location}, ${money(item.estimated_cost_usd, item.location)})`);
+    const overage = item.over_monthly_budget === true
+      ? `; over monthly allowance by $${Number(item.monthly_overage_after_usd || 0).toFixed(2)} after this run`
+      : "";
+    lines.push(`${index + 1}. ${labels[item.kind] || item.kind}: ${item.model_lineage || "unclassified lineage"} → ${item.resolved_child} (${item.location}, ${money(item.estimated_cost_usd, item.location)}${overage})`);
   });
   if (plan.choices_converged === true) {
-    lines.push("All approved strategies currently resolve to the same execution child; the choice teaches the policy to use when the accepted pool changes.");
+    lines.push("All three choices currently use the same model; your choice controls what happens when the available models change.");
   }
   const budget = plan.economic_policy?.effective_monthly_budget_usd
     ?? plan.economic_policy?.monthly_cloud_budget_usd;
@@ -123,14 +151,43 @@ export function formatSkillPlan(plan) {
   lines.push(Number.isFinite(budget)
     ? `Monthly cloud budget: $${budget.toFixed(2)}; headroom: $${Number(headroom || 0).toFixed(2)}.`
     : "Monthly cloud budget: not configured; choices are estimates only.");
-  lines.push(`Reply TL-${plan.choice_token} 1, TL-${plan.choice_token} 2, or TL-${plan.choice_token} 3. The one-time token binds your reply to this exact plan.`);
-  lines.push("The choice is saved for this skill version and used deterministically until its profile is invalidated.");
+  if ((plan.choices || []).some((item) => item.over_monthly_budget === true)) {
+    lines.push("Your cloud budget is used up. Replying with a number approves this one run, or say: Set my ToggleLogic budget to $25 per month.");
+  }
+  lines.push("Reply 1, 2, or 3. I’ll remember the choice for these skill versions.");
   return lines.join("\n");
 }
 
-export function createSkillRoutingCoordinator({ seam, config, fallbackLogger, shadow = false }) {
+function executionFooter(details) {
+  const lineage = details?.model_lineage || details?.selected_lineage || "lineage unavailable";
+  const child = details?.resolved_child || details?.selected_model_ref || "model unavailable";
+  const cost = Number.isFinite(details?.estimated_cost_usd) ? money(details.estimated_cost_usd) : "estimate unavailable";
+  return `— Routed by ToggleLogic to ${lineage} → ${child} in a bounded child session (estimated ${cost}; metered cost is logged separately).`;
+}
+
+export function createSkillRoutingCoordinator({
+  seam,
+  config,
+  fallbackLogger,
+  shadow = false,
+  scope = null,
+  resolver = null,
+  contracts = null,
+  runtime = null,
+  nonAction = null,
+  intentRecipes = null,
+  classifier = null,
+  requirements = null,
+  childToolGuard = null,
+  auditUsage = null,
+  spendProvider = null,
+  auditSpend = null,
+}) {
   const statePath = resolveOpenClawPath(config.pendingStatePath);
   const ttlMs = config.pendingTtlMinutes * 60_000;
+  const maxChildTokens = Number.isFinite(config.maxChildTokens) ? config.maxChildTokens : 200000;
+  const maxChildCostUsd = Number.isFinite(config.maxChildCostUsd) ? config.maxChildCostUsd : 5;
+  const clarifyOnMultiSkill = config.clarifyOnMultiSkill === true;
   let state = { schema_version: 1, pending: {} };
 
   try {
@@ -165,18 +222,120 @@ export function createSkillRoutingCoordinator({ seam, config, fallbackLogger, sh
     if (changed) persist();
   }
 
-  async function plan({ prompt, plannedSkills, estimatedTokens, monthlyCloudSpendUsd }, hookContext = {}) {
+  /**
+   * The SINGLE trusted owner decision for staging an education choice — the SAME
+   * decision that admits a turn into canary scope (scope.isOwner). Prefer the
+   * host's senderIsOwner bit when a hook supplies it; else fall back to the
+   * configured owner-sender allowlist (ownerSenderIds, or the senderIds scope
+   * dimension) matched against the trusted senderId.
+   *
+   * WHY THIS EXISTS (owner-auth propagation defect): before_agent_reply does NOT
+   * carry senderIsOwner, so a configured trusted owner whom scope.evaluate() had
+   * already admitted as an in-scope OWNER turn was still denied the teaching
+   * choice here because plan() re-derived owner status from the raw bit alone
+   * (teaching_authorized=false → "An authenticated owner must start this teaching
+   * choice"). Delegating to scope.isOwner keeps the two owner decisions identical
+   * and NEVER weakens scope: it only ADDS the explicit-allowlist path to the raw
+   * bit (anything senderIsOwner===true authorized before still authorizes). Falls
+   * back to the bare bit when no scope evaluator is wired (e.g. the optional
+   * planning tools in a deployment without a canary scope, or unit fixtures).
+   */
+  function isTrustedOwner(hookContext = {}) {
+    if (scope && typeof scope.isOwner === "function") return scope.isOwner(hookContext) === true;
+    return hookContext?.senderIsOwner === true;
+  }
+
+  /**
+   * Resolve the skills a turn is bound to from PRODUCTION-AVAILABLE inputs:
+   * structured host metadata first (if a host ever supplies it), then the
+   * deterministic prompt resolver. Never guesses.
+   */
+  function resolvePlannedSkills(event = {}, hookContext = {}) {
+    const structured = structuredPlannedSkills(event, hookContext);
+    if (structured.length > 0) {
+      return { status: "resolved", skills: structured, source: "structured_host_metadata", resolution: null };
+    }
+    if (resolver) {
+      const resolution = resolver.resolve(event?.prompt);
+      if (resolution.status === "resolved") {
+        return { status: "resolved", skills: normalizeSkills(resolution.skills), source: "deterministic_resolver", resolution };
+      }
+      return { status: resolution.status, skills: [], source: "deterministic_resolver", resolution };
+    }
+    return { status: "none", skills: [], source: "none", resolution: null };
+  }
+
+  async function plan({ prompt, plannedSkills, estimatedTokens, monthlyCloudSpendUsd, originalTask }, hookContext = {}) {
     const skills = normalizeSkills(plannedSkills);
     if (skills.length === 0) throw new Error("at least one planned skill is required");
+    // DEPLOYMENT-OWNED capability requirements, aggregated (strictest) across the
+    // resolved skills. Passed to Intelligence.planSkills as routing CONSTRAINTS so
+    // first-use education for a tool-using skill excludes general_purpose-only local
+    // rows; combined there with the legacy task classifier and any learned profile.
+    const skillRequirements = requirements && typeof requirements.aggregate === "function"
+      ? requirements.aggregate(skills)
+      : null;
+    // Month-to-date cloud spend. AUTHORITATIVE PRECEDENCE (WI4, 1.6.1-rc.3): when a
+    // live spend provider is wired (skillRouting.spend.enabled), the VALIDATED live
+    // snapshot ALWAYS wins — no caller/event/tool parameter may override it (a
+    // hand-entered zero must never reopen cloud after a valid or exhausted snapshot).
+    // An attempted caller override while live spend is enabled is IGNORED and
+    // AUDITED. A caller value is honored only when live spend is DISABLED (no
+    // provider). Static config is used only when live spend is disabled with no
+    // caller value, or via the documented no-finite-budget fallback (the provider
+    // yields a null effective spend, meaning "unavailable, no finite budget"). When
+    // the live snapshot is unavailable and a finite cloud budget applies, the
+    // provider yields the budget-exhausted sentinel so Intelligence withholds cloud
+    // routes while local-capable routes remain. This runs AFTER skill resolution, so
+    // the universal no-skill fail-safe is never affected by spend.
+    const liveSpendEnabled = Boolean(spendProvider && typeof spendProvider.current === "function");
+    const callerSpendProvided = Number.isFinite(monthlyCloudSpendUsd);
+    let spendResolution = null;
+    let effectiveSpend;
+    if (liveSpendEnabled) {
+      spendResolution = spendProvider.current();
+      effectiveSpend = spendResolution.status === "ok" || spendResolution.cloudSuppressed
+        ? spendResolution.effectiveSpendUsd
+        : config.monthlyCloudSpendUsd; // documented no-finite-budget fallback (provider effective is null)
+      try {
+        auditSpend?.({
+          mode: "skill_spend_resolution",
+          status: spendResolution.status,
+          reason: spendResolution.reason,
+          policy_month: spendResolution.policyMonth ?? null,
+          effective_spend_usd: Number.isFinite(effectiveSpend) ? effectiveSpend : null,
+          cloud_suppressed: spendResolution.cloudSuppressed === true,
+          month_to_date_cost_usd: spendResolution.monthToDateCostUsd ?? null,
+          age_hours: spendResolution.ageHours ?? null,
+          stale: spendResolution.stale === true,
+          delta: spendResolution.delta ?? null,
+          errors: (spendResolution.errors || []).slice(0, 8),
+          planned_skills: skills.map((s) => s.id),
+          // Record any attempted caller/tool override that the live provider overrode.
+          caller_spend_ignored: callerSpendProvided,
+          caller_spend_attempted_usd: callerSpendProvided ? monthlyCloudSpendUsd : null,
+        });
+      } catch { /* audit is best-effort; never raise into planning */ }
+    } else if (callerSpendProvided) {
+      // Live spend disabled: the optional legacy caller value is honored.
+      effectiveSpend = monthlyCloudSpendUsd;
+    } else {
+      effectiveSpend = config.monthlyCloudSpendUsd;
+    }
     const result = await seam.planSkillRoute({
       prompt,
       plannedSkills: skills,
       estimatedTokens: estimatedTokens || config.defaultEstimatedTokens,
-      monthlyCloudSpendUsd: Number.isFinite(monthlyCloudSpendUsd) ? monthlyCloudSpendUsd : config.monthlyCloudSpendUsd,
+      monthlyCloudSpendUsd: Number.isFinite(effectiveSpend) ? effectiveSpend : config.monthlyCloudSpendUsd,
+      ...(skillRequirements ? { skillRequirements } : {}),
     });
     if (!result) throw new Error("ToggleLogic Intelligence skill planning is unavailable");
     const key = sessionId(hookContext);
-    const teachingAuthorized = hookContext?.senderIsOwner === true && shadow !== true;
+    // ONE trusted owner decision (scope.isOwner), NOT the raw senderIsOwner bit —
+    // before_agent_reply omits that bit, so a configured trusted owner would
+    // otherwise be denied the teaching choice on the exact path scope already
+    // admitted as an owner turn. See isTrustedOwner above.
+    const teachingAuthorized = isTrustedOwner(hookContext) && shadow !== true;
     const choiceToken = result.status === "education_required" && teachingAuthorized
       ? crypto.randomBytes(3).toString("hex") : null;
     const authorizedResult = {
@@ -190,6 +349,11 @@ export function createSkillRoutingCoordinator({ seam, config, fallbackLogger, sh
       state.pending[key] = {
         created_at_ms: Date.now(),
         owner_sender_hash: senderId(hookContext),
+        // The bounded task the owner is choosing a route FOR — executed in the
+        // child once the choice arrives, so the routed model is assigned to the
+        // resolved skill work, never to the bare "TL-<token> N" reply text.
+        original_task: cleanString(originalTask ?? prompt),
+        resolved_skills: skills,
         plan: authorizedResult,
       };
       const keys = Object.keys(state.pending);
@@ -224,6 +388,9 @@ export function createSkillRoutingCoordinator({ seam, config, fallbackLogger, sh
         expectedTokens: pending.plan.estimated_tokens,
       });
     }
+    const originalTask = pending.original_task || null;
+    const skills = pending.resolved_skills || pending.plan.planned_skills;
+    const planSnapshot = pending.plan;
     delete state.pending[key];
     persist();
     const override = modelOverride(selected.resolved_child);
@@ -231,6 +398,11 @@ export function createSkillRoutingCoordinator({ seam, config, fallbackLogger, sh
     return {
       override,
       modelRef: selected.resolved_child,
+      originalTask,
+      skills,
+      plan: planSnapshot,
+      choice: selected,
+      strategy: kind,
       details: {
         matched_rule: "owner_taught_skill_profile",
         planned_skills: pending.plan.planned_skills,
@@ -242,7 +414,484 @@ export function createSkillRoutingCoordinator({ seam, config, fallbackLogger, sh
     };
   }
 
-  return { plan, consumeChoice, structuredPlannedSkills, formatSkillPlan, isShadow: shadow === true };
+  /**
+   * Execute bounded skill work in a FRESH child session pinned to the resolved
+   * child, under the skill's execution contract and a token/cost ceiling. This
+   * is the single execution path shared by the run tool and the reply gate; it
+   * is what stops routed skill work from re-running inline against the fat main
+   * session (the 452K-token incident amplification).
+   */
+  async function executeBoundedChild({ callRef, invocation, task, skills, override, modelRef, estimatedTokens, estimatedCostUsd, details, signal, runtime: runtimeOverride }) {
+    const rt = runtimeOverride || runtime;
+    if (!override || !rt?.subagent?.run || !rt?.subagent?.waitForRun || !rt?.subagent?.getSessionMessages) {
+      throw new Error("OpenClaw skill execution runtime is unavailable");
+    }
+    const parentSession = cleanString(invocation?.sessionKey);
+    if (!parentSession) throw new Error("a host-authenticated session is required for skill execution");
+    if (parentSession.includes(":togglelogic-skill:")) {
+      throw new Error("nested ToggleLogic skill execution is not allowed");
+    }
+    // Bounded-child PRE-FLIGHT rejection — this is an ESTIMATE gate, not a
+    // runtime ceiling. OpenClaw 2026.9.4 SubagentRunParams exposes no
+    // model-pass/tool-call/token/cost enforcement field (only disableTools /
+    // toolsAlsoAllow), so the plugin cannot cap the child's live token spend from
+    // here. What it CAN guarantee: a FRESH session (no fat-main history) plus
+    // promptMode:"minimal" + lightContext:true (below), and refusing to even
+    // start a task whose own estimate already blows the budget.
+    const estTokens = Number.isFinite(estimatedTokens) ? estimatedTokens : config.defaultEstimatedTokens;
+    if (estTokens > maxChildTokens) {
+      throw new Error(`skill task estimated at ${estTokens} tokens exceeds the bounded-child ceiling (${maxChildTokens}); refusing to route to prevent fat-session amplification`);
+    }
+    if (Number.isFinite(estimatedCostUsd) && Number.isFinite(maxChildCostUsd) && estimatedCostUsd > maxChildCostUsd) {
+      throw new Error(`skill task estimated at $${estimatedCostUsd.toFixed(2)} exceeds the bounded-child cost ceiling ($${maxChildCostUsd.toFixed(2)}); refusing to route`);
+    }
+    signal?.throwIfAborted?.();
+    const suffix = crypto.createHash("sha256").update(`${parentSession}\0${callRef}`).digest("hex").slice(0, 16);
+    const childSessionKey = `${parentSession}:togglelogic-skill:${suffix}`;
+    const childSessionHash = crypto.createHash("sha256").update(childSessionKey).digest("hex");
+    const skillList = skills.map((item) => item.id).join(", ");
+    const contractPrompt = contracts ? contracts.contractPrompt(skills, task) : null;
+    // Credential-free per-skill execution identity (mailbox/sender/label) actually
+    // applied to this route — for the audit/receipt. Keyed only to the resolved
+    // skills, so it can never carry another skill's mailbox identity.
+    const executionIdentity = contracts && typeof contracts.identityAudit === "function"
+      ? contracts.identityAudit(skills) : [];
+    const extraSystemPrompt = [
+      "This is already a ToggleLogic-routed child execution. Do not call togglelogic_skill_plan or togglelogic_skill_run. Execute the bounded task directly and return only its result.",
+      ...(contractPrompt ? [contractPrompt] : []),
+    ].join("\n\n");
+
+    // Per-skill bounded tool surface. disableTools:true → an exact empty tool
+    // surface (a supported SubagentRunParams field). A non-null allowlist and the
+    // per-run tool-call COUNT ceiling are enforced live on the child by the
+    // before_tool_call guard (see child-tool-guard.js); the host exposes no
+    // model-token/pass cap, so those are the real runtime bounds available.
+    const toolPolicy = contracts && typeof contracts.toolPolicyFor === "function"
+      ? contracts.toolPolicyFor(skills)
+      : { disableTools: false, allowedTools: null, maxToolCalls: null };
+    childToolGuard?.register?.(childSessionKey, {
+      skills,
+      allowedTools: toolPolicy.allowedTools,
+      maxToolCalls: toolPolicy.maxToolCalls,
+    });
+
+    let wait;
+    let run;
+    let text;
+    try {
+      run = await rt.subagent.run({
+        sessionKey: childSessionKey,
+        message: `Execute this bounded task using these planned skills: ${skillList}.\n\nTask:\n${task}`,
+        extraSystemPrompt,
+        provider: override.providerOverride,
+        model: override.modelOverride,
+        deliver: false,
+        idempotencyKey: `togglelogic-skill-${suffix}`,
+        // Supported bounded-context controls (openclaw 2026.9.4 SubagentRunParams):
+        // promptMode:"minimal" uses the bounded subagent prompt instead of the full
+        // conversation prompt, lightContext trims injected runtime context, and
+        // disableTools (when the per-skill policy declares no tools) gives an exact
+        // empty tool surface — together with the fresh session, the real defense
+        // against the 452K-token fat-main-session amplification. (contextTokenBudget
+        // is NOT a supported field and was removed; it silently did nothing.)
+        promptMode: "minimal",
+        lightContext: true,
+        ...(toolPolicy.disableTools ? { disableTools: true } : {}),
+      });
+      wait = await rt.subagent.waitForRun({
+        runId: run.runId,
+        timeoutMs: config.executionTimeoutSeconds * 1000,
+      });
+      if (wait?.status !== "ok") {
+        throw new Error(`skill execution ${wait?.status || "unknown"}${wait?.error ? `: ${wait.error}` : ""}`);
+      }
+      signal?.throwIfAborted?.();
+      const transcript = await rt.subagent.getSessionMessages({ sessionKey: run.sessionKey || childSessionKey, limit: 20 });
+      text = assistantText(transcript?.messages);
+      if (!text) throw new Error(`skill execution ${wait?.status || "completed"} without an assistant result`);
+    } finally {
+      // POST-RUN ACTUAL USAGE AUDIT. The host does not expose child model token/cost
+      // via SubagentRunResult/AgentWaitResult, so the plugin audits what it CAN
+      // measure: the actual tool-call count (from the guard), denied tool calls, and
+      // wall-clock duration — with model token/cost explicitly marked not
+      // host-observable. This closes the "post-run actual usage audit" requirement
+      // honestly and fires whether the run succeeded or failed.
+      const usage = childToolGuard?.release?.(childSessionKey) || null;
+      const wallClockMs = Number.isFinite(wait?.startedAt) && Number.isFinite(wait?.endedAt)
+        ? wait.endedAt - wait.startedAt : null;
+      try {
+        auditUsage?.({
+          mode: "skill_child_usage_audit",
+          child_session_key_hash: childSessionHash,
+          child_run_id: run?.runId ?? null,
+          planned_skills: skills.map((s) => s.id),
+          resolved_child: modelRef,
+          execution_status: wait?.status ?? "unknown",
+          stop_reason: wait?.stopReason ?? null,
+          provider_started: wait?.providerStarted ?? null,
+          wall_clock_ms: wallClockMs,
+          estimated_tokens: Number.isFinite(estimatedTokens) ? estimatedTokens : null,
+          estimated_cost_usd: Number.isFinite(estimatedCostUsd) ? estimatedCostUsd : null,
+          actual_tool_calls: usage?.toolCalls ?? null,
+          denied_tool_calls: usage?.deniedToolCalls ?? null,
+          denied_tools: usage?.deniedTools ?? [],
+          tool_call_ceiling: usage?.ceiling ?? null,
+          disable_tools: toolPolicy.disableTools === true,
+          allowed_tools: toolPolicy.allowedTools ?? null,
+          // Per-skill execution identity applied to this child (credential-free).
+          execution_identity: executionIdentity,
+          // The residual gap (documented): the host exposes no model token/pass cap
+          // or in-flight abort, so actual model spend is not observable here.
+          model_usage_host_observable: false,
+          runtime_token_ceiling_enforced: false,
+        });
+      } catch { /* audit is best-effort; never raise into the caller */ }
+    }
+    return {
+      text,
+      details: {
+        schema_version: 1,
+        executed: true,
+        planned_skills: skills,
+        model_lineage: details?.model_lineage ?? null,
+        resolved_child: modelRef,
+        estimated_cost_usd: Number.isFinite(estimatedCostUsd) ? estimatedCostUsd : null,
+        child_run_id: run.runId,
+        child_session_key_hash: childSessionHash,
+        execution_status: wait.status,
+        runtime: run.runtime || null,
+        prompt_mode: "minimal",
+        light_context: true,
+        // Per-skill bounded tool surface actually applied to this child.
+        disable_tools: toolPolicy.disableTools === true,
+        allowed_tools: toolPolicy.allowedTools ?? null,
+        // Per-skill authoritative mailbox/sender identity injected into the child
+        // (credential-free) — the deployment-owned identity contract's receipt.
+        execution_identity: executionIdentity,
+        tool_call_ceiling: (childToolGuard && Number.isFinite(toolPolicy.maxToolCalls))
+          ? toolPolicy.maxToolCalls : (childToolGuard ? childToolGuard.defaultMax : null),
+        // These are PRE-FLIGHT estimate ceilings, not live runtime enforcement.
+        preflight_ceiling_tokens: maxChildTokens,
+        preflight_ceiling_cost_usd: maxChildCostUsd,
+        runtime_token_ceiling_enforced: false,
+      },
+    };
+  }
+
+  /**
+   * Evaluate whether a turn is an ACTIVE governed turn (in canary scope and not
+   * shadow). Total/never-throws — used by the gate and by the interceptor's
+   * defense-in-depth catch so an unexpected error on a governed turn can still
+   * fail closed instead of falling through to inline execution.
+   */
+  function evaluateScope(hookContext = {}) {
+    const scopeDecision = scope ? scope.evaluate(hookContext) : { inScope: false, reason: "no_scope" };
+    return { scopeDecision, active: scopeDecision.inScope && shadow !== true };
+  }
+
+  /**
+   * THE GUARANTEED PRE-EXECUTION GATE. Called from before_agent_reply. Returns
+   * null to fall through to normal routing, or a handled reply that
+   * short-circuits the turn BEFORE any model/tool work.
+   *
+   * FAIL-CLOSED (owner-directed): on an ACTIVE governed turn EVERY actionable
+   * request must resolve to an active installed skill or return the no-skill
+   * fail-safe; internal errors on a governed turn or a token reply return a
+   * handled error, NEVER a silent fall-through to inline model execution (the
+   * 2026-09-15 incident path). Out-of-scope / shadow turns stay passthrough and
+   * are never falsely represented as governed.
+   */
+  async function handleGate(event = {}, hookContext = {}) {
+    const text = cleanString(event?.prompt);
+    const { scopeDecision, active } = evaluateScope(hookContext);
+
+    try {
+    // Authenticated owner control: update the durable Intelligence economic
+    // profile without asking a general model to interpret or write policy.
+    const requestedBudget = active && text && isTrustedOwner(hookContext)
+      ? parseMonthlyBudgetUpdate(text) : null;
+    if (requestedBudget !== null) {
+      try {
+        const policy = await seam.updateMonthlyCloudBudget(requestedBudget);
+        const spend = spendProvider && typeof spendProvider.current === "function" ? spendProvider.current() : null;
+        const currentSpend = Number.isFinite(spend?.monthToDateCostUsd) ? spend.monthToDateCostUsd : null;
+        const headroom = currentSpend === null ? null : Math.max(0, requestedBudget - currentSpend);
+        const spendLine = currentSpend === null
+          ? "Current month-to-date spend is unavailable."
+          : `Current month-to-date cloud spend is $${currentSpend.toFixed(2)}; remaining headroom is $${headroom.toFixed(2)}.`;
+        return {
+          handled: true,
+          reply: { text: `ToggleLogic’s monthly cloud budget is now $${Number(policy.monthly_cloud_budget_usd).toFixed(2)}. ${spendLine}` },
+          reason: "skill_budget_updated",
+          audit: { mode: "skill_budget_updated", monthly_cloud_budget_usd: policy.monthly_cloud_budget_usd, current_spend_usd: currentSpend, headroom_usd: headroom },
+        };
+      } catch (error) {
+        return { handled: true, reply: { text: `I couldn’t update the ToggleLogic budget: ${String(error?.message ?? error)}.` }, reason: "skill_budget_update_failed", audit: { mode: "skill_budget_update_failed", error: String(error?.message ?? error).slice(0, 512) } };
+      }
+    }
+    // 1) Owner reply to a staged education choice → record profile + execute the
+    //    ORIGINAL bounded task in the child. Only honored in-scope.
+    if (active && text) {
+      let consumed = null;
+      try {
+        consumed = await consumeChoice(text, hookContext);
+      } catch (error) {
+        return { handled: true, reply: { text: `ToggleLogic could not save your routing choice: ${String(error?.message ?? error)}. No task was executed; please try again.` }, reason: "skill_profile_write_failed", audit: { mode: "skill_profile_write_failed", error: String(error?.message ?? error).slice(0, 512) } };
+      }
+      if (consumed) {
+        if (!consumed.originalTask) {
+          return { handled: true, reply: { text: `Recorded your choice (${consumed.strategy}). The original task was no longer available to execute; please resend it.` }, reason: "skill_choice_recorded_no_task", audit: { mode: "skill_routing", ...consumed.details } };
+        }
+        // The route is now learned, but the specific task may still be
+        // unexecutable (e.g. a past/nonexistent meeting): validate the skill
+        // contract before spending the bounded child.
+        if (contracts) {
+          const pf = await contracts.preflight(consumed.skills, consumed.originalTask, hookContext);
+          if (pf.action === "clarify") {
+            return { handled: true, reply: { text: pf.reply }, reason: "skill_contract_clarify", audit: { mode: "skill_contract_clarify", contract_reason: pf.reason, ...consumed.details } };
+          }
+        }
+        const result = await executeBoundedChild({
+          callRef: `choice-${crypto.randomBytes(6).toString("hex")}`,
+          invocation: hookContext,
+          task: consumed.originalTask,
+          skills: consumed.skills,
+          override: consumed.override,
+          modelRef: consumed.modelRef,
+          estimatedTokens: consumed.plan?.estimated_tokens,
+          estimatedCostUsd: consumed.choice?.estimated_cost_usd,
+          details: consumed.details,
+        });
+        return {
+          handled: true,
+          reply: { text: `${result.text}\n\n${executionFooter(consumed.details)}` },
+          reason: "skill_choice_executed",
+          audit: { mode: "skill_routing", ...consumed.details, ...result.details },
+        };
+      }
+      // Looked like a token reply but did not validate (wrong/replayed/expired
+      // token or a different sender): fail loud, never execute inline.
+      if (looksLikeChoiceReply(text)) {
+        return { handled: true, reply: { text: "That routing token is not valid for a pending choice in this conversation (it may be wrong, already used, or expired). Send your request again to get a fresh choice." }, reason: "skill_choice_rejected", audit: { mode: "skill_choice_rejected" } };
+      }
+    }
+
+    // 2) Resolve the skills this turn is bound to (deterministic).
+    let resolved = resolvePlannedSkills(event, hookContext);
+
+    // A skill-invocation cue naming a skill that is NOT an active installed skill.
+    // Owner rule: do NOT falsely claim "no related skill" if OTHER installed skills
+    // can do the job — report the named skill unavailable and OFFER the resolved
+    // applicable installed skills; fall to the no-skill sentence only when none
+    // relates. This offers real installed skills; it never guesses a route.
+    if (resolved.status === "ambiguous") {
+      if (!active) return null;
+      const named = resolved.resolution?.unknownSkills || [];
+      const suggestions = resolver && typeof resolver.suggest === "function" ? resolver.suggest(text, { limit: 3 }) : [];
+      if (suggestions.length > 0) {
+        const namedStr = named.join(", ") || "that skill";
+        const offered = suggestions.map((s) => s.id);
+        return {
+          handled: true,
+          reply: { text: `The ${namedStr} skill isn't installed here, so I can't route to it. I do have these installed skills that relate to what you're asking: ${offered.join(", ")}. Reply with the one you'd like me to use.` },
+          reason: "skill_named_unavailable_alternatives",
+          audit: { mode: "skill_named_unavailable_alternatives", named, offered },
+        };
+      }
+      return { handled: true, reply: { text: NO_SKILL_FAILSAFE }, reason: "skill_named_unavailable", audit: { mode: "skill_named_unavailable", named } };
+    }
+
+    if (resolved.status !== "resolved" || resolved.skills.length === 0) {
+      // No active installed skill relates to this request (deterministically).
+      if (!active) return null; // out-of-scope/shadow: prior safe passthrough behavior
+      // Non-action conversation/control messages bypass the skill gate ONLY
+      // through explicit deployment-owned categories — never by silent inference.
+      const category = nonAction ? nonAction.match(text) : { matched: false };
+      if (category.matched) {
+        return { handled: false, audit: { mode: "non_action_category", category: category.category, kind: category.kind } };
+      }
+      // DEPLOYMENT-OWNED DETERMINISTIC INTENT RECIPES. Evaluated ONLY after exact
+      // installed-skill resolution returned none, and BEFORE the bounded classifier.
+      // A recipe resolves a declared token pattern to one-or-more INSTALLED skills,
+      // but only when every target skill is present in the fresh verified inventory
+      // (else inert). Conflicting recipes fail closed with a bounded clarification.
+      let recipeStatus = "not_configured";
+      if (intentRecipes && typeof intentRecipes.resolve === "function") {
+        const installedIds = resolver ? [...resolver.catalogIds] : [];
+        const recipe = intentRecipes.resolve(text, { installedIds });
+        // Record the specific reason (e.g. "recipe_skills_absent") for a non-resolve
+        // so the fail-safe audit shows WHY a matched recipe stayed inert.
+        recipeStatus = recipe.status === "resolved" || recipe.status === "ambiguous" ? recipe.status : (recipe.reason || recipe.status);
+        if (recipe.status === "resolved") {
+          resolved = {
+            status: "resolved",
+            skills: normalizeSkills(recipe.skills.map((id) => ({ id }))),
+            source: "intent_recipe",
+            resolution: { reason: "intent_recipe", ruleId: recipe.ruleId },
+          };
+        } else if (recipe.status === "ambiguous") {
+          const ids = [...new Set((recipe.candidates || []).flatMap((c) => c.skills))].slice(0, 8);
+          const ruleIds = (recipe.candidates || []).map((c) => c.ruleId);
+          return { handled: true, reply: { text: `Your request matches more than one configured intent recipe (${ruleIds.join(", ")}), which resolve to different skills (${ids.join(", ")}). Which should I use? Reply with the skill name.` }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
+        }
+      }
+      // A natural-language request that names no skill AND matched no recipe may
+      // still map to an eligible skill via the BOUNDED resolution classifier (a
+      // pinned system skill, OFF unless configured). It is given the VERIFIED
+      // catalog (id + bounded description, never arbitrary prompt data), is
+      // schema-validated, confidence-thresholded, audited, and PROHIBITED from
+      // performing the task; its output is only a skill id we then route normally.
+      let classifierStatus = "not_configured";
+      if ((resolved.status !== "resolved" || resolved.skills.length === 0) && classifier && classifier.enabled) {
+        let decision = { status: "error" };
+        try {
+          const eligible = resolver && typeof resolver.classifierCatalog === "function"
+            ? resolver.classifierCatalog()
+            : (resolver ? [...resolver.catalogIds].map((id) => ({ id, description: "" })) : []);
+          decision = await classifier.classify(text, { eligible });
+        } catch { decision = { status: "error" }; }
+        classifierStatus = decision.status;
+        if (decision.status === "resolved") {
+          // Fall through to normal planning with the classifier-resolved skill.
+          resolved = { status: "resolved", skills: normalizeSkills([{ id: decision.skillId }]), source: "bounded_classifier", resolution: { reason: "classifier_resolved", confidence: decision.confidence } };
+        } else if (decision.status === "ambiguous") {
+          const ids = (decision.candidates || []).slice(0, 4);
+          return { handled: true, reply: { text: `Your request could map to more than one installed skill (${ids.join(", ")}). Which single skill should I use? Reply with the skill name.` }, reason: "skill_classifier_ambiguous", audit: { mode: "skill_classifier_ambiguous", candidates: ids, confidence: decision.confidence } };
+        } else if (decision.status === "conversation") {
+          return { handled: false, audit: { mode: "conversation", classifier: "bounded_local", confidence: decision.confidence } };
+        }
+      }
+      // Fail-closed: none / low-confidence / malformed / disabled / error → the
+      // fail-safe, NOT silently passed to a model.
+      if (resolved.status !== "resolved" || resolved.skills.length === 0) {
+        return { handled: true, reply: { text: NO_SKILL_FAILSAFE }, reason: "no_skill_failsafe", audit: { mode: "no_skill_failsafe", resolver_reason: resolved.resolution?.reason || resolved.source, recipe: recipeStatus, classifier: classifierStatus } };
+      }
+    }
+
+    // We have resolved skills. Out-of-scope or shadow turns must NOT actively
+    // gate — they stay passthrough (skill runs inline, non-canary path).
+    if (!active) {
+      return { handled: false, audit: { mode: "skill_routing_shadow", inScope: scopeDecision.inScope, shadow: shadow === true, scope_reason: scopeDecision.reason, planned_skills: resolved.skills } };
+    }
+
+    // DETERMINISTIC SAFETY PREFLIGHT — the moment skills resolve, BEFORE any
+    // route/model education or spend. Intent- and skill-aware (see
+    // skill-contracts.js): a past or unverifiable meeting/calendar request is
+    // clarified immediately with ZERO model calls (the 2026-09-15 incident was a
+    // past meeting answered with a fabricated inline brief). Generic Graph
+    // email/contact work is NOT gated. This runs ahead of the three-choice
+    // education preflight so a resolved skill whose SPECIFIC task can't safely
+    // execute never even stages a routing choice.
+    if (contracts) {
+      const pf = await contracts.preflight(resolved.skills, text, hookContext);
+      if (pf.action === "clarify") {
+        return { handled: true, reply: { text: pf.reply }, reason: "skill_contract_clarify", audit: { mode: "skill_contract_clarify", contract_reason: pf.reason, planned_skills: resolved.skills } };
+      }
+    }
+
+    // Ambiguous AMONG installed skills (more than one) → one bounded
+    // clarification, execute nothing. Opt-in (clarifyOnMultiSkill): the owner rule
+    // permits "one or more" skills, so multi-skill tasks resolve by default; a
+    // deployment can require a single-skill choice instead.
+    if (clarifyOnMultiSkill && resolved.skills.length > 1) {
+      const names = resolved.skills.map((s) => s.id).join(", ");
+      return { handled: true, reply: { text: `Your request references more than one installed skill (${names}). Which single skill should I use? I'll run exactly one — reply with the skill name.` }, reason: "skill_ambiguous_multi", audit: { mode: "skill_ambiguous_multi", planned_skills: resolved.skills } };
+    }
+
+    // 3) Plan the route. The deterministic safety preflight above has already
+    //    cleared this specific task (a past/unverifiable meeting clarified before
+    //    reaching here), so a no-profile skill now yields the three-choice
+    //    education preflight only for a task that is safe to execute once routed.
+    let planResult;
+    try {
+      planResult = await plan({ prompt: text, plannedSkills: resolved.skills, originalTask: text }, hookContext);
+    } catch (error) {
+      // A resolved skill on an in-scope active turn whose route cannot be planned
+      // must FAIL LOUD, not fall through to inline execution — that inline path is
+      // exactly the incident. Hold the turn and ask the owner to retry.
+      const names = resolved.skills.map((s) => s.id).join(", ");
+      return {
+        handled: true,
+        reply: { text: `ToggleLogic recognized the skill (${names}) but cannot plan its route right now (${String(error?.message ?? error)}). To avoid running it unrouted, I've held this turn — please try again shortly.` },
+        reason: "skill_routing_plan_unavailable",
+        audit: { mode: "skill_routing_plan_unavailable", error: String(error?.message ?? error).slice(0, 512), planned_skills: resolved.skills },
+      };
+    }
+    if (!planResult) {
+      const names = resolved.skills.map((s) => s.id).join(", ");
+      return {
+        handled: true,
+        reply: { text: `ToggleLogic recognized the skill (${names}) but its routing engine is unavailable. To avoid running it unrouted, I've held this turn — please try again shortly.` },
+        reason: "skill_routing_engine_unavailable",
+        audit: { mode: "skill_routing_engine_unavailable", planned_skills: resolved.skills },
+      };
+    }
+
+    if (planResult.status === "education_required" && planResult.teaching_authorized === true) {
+      return { handled: true, reply: { text: formatSkillPlan(planResult) }, reason: "skill_education_required", audit: { mode: "skill_routing", status: planResult.status, planned_skills: planResult.planned_skills } };
+    }
+    if (planResult.status === "selected" && planResult.selected_model_ref) {
+      // The deterministic contract preflight already ran BEFORE planning (above),
+      // so a past/unverifiable meeting was clarified without ever reaching a
+      // selected route. No second preflight is needed on the same turn.
+      const override = modelOverride(planResult.selected_model_ref);
+      const details = {
+        matched_rule: "owner_taught_skill_profile",
+        planned_skills: planResult.planned_skills,
+        strategy: planResult.strategy,
+        model_lineage: planResult.selected_lineage,
+        resolved_child: planResult.selected_model_ref,
+        estimated_cost_usd: planResult.choices?.find((item) => item.kind === planResult.strategy)?.estimated_cost_usd ?? null,
+      };
+      const result = await executeBoundedChild({
+        callRef: `selected-${crypto.randomBytes(6).toString("hex")}`,
+        invocation: hookContext,
+        task: text,
+        skills: normalizeSkills(planResult.planned_skills),
+        override,
+        modelRef: planResult.selected_model_ref,
+        estimatedTokens: planResult.estimated_tokens,
+        estimatedCostUsd: details.estimated_cost_usd,
+        details,
+      });
+      return { handled: true, reply: { text: `${result.text}\n\n${executionFooter(details)}` }, reason: "skill_selected_executed", audit: { mode: "skill_routing", ...details, ...result.details } };
+    }
+    if (["profile_conflict", "requirements_conflict", "no_eligible_model", "education_disabled"].includes(planResult.status)) {
+      return { handled: true, reply: { text: formatSkillPlan(planResult) }, reason: `skill_${planResult.status}`, audit: { mode: "skill_routing", status: planResult.status, planned_skills: planResult.planned_skills } };
+    }
+    // education_required but not owner-authorized (e.g. non-owner in scope): show
+    // the read-only preflight without staging a token.
+    return { handled: true, reply: { text: formatSkillPlan(planResult) }, reason: `skill_${planResult.status}`, audit: { mode: "skill_routing", status: planResult.status } };
+    } catch (error) {
+      const msg = String(error?.message ?? error);
+      // FAIL CLOSED on an ACTIVE governed turn (or a token-looking reply): hold
+      // the turn with a handled error rather than fall through to inline model
+      // execution — that fall-through is exactly the 2026-09-15 incident path.
+      if (active || looksLikeChoiceReply(text)) {
+        return {
+          handled: true,
+          reply: { text: `ToggleLogic could not safely route this governed request right now (${msg.slice(0, 200)}). To avoid running it unrouted, I've held this turn — please try again shortly.` },
+          reason: "skill_routing_gate_error",
+          audit: { mode: "skill_routing_gate_error", error: msg.slice(0, 512), active },
+        };
+      }
+      // Out-of-scope / shadow: safe to stay passthrough (not a governed turn).
+      return null;
+    }
+  }
+
+  return {
+    plan,
+    consumeChoice,
+    handleGate,
+    evaluateScope,
+    resolvePlannedSkills,
+    executeBoundedChild,
+    structuredPlannedSkills,
+    formatSkillPlan,
+    isShadow: shadow === true,
+    scopeEnabled: Boolean(scope),
+  };
 }
 
 export function createSkillRoutingTool(coordinator, defaultContext = {}) {
@@ -252,9 +901,9 @@ export function createSkillRoutingTool(coordinator, defaultContext = {}) {
     description: "Declare the skills planned for a task and get the learned route or owner-facing benchmark and cost choices before invoking those skills.",
     promptSnippet: "Plan model routing for the skills you intend to use before invoking them.",
     promptGuidelines: [
-      "Use togglelogic_skill_plan only to inspect or explain a route without executing the task; use togglelogic_skill_run for normal skill work.",
+      "Use togglelogic_skill_plan only to inspect or explain a route without executing the task.",
+      "Automatic skill routing is enforced by ToggleLogic's before_agent_reply gate; this tool is an optional planning/cost-preview surface and does not itself gate execution.",
       "If the result asks for education, present its three choices verbatim and stop; do not perform the task until the owner replies.",
-      "If a learned route is returned, name the planned skills and resolved route; this planning tool does not itself change the model already running.",
     ],
     parameters: {
       type: "object",
@@ -279,7 +928,11 @@ export function createSkillRoutingTool(coordinator, defaultContext = {}) {
           },
         },
         estimated_tokens: { type: "integer", minimum: 1 },
-        monthly_cloud_spend_usd: { type: "number", minimum: 0 },
+        // NOTE (1.6.1-rc.3): the former monthly_cloud_spend_usd parameter was
+        // REMOVED. Month-to-date cloud spend is owned by the validated live spend
+        // snapshot (skillRouting.spend); no caller may hand-enter it. additional
+        // Properties:false above means any legacy caller that still sends it is
+        // rejected, and the coordinator ignores/audits it while live spend is on.
       },
     },
     async execute(_toolCallId, params, _signal, _onUpdate, context) {
@@ -287,7 +940,8 @@ export function createSkillRoutingTool(coordinator, defaultContext = {}) {
         prompt: params.task_summary,
         plannedSkills: params.skills,
         estimatedTokens: params.estimated_tokens,
-        monthlyCloudSpendUsd: params.monthly_cloud_spend_usd,
+        // monthlyCloudSpendUsd intentionally NOT forwarded — live spend is authoritative.
+        originalTask: params.task_summary,
       }, context || defaultContext);
       const rendered = formatSkillPlan(plan);
       return { content: [{ type: "text", text: rendered }], details: plan };
@@ -302,7 +956,7 @@ export function createSkillRoutingRunTool(coordinator, runtime, config, defaultC
     description: "Plan a skill-aware route and, when a learned profile exists, execute the task in a child run pinned to the currently accepted child of that skill's model lineage.",
     promptSnippet: "Route and execute planned skill work through its learned ToggleLogic profile.",
     promptGuidelines: [
-      "Before performing work that invokes one or more skills, call togglelogic_skill_run with the exact skill names/versions and the complete bounded task.",
+      "Skill routing is enforced automatically by ToggleLogic's before_agent_reply gate; this tool is an optional explicit surface for the same bounded execution.",
       "If education is required, present the returned choices verbatim and stop until the authenticated owner replies with the displayed one-time token.",
       "If execution succeeds, return the child result without repeating the task in the parent model.",
     ],
@@ -329,7 +983,11 @@ export function createSkillRoutingRunTool(coordinator, runtime, config, defaultC
           },
         },
         estimated_tokens: { type: "integer", minimum: 1 },
-        monthly_cloud_spend_usd: { type: "number", minimum: 0 },
+        // NOTE (1.6.1-rc.3): the former monthly_cloud_spend_usd parameter was
+        // REMOVED. Month-to-date cloud spend is owned by the validated live spend
+        // snapshot (skillRouting.spend); no caller may hand-enter it. additional
+        // Properties:false above means any legacy caller that still sends it is
+        // rejected, and the coordinator ignores/audits it while live spend is on.
       },
     },
     async execute(toolCallId, params, signal, _onUpdate, context) {
@@ -338,59 +996,38 @@ export function createSkillRoutingRunTool(coordinator, runtime, config, defaultC
         prompt: params.task_summary,
         plannedSkills: params.skills,
         estimatedTokens: params.estimated_tokens,
-        monthlyCloudSpendUsd: params.monthly_cloud_spend_usd,
+        // monthlyCloudSpendUsd intentionally NOT forwarded — live spend is authoritative.
+        originalTask: params.task_summary,
       }, invocation);
       if (plan.status !== "selected" || !plan.selected_model_ref || coordinator.isShadow) {
         return { content: [{ type: "text", text: formatSkillPlan(plan) }], details: { ...plan, executed: false } };
       }
       const override = modelOverride(plan.selected_model_ref);
-      if (!override || !runtime?.subagent?.run || !runtime?.subagent?.waitForRun || !runtime?.subagent?.getSessionMessages) {
-        throw new Error("OpenClaw skill execution runtime is unavailable");
-      }
-      const parentSession = cleanString(invocation?.sessionKey);
-      if (!parentSession) throw new Error("a host-authenticated session is required for skill execution");
-      if (parentSession.includes(":togglelogic-skill:")) {
-        throw new Error("nested ToggleLogic skill execution is not allowed");
-      }
-      signal?.throwIfAborted?.();
-      const suffix = crypto.createHash("sha256").update(`${parentSession}\0${toolCallId}`).digest("hex").slice(0, 16);
-      const childSessionKey = `${parentSession}:togglelogic-skill:${suffix}`;
-      const skillList = plan.planned_skills.map((item) => item.id).join(", ");
-      const run = await runtime.subagent.run({
-        sessionKey: childSessionKey,
-        message: `Execute this bounded task using these planned skills: ${skillList}.\n\nTask:\n${params.task_summary}`,
-        extraSystemPrompt: "This is already a ToggleLogic-routed child execution. Do not call togglelogic_skill_plan or togglelogic_skill_run. Execute the bounded task directly and return only its result.",
-        provider: override.providerOverride,
-        model: override.modelOverride,
-        deliver: false,
-        idempotencyKey: `togglelogic-skill-${suffix}`,
+      const details = {
+        model_lineage: plan.selected_lineage,
+        resolved_child: plan.selected_model_ref,
+        strategy: plan.strategy,
+        estimated_cost_usd: plan.choices?.find((item) => item.kind === plan.strategy)?.estimated_cost_usd ?? null,
+      };
+      const result = await coordinator.executeBoundedChild({
+        callRef: toolCallId,
+        invocation,
+        task: params.task_summary,
+        skills: normalizeSkills(plan.planned_skills),
+        override,
+        modelRef: plan.selected_model_ref,
+        estimatedTokens: plan.estimated_tokens,
+        estimatedCostUsd: details.estimated_cost_usd,
+        details,
+        signal,
+        runtime, // tool-supplied runtime overrides the coordinator's closure
       });
-      const wait = await runtime.subagent.waitForRun({
-        runId: run.runId,
-        timeoutMs: config.executionTimeoutSeconds * 1000,
-      });
-      if (wait?.status !== "ok") {
-        throw new Error(`skill execution ${wait?.status || "unknown"}${wait?.error ? `: ${wait.error}` : ""}`);
-      }
-      signal?.throwIfAborted?.();
-      const transcript = await runtime.subagent.getSessionMessages({ sessionKey: run.sessionKey || childSessionKey, limit: 20 });
-      const text = assistantText(transcript?.messages);
-      if (!text) throw new Error(`skill execution ${wait?.status || "completed"} without an assistant result`);
       return {
-        content: [{ type: "text", text }],
+        content: [{ type: "text", text: result.text }],
         details: {
-          schema_version: 1,
-          executed: true,
-          planned_skills: plan.planned_skills,
+          ...result.details,
           execution_requested_skills: plan.planned_skills,
           strategy: plan.strategy,
-          model_lineage: plan.selected_lineage,
-          resolved_child: plan.selected_model_ref,
-          estimated_cost_usd: plan.choices.find((item) => item.kind === plan.strategy)?.estimated_cost_usd ?? null,
-          child_run_id: run.runId,
-          child_session_key_hash: crypto.createHash("sha256").update(run.sessionKey || childSessionKey).digest("hex"),
-          execution_status: wait.status,
-          runtime: run.runtime || null,
         },
       };
     },

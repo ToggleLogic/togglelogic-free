@@ -1,13 +1,18 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.6.0",
+  "version": "1.6.1-rc.11",
   "description": "Free-tier model routing for OpenClaw: apply static routes, opt-in provider-constrained family aliases, a simple static cheapest-default, and sticky model overrides that hold until you switch back — with structured audit and privacy-safe local fleet cost attribution. Bring your own provider credentials; no Intelligence engine or production model registry is included. Optional cost visibility reports per-model dollar estimates from dynamic public pricing (observe-only; unpriced-loud, never a false $0.00). PATENT PENDING. The separate source-available ToggleLogic Intelligence package can add capability-aware automatic selection; eligible startups register before commercial production use. ToggleLogic Free is source-available under License 2.0 (see LICENSE).",
   "activation": {
     "onStartup": true
   },
   "contracts": {
     "tools": ["togglelogic_skill_plan", "togglelogic_skill_run"]
+  },
+  "configContracts": {
+    "dangerousFlags": [
+      { "path": "skillRouting.calendar.enabled", "equals": true }
+    ]
   },
   "enabledByDefault": true,
   "configSchema": {
@@ -158,7 +163,211 @@
           "pendingTtlMinutes": { "type": "integer", "minimum": 1, "default": 15 },
           "defaultEstimatedTokens": { "type": "integer", "minimum": 1, "default": 4000 },
           "executionTimeoutSeconds": { "type": "integer", "minimum": 30, "maximum": 3600, "default": 600 },
-          "monthlyCloudSpendUsd": { "type": "number", "minimum": 0, "default": 0, "description": "Deployment-supplied month-to-date cloud model spend used for preflight estimates and learned-profile budget eligibility. Update it from the authoritative billing or cost ledger." }
+          "monthlyCloudSpendUsd": { "type": "number", "minimum": 0, "default": 0, "description": "STATIC fallback month-to-date cloud model spend used for preflight estimates and learned-profile budget eligibility when skillRouting.spend.enabled is false (or as the fallback when a live snapshot is unavailable and no finite cloud budget is declared). When skillRouting.spend.enabled is true this is superseded by the live, validated cloud-spend snapshot." },
+          "spend": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Live cloud-spend consumption. When enabled, the coordinator reads a DEPLOYMENT-OWNED, versioned+fingerprinted, current-policy-month cloud-spend snapshot (written by scripts/generate-spend-snapshot.mjs from `openclaw gateway usage-cost --all-agents --expect-final --json`) as the AUTHORITATIVE spend — no caller hand-enters a number. The plugin re-verifies source/pair/month/freshness/fingerprint and FAILS CLOSED on unpriced CLOUD rows; unpriced LOCAL (Ollama) rows are expected $0. With a finite cloud budget declared, an unavailable/stale/invalid snapshot withholds cloud routes while local-capable routes remain. The universal no-skill fail-safe is unaffected (it runs before any model selection).",
+            "properties": {
+              "enabled": { "type": "boolean", "default": false, "description": "Consume the live cloud-spend snapshot for routing. Default false = use the static monthlyCloudSpendUsd." },
+              "snapshotPath": { "type": "string", "default": "~/.openclaw/togglelogic/cloud-spend.snapshot.json", "description": "Path to the deployment-owned cloud-spend snapshot the plugin consumes and verifies (written by scripts/generate-spend-snapshot.mjs; the plugin never writes it and never shells out on a turn)." },
+              "maxAgeHours": { "type": "integer", "minimum": 1, "default": 26, "description": "Freshness window. A snapshot older than this is STALE and fails closed. Sized for a daily refresh with slack; regenerate each refresh cycle." },
+              "timezone": { "type": "string", "default": "", "description": "IANA timezone for the policy-month boundary. Empty defaults to skillRouting.ownerTimezone." },
+              "localProviders": { "type": "array", "items": { "type": "string" }, "default": ["ollama"], "description": "Provider tokens treated as LOCAL ($0 marginal). A missing-cost row for one of these is expected and benign; a missing-cost row for any other (cloud) provider fails the snapshot closed." },
+              "finiteCloudBudgetApplies": { "type": "boolean", "default": false, "description": "Declare that a finite amortized cloud budget applies (see docs/ECONOMIC-PROFILE.md). When true, an unavailable/stale/invalid snapshot suppresses cloud routes (local-capable routes remain). When false, an unavailable snapshot falls back to the static monthlyCloudSpendUsd." },
+              "delta": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Optional conservative top-up from the plugin's OWN cost log for cloud calls STRICTLY AFTER the snapshot's `through` instant in the policy month. Uses already-reconciled costUsd (no cache double-pricing). Off by default.",
+                "properties": {
+                  "enabled": { "type": "boolean", "default": false, "description": "Apply the in-memory cost-log delta on top of the snapshot total." },
+                  "costLogPath": { "type": "string", "default": "", "description": "Cost-log path (JSONL). Empty defaults to costVisibility.log.path." },
+                  "maxBytes": { "type": "integer", "minimum": 65536, "default": 8388608, "description": "Bounded tail read of the cost log so a large ledger can never blow memory on a turn." }
+                }
+              }
+            }
+          },
+          "maxChildTokens": { "type": "integer", "minimum": 1000, "default": 200000, "description": "Bounded-child token ceiling. A skill plan estimated above this fails loud instead of routing, preventing fat-main-session amplification." },
+          "maxChildCostUsd": { "type": "number", "minimum": 0, "default": 5, "description": "Bounded-child estimated-cost ceiling. A routed skill whose estimate exceeds this is refused loudly." },
+          "maxChildToolCalls": { "type": "integer", "minimum": 0, "default": 32, "description": "Hard per-child tool-call COUNT ceiling, enforced live on the routed child by the before_tool_call guard. Bounds a runaway tool loop; it is NOT a model token/pass cap — the host exposes none (see docs/BOUNDED-CHILD-LIMITS.md)." },
+          "skillTools": {
+            "type": "object",
+            "default": {},
+            "description": "Per-skill bounded tool surface for the routed child, enforced by the before_tool_call guard. Keys are skill ids.",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "allowedTools": { "type": "array", "items": { "type": "string" }, "description": "If set, only these tool names are allowed for the child; others are denied. Omit to leave the surface unrestricted (count-only)." },
+                "maxToolCalls": { "type": "integer", "minimum": 0, "description": "Override the tool-call count ceiling for this skill's child." },
+                "disableTools": { "type": "boolean", "description": "Run this skill's child with an exact empty tool surface (SubagentRunParams.disableTools)." }
+              }
+            }
+          },
+          "skillIdentities": {
+            "type": "object",
+            "default": {},
+            "description": "DEPLOYMENT-OWNED per-skill EXECUTION IDENTITY, keyed by verified installed skill id. The authoritative mailbox/account, sender identity, and send policy the routed child must act under — injected into the child's system prompt and surfaced (credential-free) in the audit/receipt. NEVER a credential/token; values are identity labels + policy sentences only. Not model-selectable: an identity is applied ONLY to a skill that actually resolved on the turn, so a Microsoft Graph (owner mailbox) identity can never cross onto a Gmail (gog) route or vice versa, and an identity is never supplied for a skill that did not resolve. Default empty (opt-in).",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "label": { "type": "string", "maxLength": 80, "description": "Short credential-free identity label used in the audit/receipt (e.g. \"owner-mailbox:Al-Harlow\"). Defaults to the mailbox if omitted." },
+                "mailbox": { "type": "string", "maxLength": 600, "description": "The authoritative mailbox/account for this skill (e.g. the owner's Microsoft 365 mailbox, or SAM's own clickitco@gmail.com). NOT a credential." },
+                "senderIdentity": { "type": "string", "maxLength": 600, "description": "Whose identity the child sends/writes as for this skill (e.g. \"Al Harlow (the owner)\" vs \"SAM, in SAM's own identity\")." },
+                "authority": { "type": "string", "maxLength": 600, "description": "One-line authority statement (e.g. act as Al / on behalf of Al for the owner mailbox; never impersonate Al from SAM's own Gmail)." },
+                "sendPolicy": { "type": "string", "maxLength": 600, "description": "Send policy: a specific owner instruction to send a NAMED message authorizes exactly that send; a general write/compose/draft/reply request is draft-only until the owner confirms the exact message." }
+              }
+            }
+          },
+          "resolverMode": { "type": "string", "enum": ["deterministic", "off"], "default": "deterministic", "description": "How the before_agent_reply gate resolves skills from message text. 'deterministic' recognizes only exact installed skill-id/alias references from the LIVE inventory; 'off' disables text resolution." },
+          "ambiguityPolicy": { "type": "string", "enum": ["clarify", "fail"], "default": "clarify", "description": "Resolver-level policy for a skill invocation that names an unknown skill. Under the owner fail-closed rule the gate answers a named-unavailable skill with the no-skill fail-safe regardless." },
+          "useSnapshotInventory": { "type": "boolean", "default": true, "description": "Use the DEPLOYMENT-OWNED, versioned+fingerprinted inventory snapshot as the AUTHORITATIVE skill catalog. The snapshot is produced at deploy time by scripts/generate-skill-inventory.mjs from `openclaw skills list --json` (ELIGIBLE set). The plugin verifies source/version/freshness/fingerprint and FAILS CLOSED on a missing/stale/wrong-source/wrong-version/drifted snapshot; it never reads the workspace skill_manifest.json (proven stale) and never shells out on a turn. When true, skillCatalog only supplements aliases; set false to revert to skillCatalog as the membership source (dev/testing only)." },
+          "inventorySnapshotPath": { "type": "string", "default": "~/.openclaw/togglelogic/skill-inventory.snapshot.json", "description": "Path to the deployment-owned inventory snapshot the plugin consumes and verifies (written by scripts/generate-skill-inventory.mjs)." },
+          "inventoryMarkerPath": { "type": "string", "default": "~/.openclaw/togglelogic/skill-inventory-accepted.json", "description": "Mode-0600 plugin-owned marker of the last-accepted inventory fingerprints, used for run-to-run drift detection (NOT the deployment snapshot; the plugin never writes the snapshot)." },
+          "inventoryMaxAgeHours": { "type": "integer", "minimum": 1, "default": 24, "description": "Freshness window: a snapshot older than this is treated as STALE and fails closed. Regenerate the snapshot (and restart the plugin) whenever installed/eligible skills change." },
+          "clarifyOnMultiSkill": { "type": "boolean", "default": false, "description": "When more than one installed skill is referenced, ask one bounded clarification and execute nothing. Default false: the owner rule permits 'one or more' skills, so multi-skill tasks resolve." },
+          "calendar": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Microsoft Graph /me/calendarView grounding port for time-sensitive skills (e.g. meeting-prep). When enabled AND bridge.command is set, the plugin SPAWNS the configured, deployment-owned, vault-backed bridge executable (a SUBPROCESS) with a bounded window, wall-clock timeout, and strict JSON validation, and uses its sanitized output as the authoritative calendar. The plugin holds no Graph credentials. Disabled, or enabled-but-unwired, it fails CLOSED (clarify, never fabricate). CAPABILITY: enabling calendar grants this plugin subprocess-execution of the configured command — see configContracts.dangerousFlags and docs/CAPABILITY-CONSENT.md.",
+            "properties": {
+              "enabled": { "type": "boolean", "default": false, "description": "Enable the authoritative calendar grounding check before a time-sensitive skill executes. DANGEROUS: true activates subprocess execution of bridge.command." },
+              "timeoutMs": { "type": "integer", "minimum": 1000, "maximum": 60000, "default": 8000, "description": "Bridge lookup wall-clock timeout; the child is killed and the lookup fails closed on timeout." },
+              "bridge": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "The explicitly configured calendar bridge executable. Launched with execFile + an explicit argv array (NEVER a shell), so window bounds and all arguments are passed literally (injection-safe). Empty command = unwired = fails closed.",
+                "properties": {
+                  "command": { "type": "string", "default": "", "description": "The bridge executable (e.g. \"python3\"). SUBPROCESS: the plugin executes this command. Empty leaves the port unwired." },
+                  "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Base argv passed before --start/--end (e.g. the absolute path to microsoft-graph/scripts/calendar_bridge.py)." },
+                  "cwd": { "type": "string", "default": "", "description": "Optional working directory for the bridge process." },
+                  "env": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "Optional extra environment variables MERGED onto the parent env for the bridge process (string values only)." },
+                  "accountArg": { "type": "string", "default": "", "description": "Optional deployment account nickname forwarded as --account <value>." },
+                  "maxResults": { "type": "integer", "minimum": 1, "maximum": 100, "default": 25, "description": "Optional cap forwarded as --max-results <n>." }
+                }
+              }
+            }
+          },
+          "nonActionCategories": {
+            "type": "array",
+            "default": [],
+            "description": "Explicit deployment-owned non-action categories (conversation/control). The ONLY way a non-skill message bypasses the fail-closed gate; default empty so nothing is silently exempted.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": {
+                "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "phrases": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Whole-message phrases (normalization-insensitive), e.g. greetings/acknowledgements." },
+                "patterns": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "default": [], "description": "Anchored regex sources tested against the raw message, e.g. \"^\\\\s*/(stop|status|help)\\\\b\"." }
+              }
+            }
+          },
+          "ownerTimezone": { "type": "string", "default": "America/New_York", "description": "IANA timezone used by time-sensitive skill contracts (e.g. meeting-prep) to evaluate the owner-local clock." },
+          "classifier": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Bounded skill-resolution classifier — a pinned SYSTEM skill (own model assignment) that maps a natural-language request naming NO skill to a single ELIGIBLE skill AFTER deterministic exact/alias resolution returns none. Tool-free, minimal, light-context, schema-validated, confidence-thresholded, audited, and PROHIBITED from performing the task. OFF unless a model is pinned; none/low-confidence/malformed/disabled output yields the no-skill fail-safe (never guesses), and multiple plausible skills yield one clarification.",
+            "properties": {
+              "enabled": { "type": "boolean", "default": false, "description": "Enable the classifier stage. Treated as off unless a model is also pinned." },
+              "provider": { "type": "string", "default": "ollama", "description": "Classifier transport provider. 'ollama' targets a local Ollama server." },
+              "model": { "type": "string", "default": "", "description": "Deployment-pinned classifier model id, e.g. 'llama3.1:8b'. Required to enable the classifier." },
+              "endpoint": { "type": "string", "default": "http://127.0.0.1:11434", "description": "Local Ollama endpoint." },
+              "confidenceThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.6, "description": "Below this confidence, resolution is treated as no-skill (fail-safe)." },
+              "timeoutMs": { "type": "integer", "minimum": 250, "maximum": 60000, "default": 4000, "description": "Classifier call timeout; a timeout fails safe to no-skill." },
+              "numCtx": { "type": "integer", "minimum": 2048, "maximum": 32768, "default": 8192, "description": "Local model context window. The classifier is given each eligible skill's id + bounded description; the historical 2048 default silently truncated the reference host's 57-skill catalog. Default 8192 fits it with headroom; hard-bounded [2048, 32768]." }
+            }
+          },
+          "intentRecipes": {
+            "type": "array",
+            "default": [],
+            "description": "DEPLOYMENT-OWNED deterministic intent recipes, evaluated AFTER exact installed-skill/alias resolution returns none and BEFORE the bounded classifier. Each recipe is a declarative normalized-token rule (no code, no raw regex) that composes a natural-language request to one-or-more INSTALLED skills. A recipe resolves ONLY if every target skill is present in the fresh verified inventory; matching recipes that resolve to different skill sets fail closed with one clarification. Default empty (opt-in).",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "skillIds"],
+              "properties": {
+                "id": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Stable recipe id (audited)." },
+                "allTerms": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 120 }, "default": [], "description": "EVERY term must appear (word-boundary, normalized) for the recipe to match." },
+                "anyTerms": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 120 }, "default": [], "description": "At least ONE term must appear when this list is non-empty. A recipe must declare at least one allTerms or anyTerms entry, else it is dropped." },
+                "skillIds": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$" }, "description": "One-or-more INSTALLED skill ids this recipe composes to; the recipe is inert unless all are in the verified inventory." }
+              }
+            }
+          },
+          "skillCatalog": {
+            "type": "array",
+            "default": [],
+            "description": "Optional alias SUPPLEMENT for snapshot skills (id → extra match aliases). With useSnapshotInventory true this does NOT define membership; a configured id not present in the verified snapshot is reported as configured-but-not-installed and never resolves.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": {
+                "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$" },
+                "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+                "version": { "type": "string", "maxLength": 128 },
+                "fingerprint": { "type": "string", "maxLength": 256 },
+                "execution_class": { "type": "string", "maxLength": 128 }
+              }
+            }
+          },
+          "skillRequirements": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "DEPLOYMENT-OWNED per-skill CAPABILITY REQUIREMENTS (routing CONSTRAINTS, not learned model choices), keyed by verified installed skill id. A skill with no explicit entry inherits the conservative default (tool_calling_strong + requiresTools), so an unverified general-purpose-only local model is never offered for a tool-using skill (Microsoft Graph, Zoom). Opt a PROVEN tool-free skill DOWN to { requiredTier: 'general_purpose', requiresTools: false }. Every field validates independently and an invalid value fails closed to the conservative fallback (it can never widen). Aggregated (strictest) across a turn's resolved skills and passed to Intelligence.planSkills.",
+            "properties": {
+              "default": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "The deployment default requirement, coerced against the hard conservative fallback (tool_calling_strong + requiresTools).",
+                "properties": {
+                  "requiredTier": { "type": "string", "enum": ["general_purpose", "tool_calling_strong", "terminal_capable", "flagship_reasoning"], "description": "Capability tier FLOOR: only models eligible at this tier may execute the skill." },
+                  "requiredSurface": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$", "description": "Required execution surface slug (e.g. 'local_exec')." },
+                  "privacy": { "type": "string", "enum": ["cloud_allowed", "local_preferred", "local_only"], "description": "Privacy posture; local_only forbids any cloud model." },
+                  "requiresTools": { "type": "boolean", "description": "The skill needs tool-calling; excludes general-purpose-only models." },
+                  "estimatedTokens": { "type": "integer", "minimum": 1, "description": "Optional per-run token hint." },
+                  "minimumBenchmarkScore": { "type": "number", "minimum": 0, "description": "Optional benchmark floor a candidate must meet." },
+                  "maxCostUsdPerRun": { "type": "number", "minimum": 0, "description": "Optional per-run cost cap." },
+                  "maxCostUsdPerMonth": { "type": "number", "minimum": 0, "description": "Optional per-skill monthly cost cap (min'd with the amortized cloud budget)." }
+                }
+              },
+              "skills": {
+                "type": "object",
+                "description": "Per verified installed skill id → its capability requirement. An entry for an id not in the verified inventory is simply never consulted.",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "requiredTier": { "type": "string", "enum": ["general_purpose", "tool_calling_strong", "terminal_capable", "flagship_reasoning"] },
+                    "requiredSurface": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" },
+                    "privacy": { "type": "string", "enum": ["cloud_allowed", "local_preferred", "local_only"] },
+                    "requiresTools": { "type": "boolean" },
+                    "estimatedTokens": { "type": "integer", "minimum": 1 },
+                    "minimumBenchmarkScore": { "type": "number", "minimum": 0 },
+                    "maxCostUsdPerRun": { "type": "number", "minimum": 0 },
+                    "maxCostUsdPerMonth": { "type": "number", "minimum": 0 }
+                  }
+                }
+              }
+            }
+          },
+          "scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Canary scope. ACTIVE routing/education only for turns whose trusted hook identity matches every configured (non-empty) dimension; all other turns stay shadow/passthrough. Correction for the 2026-09-15 unscoped global canary.",
+            "properties": {
+              "enabled": { "type": "boolean", "default": false, "description": "Whether canary scope constraints are active. When false, active gating is inert (shadow/passthrough)." },
+              "allowGlobal": { "type": "boolean", "default": false, "description": "Explicitly allow an UNCONSTRAINED (global) active canary. Fail-safe default false: without constraints or this flag, active gating stays inert." },
+              "requireOwner": { "type": "boolean", "default": true, "description": "Require the trusted sender to be an owner (senderIsOwner bit or ownerSenderIds match)." },
+              "channels": { "type": "array", "items": { "type": "string" }, "default": [], "description": "e.g. [\"telegram\"]." },
+              "accountIds": { "type": "array", "items": { "type": "string" }, "default": [], "description": "e.g. [\"codex\"]." },
+              "senderIds": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Trusted channel-scoped sender ids, e.g. the owner's Telegram peer id." },
+              "chatIds": { "type": "array", "items": { "type": "string" }, "default": [] },
+              "sessionKeys": { "type": "array", "items": { "type": "string" }, "default": [] },
+              "ownerSenderIds": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Owner allowlist used for the owner check when the host does not supply senderIsOwner on this hook." }
+            }
+          }
         }
       },
       "governedEscalation": {
@@ -235,7 +444,9 @@
               "cachePath": { "type": "string", "default": "~/.openclaw/togglelogic/pricing-cache.json", "description": "Local cache path for fetched pricing. Tilde expansion supported." },
               "refreshHours": { "type": "integer", "default": 24, "minimum": 1, "description": "How often to re-fetch pricing (hours)." },
               "timeoutMs": { "type": "integer", "default": 15000, "minimum": 1000, "description": "Fetch timeout in milliseconds." },
-              "userPriceOverridePath": { "type": "string", "default": "", "description": "Optional deployment-supplied price map (DATA) taking highest priority. Tilde expansion supported. The plugin never writes it." }
+              "userPriceOverridePath": { "type": "string", "default": "", "description": "Optional deployment-supplied price map (DATA) taking highest priority. Tilde expansion supported. The plugin never writes it." },
+              "cacheReadMultiplier": { "type": "number", "minimum": 0, "default": 0.25, "description": "Proxy multiplier applied to the input rate for cache-READ tokens ONLY when the source lacks explicit cache-tier rates. Reconciles the cost log and owner receipt onto one calculation; replaces the old full-input-rate cache billing." },
+              "cacheWriteMultiplier": { "type": "number", "minimum": 0, "default": 1.0, "description": "Proxy multiplier applied to the input rate for cache-WRITE tokens when the source lacks explicit cache-tier rates." }
             }
           },
           "summaryEveryCalls": { "type": "integer", "default": 20, "minimum": 1, "description": "Emit a loud day-summary line to the cost log every N observed calls." }

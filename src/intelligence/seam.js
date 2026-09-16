@@ -123,6 +123,13 @@ export function createIntelligenceSeam(
     return adapter.recordSkillChoice(input, hostRuntimeConfig);
   }
 
+  function updateMonthlyCloudBudget(monthlyBudgetUsd) {
+    if (state !== "available" || !adapter || typeof adapter.updateMonthlyCloudBudget !== "function") {
+      throw new Error("ToggleLogic Intelligence budget updates are unavailable");
+    }
+    return adapter.updateMonthlyCloudBudget(monthlyBudgetUsd, hostRuntimeConfig);
+  }
+
   function info() {
     return {
       state,
@@ -131,5 +138,5 @@ export function createIntelligenceSeam(
     };
   }
 
-  return { detect, status, classify, planSkillRoute, recordSkillChoice, info };
+  return { detect, status, classify, planSkillRoute, recordSkillChoice, updateMonthlyCloudBudget, info };
 }

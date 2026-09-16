@@ -32,12 +32,15 @@ you configure in OpenClaw.
 - **Optional model-family aliases.** Name a family for a configured route and
   resolve it only within providers you have approved. Resolution safely passes
   through when freshness, provider, or price requirements are not satisfied.
-- **Optional skill-aware routing (1.6).** With a compatible
-  Intelligence layer, SAM declares the exact skills it plans to invoke. A new
-  or changed skill produces owner-facing cost, benchmark, and Intelligence
-  choices; the learned strategy or model lineage is then reused without asking
-  again. Numbered model children remain execution-time resolutions, not durable
-  pins.
+- **Skill-aware routing (1.6.1-rc.5).** A guaranteed pre-execution gate
+  (`before_agent_reply`, host-enforced user turns only) resolves the skills a
+  message references DETERMINISTICALLY from the deployment's installed-skill
+  catalog, then — for an in-scope owner turn — replies with cost, benchmark, and
+  Intelligence choices and a one-time token BEFORE any model runs. The learned
+  strategy or model lineage is reused deterministically and executed in a bounded
+  child. Active routing/education is scoped to configured trusted identities
+  (e.g. one owner channel); every out-of-scope turn stays passthrough. Numbered
+  model children remain execution-time resolutions, not durable pins.
 
 ## What it does not do
 
@@ -130,20 +133,108 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
 Bring your own provider credentials. Set your routing policy. The evidence stays
 local.
 
-### Skill-aware routing (1.6)
+### Skill-aware routing (1.6.1-rc.5)
 
-This capability is opt-in and requires ToggleLogic Intelligence 1.4. SAM uses
-`togglelogic_skill_run` for normal work: it plans the named skills and executes
-a learned route in a child run pinned to the current accepted lineage child.
-`togglelogic_skill_plan` is the read-only simulator. An integration can instead
-provide `plannedSkills` / `metadata.skillId` as structured hook data. Free never
-guesses a skill by inspecting prompt text.
+This capability is opt-in and requires ToggleLogic Intelligence 1.4.1-rc.5.
 
-The execution tool runs only in an OpenClaw gateway request context. It keeps
-the child model's skill tools available, blocks nested ToggleLogic child
-dispatch structurally, fails loudly on child timeout/error, and records the actual child
-provider/model. Host-configured model refs are passed to Intelligence as
-authoritative accepted routing candidates.
+**How it intercepts.** The 1.6.0 design gated on structured planned-skill
+metadata that the OpenClaw host never supplies on the routing hooks, so it could
+not intercept a skill invocation (see the 2026-09-15 postmortem). The 1.6.1-rc
+line replaces that with a real boundary:
+
+- A **guaranteed pre-execution gate** on `before_agent_reply` (registered with
+  host-enforced `eligibleTriggers: ["user"]`). Returning `handled:true` plus a
+  reply short-circuits the turn **before any model is resolved or called** — it
+  does not rely on the model choosing to call a tool.
+- A **deterministic skill resolver** over the **live installed-skill inventory**:
+  membership comes from the host's own `skill_manifest.json` (enabled skills),
+  fingerprinted/versioned with startup drift detection — not a hand-maintained
+  catalog and not a temporary plugin cache. Only an exact installed skill id or a
+  declared alias (word-boundary match) resolves a skill. `skillRouting.skillCatalog`
+  now only supplements aliases; a configured id that is not installed is reported
+  and never resolves.
+- **Universal fail-closed rule** (owner-directed): on a governed turn, EVERY
+  actionable request must resolve to an active installed skill or receive the
+  verbatim fail-safe *“I don't have a skill that relates to what you're asking me
+  to do.”* — never a silent fall-through to a general model. A specifically named
+  unavailable skill returns the same fail-safe. Non-action conversation/control
+  messages bypass the gate ONLY via explicit `skillRouting.nonActionCategories`
+  (default empty). Ambiguity among installed skills asks one bounded clarification
+  and executes nothing (`clarifyOnMultiSkill`).
+- **Resolution after exact match returns none** runs two owner-configured stages,
+  in order, both fail-closed: (1) **deterministic intent recipes**
+  (`skillRouting.intentRecipes`, default empty) — declarative normalized-token rules
+  (`{ id, allTerms, anyTerms, skillIds }`, no code/regex) that compose a request to
+  one-or-more INSTALLED skills, resolving only when every target skill is in the
+  fresh verified inventory (conflicting rules fail closed); then (2) the **bounded
+  local classifier** (`skillRouting.classifier`, off unless a model is pinned) given
+  the verified catalog as **id + bounded description** (not opaque ids) with a
+  configurable, hard-bounded `numCtx` (default 8192), schema-validated,
+  confidence-thresholded, eligible-id-checked, and prohibited from performing the
+  task. Snapshot descriptions are sanitized, size-bounded, and bound into the
+  inventory fingerprint (tamper fails closed). See
+  `docs/RESOLVER-HARDENING-1.6.1-rc.2.md`.
+- **Canary scope**: active routing/education runs only for turns whose trusted
+  hook identity (channel / accountId / senderId / chatId / sessionKey) matches
+  `skillRouting.scope`. Out-of-scope turns (other channels/senders, cron,
+  heartbeat, CLI, inter-session) stay shadow/passthrough and are never
+  represented as governed. An unconstrained scope is inert unless `allowGlobal`
+  is set.
+- **Bounded child execution**: a resolved route (including the owner's token
+  reply) executes in a fresh child session with `promptMode: "minimal"` +
+  `lightContext: true` so routed work never re-runs inline against the fat main
+  session. `maxChildTokens` / `maxChildCostUsd` are a PRE-FLIGHT estimate guard
+  (a plan estimated above them is refused). Note: openclaw 2026.9.4
+  `SubagentRunParams` exposes no **in-flight per-call** model-pass/token/cost
+  abort, so a single routed child's live token spend cannot be hard-capped from
+  the plugin — see the remediation report for the minimal host change this
+  requires. This is separate from the monthly cloud-budget ceiling below.
+- **Live monthly cloud-spend ceiling** (`skillRouting.spend`, 1.6.1-rc.4): the
+  plugin consumes a DEPLOYMENT-OWNED, versioned + fingerprinted, current-policy-
+  month cloud-spend snapshot — written at refresh time by
+  `scripts/generate-spend-snapshot.mjs` from `openclaw gateway usage-cost
+  --all-agents --expect-final --json` — as the AUTHORITATIVE month-to-date cloud
+  spend for routing. No caller hand-enters a number. It re-verifies source /
+  plugin pair / policy month / freshness / fingerprint and **fails closed on any
+  unpriced CLOUD row** (unpriced LOCAL/Ollama rows are expected $0). When spend
+  meets the finite amortized cloud budget, Intelligence withholds cloud routes
+  and local-capable routes remain; when the snapshot is missing/stale/invalid and
+  a finite cloud budget is declared (`spend.finiteCloudBudgetApplies`), cloud is
+  withheld the same way. The universal no-skill fail-safe runs BEFORE any of this.
+  See `docs/ECONOMIC-PROFILE.md`.
+- **Fail-closed on error**: an internal gate error on a governed turn (or a token
+  reply) returns a handled error and holds the turn; it never falls through to
+  inline routing.
+- A **fail-loud startup self-check**: if the host cannot provide the affordances
+  the gate needs, or the canary scope is unconfigured, active gating is refused
+  (forced shadow) with a loud audit line instead of shipping a dead preflight.
+
+`togglelogic_skill_run` and `togglelogic_skill_plan` remain as optional explicit
+surfaces for the same bounded execution. The execution path runs only in an
+OpenClaw gateway request context, keeps the child model's skill tools available,
+blocks nested ToggleLogic child dispatch structurally, fails loudly on child
+timeout/error, and records the actual child provider/model. Host-configured model
+refs are passed to Intelligence as authoritative accepted routing candidates.
+
+Time-sensitive skills carry a permanent execution contract. `meeting-prep`:
+checks the current time first, treats Microsoft Outlook via Microsoft Graph as
+the only authoritative calendar, clarifies (never fabricates) a past/nonexistent
+meeting, uses Zoom history only after confirming an Outlook event, and never
+synthesizes an event from conversation history. When `skillRouting.calendar` is
+enabled the contract calls a deterministic Microsoft Graph `/me/calendarView`
+grounding port that returns a UNIQUE future event only; zero/multiple/ambiguous/
+auth/timeout/unwired all fail CLOSED (clarify). The transport is an explicitly
+configured **subprocess bridge** (`skillRouting.calendar.bridge.command` → the
+vault-backed `microsoft-graph/scripts/calendar_bridge.py`), launched with an
+explicit argv array (no shell; injection-safe), a wall-clock timeout, and strict
+JSON validation. The plugin holds no Graph credentials; no model instruction
+substitutes for the call. See `docs/CAPABILITY-CONSENT.md`.
+
+Note: `meeting-prep` is **not currently an installed active skill** on SAM-HQ (it
+existed only in a temporary plugin cache). Under the fail-closed rule the exact
+2026-09-15 incident prompt therefore returns the no-skill fail-safe until a
+durable, reviewed `meeting-prep` skill is actually installed; the contract and
+grounding port above apply once it is.
 
 ```json
 {
@@ -159,18 +250,82 @@ authoritative accepted routing candidates.
       "intelligence": {
         "enabled": true,
         "skillProfilesPath": "/absolute/path/to/skill-routing-profiles.json"
+      },
+      "skillRouting": {
+        "useSnapshotInventory": true,
+        "inventorySnapshotPath": "~/.openclaw/togglelogic/skill-inventory.snapshot.json",
+        "inventoryMarkerPath": "~/.openclaw/togglelogic/skill-inventory-accepted.json",
+        "skillCatalog": [
+          { "id": "microsoft-graph", "aliases": ["outlook", "graph"] }
+        ],
+        "nonActionCategories": [
+          { "id": "greeting", "phrases": ["hi", "hello", "thanks"] },
+          { "id": "control", "patterns": ["^\\s*/(stop|status|help)\\b"] }
+        ],
+        "calendar": {
+          "enabled": true,
+          "timeoutMs": 8000,
+          "bridge": {
+            "command": "python3",
+            "args": ["~/.openclaw/workspace/skills/microsoft-graph/scripts/calendar_bridge.py"],
+            "maxResults": 25
+          }
+        },
+        "maxChildTokens": 200000,
+        "maxChildCostUsd": 5,
+        "maxChildToolCalls": 32,
+        "skillRequirements": {
+          "default": { "requiredTier": "tool_calling_strong", "requiresTools": true },
+          "skills": {
+            "microsoft-graph": { "requiredTier": "tool_calling_strong", "requiresTools": true },
+            "zoom-meetings": { "requiredTier": "tool_calling_strong", "requiresTools": true }
+          }
+        },
+        "skillTools": {
+          "microsoft-graph": { "maxToolCalls": 12 },
+          "zoom-meetings": { "maxToolCalls": 8 }
+        },
+        "scope": {
+          "enabled": true,
+          "channels": ["telegram"],
+          "accountIds": ["default"],
+          "senderIds": ["<owner-telegram-peer-id>"],
+          "ownerSenderIds": ["<owner-telegram-peer-id>"]
+        }
       }
     }
   } } }
 }
 ```
 
+`skillRequirements` are DEPLOYMENT-OWNED capability constraints (not learned model
+choices), keyed by verified installed skill id: the capability floor a skill needs
+to run. A skill with no explicit entry inherits the conservative default
+(`tool_calling_strong` + `requiresTools`), so first-use education for a tool-using
+skill such as `microsoft-graph` or `zoom-meetings` never offers an unverified
+general-purpose-only local model; opt a **proven tool-free** skill down to
+`{ "requiredTier": "general_purpose", "requiresTools": false }` to let a local
+lowest-cost model win. Invalid values fail closed to the conservative fallback. The
+requirements are aggregated (strictest tier/privacy/benchmark, min cost caps) across
+a turn's resolved skills and combined in Intelligence with the task classifier and
+any learned profile.
+
+The `scope` above binds the canary to the owner's own SAM-HQ Telegram DM — the
+`default` account (session-key form
+`agent:main:telegram:default:direct:<owner-peer-id>`), the account SAM itself runs
+on, NOT the separate Codex Development bot account. Replace
+`<owner-telegram-peer-id>` with the owner's own Telegram peer id; no owner id is
+hardcoded in this package.
+
 Educational choices are bound to the authenticated owner, session, sender when
 available, short-lived plan, and one-time `TL-xxxxxx` token. The displayed
-token plus `1`, `2`, or `3` teaches the profile. Local inference is not reported as free:
-the Intelligence economic policy compares cloud estimates against explicit or
-amortized local hardware and operating cost. Installation and production
-activation remain separate actions.
+token plus `1`, `2`, or `3` teaches the profile. A local run is reported at its true
+**zero marginal per-run cost** (`$0.00` for one more run on already-owned,
+already-powered hardware — never collapsed to "unknown" so a paid cloud model can
+beat it), while hardware **ownership** is tracked SEPARATELY as an amortized monthly
+cost (capital ÷ useful-life + operating) that defines the comparable monthly cloud
+budget on the receipt. Installation and production activation remain separate
+actions.
 
 ## License, in brief
 

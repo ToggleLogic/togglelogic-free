@@ -14,11 +14,14 @@
  * dispatch, turn-end memory capture, and credential/db-write gates.
  */
 
+import crypto from "node:crypto";
+
 import { createInterceptor } from "./routing/interceptor.js";
 import { createIntelligenceSeam } from "./intelligence/seam.js";
 import { createLogger as createRoutingLogger } from "./observability/logger.js";
 import { createOwnerOverrideAskHandler } from "./capture/owner-override-ask.js";
 import { createCostObserver } from "./usage/cost-observer.js";
+import { createSpendProvider } from "./usage/spend-provider.js";
 import { FamilyResolver } from "./routing/family-resolver.js";
 import { createNewSessionTracker } from "./routing/new-session-tracker.js";
 import { createApprovalGate } from "./governance/approval-gate.js";
@@ -28,6 +31,23 @@ import {
   createSkillRoutingRunTool,
   createSkillRoutingTool,
 } from "./skill-routing/coordinator.js";
+import { createCanaryScope } from "./skill-routing/scope.js";
+import { createSkillResolver, createSkillClassifier } from "./skill-routing/resolver.js";
+import { createSkillContracts } from "./skill-routing/skill-contracts.js";
+import { verifyHostAffordances } from "./skill-routing/host-affordances.js";
+import {
+  loadSkillInventory,
+  detectInventoryDrift,
+  defaultInventoryPaths,
+  aliasesFromCatalogConfig,
+  configuredButNotInstalled,
+} from "./skill-routing/skill-inventory.js";
+import { createNonActionMatcher } from "./skill-routing/intent-categories.js";
+import { createIntentRecipes } from "./skill-routing/intent-recipes.js";
+import { createSkillRequirements } from "./skill-routing/skill-requirements.js";
+import { createGraphCalendarPort } from "./skill-routing/calendar-graph.js";
+import { createSubprocessCalendarTransport } from "./skill-routing/calendar-bridge.js";
+import { createChildToolGuard } from "./skill-routing/child-tool-guard.js";
 
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 
@@ -178,14 +198,274 @@ export const CAPABILITIES = [
         version,
         newSessions.consume,
       );
-      const skillRouting = config.features.skillRouting.enabled
-        ? createSkillRoutingCoordinator({
-            seam,
-            config: config.skillRouting,
-            fallbackLogger,
-            shadow: config.intelligence.shadow,
-          })
-        : null;
+      let skillRouting = null;
+      let calendarTransportWired = false;
+      let childToolGuard = null;
+      let spendSummary = null;
+      if (config.features.skillRouting.enabled) {
+        // Fail-loud host-affordance self-check (postmortem §10.2): verify the
+        // host provides what the guaranteed gate needs; force shadow (no active
+        // gating) rather than register a silently dead preflight.
+        const affordances = verifyHostAffordances({ api, config });
+        const forcedShadow = config.intelligence.shadow || affordances.forceShadow;
+        audit.emit({
+          event: EVENTS.FALLBACK_PLAN_CHECK,
+          outcome: affordances.ok ? OUTCOMES.SUCCESS : OUTCOMES.FAILURE,
+          principal: { source: "plugin-host" },
+          subject: { capability: "skillRouting", check: "host-affordances" },
+          details: {
+            ok: affordances.ok,
+            forcedShadow,
+            configuredShadow: config.intelligence.shadow,
+            scopeEnabled: config.skillRouting.scope.enabled,
+            scopeConstrained: [config.skillRouting.scope.channels, config.skillRouting.scope.accountIds, config.skillRouting.scope.senderIds, config.skillRouting.scope.chatIds, config.skillRouting.scope.sessionKeys].some((l) => l.length > 0),
+            catalogSize: config.skillRouting.skillCatalog.length,
+            missing: affordances.missing,
+            warnings: affordances.warnings,
+          },
+        });
+        if (affordances.missing.length || affordances.warnings.length) {
+          try {
+            const notes = [...affordances.missing.map((m) => `CRITICAL: ${m}`), ...affordances.warnings].join(" | ");
+            fallbackLogger?.warn?.(
+              `togglelogic skill-routing: ${affordances.ok ? "active gating degraded" : "INERT (forced shadow)"} — ${notes}`
+            );
+          } catch { /* ignore */ }
+        }
+        const scope = createCanaryScope(config.skillRouting.scope);
+
+        // AUTHORITATIVE catalog from the DEPLOYMENT-OWNED inventory SNAPSHOT
+        // (generated at deploy time from `openclaw skills list --json`, ELIGIBLE
+        // set only, versioned + fingerprinted). The plugin VERIFIES the snapshot's
+        // source, version pair, freshness, and fingerprint and FAILS CLOSED on a
+        // missing/stale/wrong-source/wrong-version/drifted snapshot — it never reads
+        // the workspace skill_manifest.json (proven stale) and never shells out to
+        // `openclaw` on a turn. The config skillCatalog only SUPPLEMENTS aliases.
+        let resolverCatalog = config.skillRouting.skillCatalog;
+        let inventorySummary = { used: "config_catalog" };
+        if (config.skillRouting.useSnapshotInventory) {
+          const paths = defaultInventoryPaths(config);
+          const inventory = loadSkillInventory({
+            snapshotPath: paths.snapshotPath,
+            expectedPluginFree: version,
+            maxAgeMs: config.skillRouting.inventoryMaxAgeHours * 3_600_000,
+            aliases: aliasesFromCatalogConfig(config.skillRouting.skillCatalog),
+          });
+          const drift = detectInventoryDrift(inventory, { markerPath: paths.markerPath });
+          const notInstalled = configuredButNotInstalled(config.skillRouting.skillCatalog, inventory);
+          resolverCatalog = inventory.catalog; // snapshot authoritative (empty on failure → fail-closed)
+          inventorySummary = {
+            used: "deployment_snapshot",
+            ok: inventory.ok,
+            verified: inventory.verified,
+            source: inventory.source,
+            snapshotPath: paths.snapshotPath,
+            eligibleSkillCount: inventory.catalog.length,
+            counts: inventory.counts,
+            ageHours: Number.isFinite(inventory.ageMs) ? Math.round(inventory.ageMs / 3_600_000) : null,
+            stale: inventory.stale,
+            inventoryFingerprint: inventory.inventoryFingerprint,
+            drift: { firstRun: drift.firstRun, drifted: drift.drifted, added: drift.added, removed: drift.removed, changed: drift.changed.map((c) => c.id) },
+            configuredButNotInstalled: notInstalled,
+            errors: inventory.errors,
+          };
+          audit.emit({
+            event: EVENTS.FALLBACK_PLAN_CHECK,
+            outcome: inventory.ok && !drift.drifted ? OUTCOMES.SUCCESS : OUTCOMES.FAILURE,
+            principal: { source: "plugin-host" },
+            subject: { capability: "skillRouting", check: "skill-inventory-snapshot" },
+            details: inventorySummary,
+          });
+          if (!inventory.ok || drift.drifted || notInstalled.length) {
+            try {
+              const notes = [];
+              if (!inventory.ok) notes.push(`INVENTORY SNAPSHOT UNTRUSTED (${(inventory.errors || []).join("; ")}) — failing closed; no turn can resolve to a skill. Run scripts/generate-skill-inventory.mjs on the host.`);
+              if (drift.drifted) notes.push(`INVENTORY DRIFT since last accepted run: +[${drift.added}] -[${drift.removed}] ~[${drift.changed.map((c) => c.id)}]`);
+              if (notInstalled.length) notes.push(`configured catalog ids not in the snapshot: ${notInstalled.join(", ")}`);
+              fallbackLogger?.warn?.(`togglelogic skill-routing inventory: ${notes.join(" | ")}`);
+            } catch { /* ignore */ }
+          }
+        }
+
+        const resolver = createSkillResolver({
+          catalog: resolverCatalog,
+          mode: config.skillRouting.resolverMode,
+          ambiguityPolicy: config.skillRouting.ambiguityPolicy,
+        });
+        const nonAction = createNonActionMatcher(
+          config.skillRouting.nonActionCategories,
+          (msg) => { try { fallbackLogger?.warn?.(`togglelogic skill-routing: ${msg}`); } catch { /* ignore */ } },
+        );
+        // Deployment-owned deterministic intent recipes — declarative token rules
+        // that compose a natural-language request to one-or-more INSTALLED skills,
+        // evaluated AFTER exact resolution returns none and BEFORE the classifier.
+        // A rule only resolves when every target skill is in the verified inventory.
+        const intentRecipes = createIntentRecipes(config.skillRouting.intentRecipes);
+        // DEPLOYMENT-OWNED per-skill capability requirements (routing constraints).
+        // Aggregated (strictest) across a turn's resolved skills by the coordinator
+        // and passed across the seam into Intelligence.planSkills so first-use
+        // education for a tool-using skill (Graph/Zoom) never offers a
+        // general_purpose-only local model; a proven tool-free skill explicitly
+        // configured general_purpose may still win local lowest-cost.
+        const requirements = createSkillRequirements(config.skillRouting.skillRequirements);
+        // Bounded skill-resolution classifier (a pinned SYSTEM skill with its own
+        // model assignment — preserving the models-by-skill architecture). OFF
+        // unless a model is pinned; when off, natural-language turns that name no
+        // skill hit the no-skill fail-safe. Every decision is audited.
+        const classifier = createSkillClassifier(config.skillRouting.classifier, {
+          audit: (decision) => audit.emit({
+            event: EVENTS.FALLBACK_PLAN_CHECK,
+            outcome: decision.decision === "resolved" ? OUTCOMES.SUCCESS : OUTCOMES.FAILURE,
+            principal: { source: "plugin-host" },
+            subject: { capability: "skillRouting", check: "skill-resolution-classifier" },
+            details: { ...decision, model: config.skillRouting.classifier.model, promptMode: config.skillRouting.classifier.promptMode, lightContext: config.skillRouting.classifier.lightContext },
+          }),
+          logger: fallbackLogger,
+        });
+        // Microsoft Graph /me/calendarView grounding port. The production
+        // transport is a SUBPROCESS BRIDGE: when the deployment configures
+        // skillRouting.calendar.bridge.command, the plugin spawns that explicitly
+        // configured, vault-backed, read-only bridge executable
+        // (microsoft-graph/scripts/calendar_bridge.py) with a bounded window,
+        // wall-clock timeout, and strict JSON validation, and uses its sanitized
+        // output as the authoritative calendar. The plugin holds no Graph
+        // credentials itself; the bridge does. No model instruction substitutes for
+        // this call. With calendar disabled, or enabled-but-unwired (no bridge
+        // command), the port has hasTransport:false and every findEvent fails CLOSED
+        // (clarify, never fabricate).
+        let calendarPort = null;
+        if (config.skillRouting.calendar.enabled) {
+          const bridgeTransport = createSubprocessCalendarTransport(
+            config.skillRouting.calendar.bridge,
+            { timeoutMs: config.skillRouting.calendar.timeoutMs, logger: fallbackLogger },
+          );
+          calendarTransportWired = typeof bridgeTransport === "function";
+          calendarPort = createGraphCalendarPort({
+            ...(bridgeTransport ? { transport: bridgeTransport } : {}),
+            timeoutMs: config.skillRouting.calendar.timeoutMs,
+            logger: fallbackLogger,
+          });
+          audit.emit({
+            event: EVENTS.FALLBACK_PLAN_CHECK,
+            outcome: calendarTransportWired ? OUTCOMES.SUCCESS : OUTCOMES.FAILURE,
+            principal: { source: "plugin-host" },
+            subject: { capability: "skillRouting", check: "calendar-bridge" },
+            details: {
+              enabled: true,
+              transportWired: calendarTransportWired,
+              command: config.skillRouting.calendar.bridge.command || null,
+              timeoutMs: config.skillRouting.calendar.timeoutMs,
+              note: calendarTransportWired
+                ? "authoritative /me/calendarView grounding via configured subprocess bridge"
+                : "calendar enabled but no bridge command configured — port fails CLOSED (clarify, never fabricate)",
+            },
+          });
+          if (!calendarTransportWired) {
+            try { fallbackLogger?.warn?.("togglelogic skill-routing: calendar enabled but skillRouting.calendar.bridge.command is not set — meeting-prep grounding will fail closed (clarify, never fabricate)"); } catch { /* ignore */ }
+          }
+        }
+        const contracts = createSkillContracts({
+          ownerTimezone: config.skillRouting.ownerTimezone,
+          skillTools: config.skillRouting.skillTools,
+          // Deployment-owned per-skill mailbox/sender identity (credential-free),
+          // injected into the routed child and surfaced in the audit/receipt.
+          skillIdentities: config.skillRouting.skillIdentities,
+          ...(calendarPort ? { calendarPort } : {}),
+        });
+        // Bounded-child tool guard: the plugin-enforceable half of the child
+        // ceiling. Registered on before_tool_call below; denies re-entrant routing
+        // tools, off-allowlist tools, and tool calls past the per-run count ceiling
+        // on ":togglelogic-skill:" child sessions. (The host exposes no model
+        // token/pass cap — that residual gap is documented, not silently claimed.)
+        childToolGuard = createChildToolGuard({
+          maxToolCalls: config.skillRouting.maxChildToolCalls,
+          logger: fallbackLogger,
+        });
+        // LIVE cloud-spend provider. When enabled, the coordinator consumes a
+        // deployment-owned, validated, current-policy-month cloud-spend snapshot as
+        // the authoritative month-to-date spend for routing (no caller hand-enters a
+        // number). It fails CLOSED on a missing/stale/invalid snapshot: with a finite
+        // cloud budget declared, cloud routes are withheld while local-capable routes
+        // remain. Disabled by default (falls back to the static monthlyCloudSpendUsd).
+        const spendProvider = config.skillRouting.spend.enabled
+          ? createSpendProvider(config.skillRouting.spend, {
+              version,
+              ownerTimezone: config.skillRouting.ownerTimezone,
+              defaultCostLogPath: config.costVisibility.log.path,
+              fallbackLogger,
+            })
+          : null;
+        if (spendProvider) {
+          let startup = { status: "disabled" };
+          try { startup = spendProvider.current(); } catch (error) { startup = { status: "unavailable", errors: [String(error?.message ?? error)] }; }
+          spendSummary = {
+            enabled: true,
+            status: startup.status,
+            finiteCloudBudgetApplies: spendProvider.finiteCloudBudgetApplies,
+            cloudSuppressed: startup.cloudSuppressed === true,
+            policyMonth: startup.policyMonth ?? null,
+          };
+          audit.emit({
+            event: EVENTS.FALLBACK_PLAN_CHECK,
+            outcome: startup.status === "ok" ? OUTCOMES.SUCCESS : OUTCOMES.FAILURE,
+            principal: { source: "plugin-host" },
+            subject: { capability: "skillRouting", check: "cloud-spend-snapshot" },
+            details: {
+              enabled: true,
+              status: startup.status,
+              reason: startup.reason ?? null,
+              policyMonth: startup.policyMonth ?? null,
+              snapshotPath: spendProvider.snapshotPath,
+              finiteCloudBudgetApplies: spendProvider.finiteCloudBudgetApplies,
+              monthToDateCostUsd: startup.monthToDateCostUsd ?? null,
+              effectiveSpendUsd: Number.isFinite(startup.effectiveSpendUsd) ? startup.effectiveSpendUsd : null,
+              cloudSuppressed: startup.cloudSuppressed === true,
+              ageHours: startup.ageHours ?? null,
+              stale: startup.stale === true,
+              errors: (startup.errors || []).slice(0, 8),
+            },
+          });
+          if (startup.status !== "ok") {
+            try {
+              fallbackLogger?.warn?.(
+                `togglelogic skill-routing spend: live snapshot ${startup.status}` +
+                (spendProvider.finiteCloudBudgetApplies && startup.cloudSuppressed ? " — WITHHOLDING cloud routes (finite budget; local-capable routes remain)" : " — falling back to static spend") +
+                ` (${(startup.errors || []).join("; ") || startup.reason || "no snapshot"}). Run scripts/generate-spend-snapshot.mjs on the host.`
+              );
+            } catch { /* ignore */ }
+          }
+        }
+        skillRouting = createSkillRoutingCoordinator({
+          seam,
+          config: config.skillRouting,
+          fallbackLogger,
+          shadow: forcedShadow,
+          scope,
+          resolver,
+          contracts,
+          runtime: api.runtime,
+          nonAction,
+          intentRecipes,
+          classifier,
+          requirements,
+          childToolGuard,
+          spendProvider,
+          auditUsage: (details) => audit.emit({
+            event: EVENTS.ROUTING_DECISION,
+            outcome: details?.execution_status === "ok" ? OUTCOMES.SUCCESS : OUTCOMES.FAILURE,
+            principal: { source: "plugin-host" },
+            subject: { hook: "subagent_child", check: "post-run-usage-audit" },
+            details,
+          }),
+          auditSpend: (details) => audit.emit({
+            event: EVENTS.ROUTING_DECISION,
+            outcome: details?.status === "ok" ? OUTCOMES.SUCCESS : OUTCOMES.FAILURE,
+            principal: { source: "plugin-host" },
+            subject: { hook: "before_agent_reply", check: "cloud-spend-resolution" },
+            details,
+          }),
+        });
+      }
       const interceptor = createInterceptor({
         config,
         hostConfig: api && api.config,
@@ -216,10 +496,39 @@ export const CAPABILITIES = [
         );
       }
       if (governedEscalation || skillRouting) {
+        // eligibleTriggers:["user"] is HOST-ENFORCED — the host refuses to fire
+        // this reply hook for cron/heartbeat turns, so the canary can never gate
+        // (or educate on) scheduled/background work. Scope + trigger checks in
+        // the coordinator are defense-in-depth for hosts that ignore it.
         api.on("before_agent_reply", (event, hookContext) => interceptor.preflight({
           ...event,
           prompt: event?.cleanedBody || event?.prompt || "",
-        }, hookContext), { priority: 100 });
+        }, hookContext), { priority: 100, eligibleTriggers: ["user"] });
+      }
+      if (childToolGuard) {
+        // Bounded-child tool enforcement (before_tool_call). Fires for ALL tool
+        // calls but only ACTS on ":togglelogic-skill:" child sessions (abstains
+        // elsewhere), denying re-entrant routing tools, off-allowlist tools, and
+        // tool calls past the per-run count ceiling. Emit a loud audit line on deny.
+        api.on("before_tool_call", (event, toolContext) => {
+          const decision = childToolGuard.beforeToolCall(event, toolContext);
+          if (decision?.block) {
+            audit.emit({
+              event: EVENTS.ROUTING_DECISION,
+              outcome: OUTCOMES.FAILURE,
+              principal: { source: "plugin-host" },
+              subject: { hook: "before_tool_call", check: "bounded-child-tool-deny" },
+              details: {
+                mode: "bounded_child_tool_denied",
+                tool: event?.toolName ?? null,
+                reason: decision.blockReason,
+                child_session_key_hash: toolContext?.sessionKey
+                  ? crypto.createHash("sha256").update(String(toolContext.sessionKey)).digest("hex") : null,
+              },
+            });
+          }
+          return decision;
+        }, { priority: 100 });
       }
       if (governedEscalation) {
         api.on("before_agent_run", governedEscalation.beforeAgentRun, { priority: 100 });
@@ -252,13 +561,29 @@ export const CAPABILITIES = [
           "session_start",
           "before_model_resolve",
           ...(governedEscalation || skillRouting ? ["before_agent_reply"] : []),
+          ...(childToolGuard ? ["before_tool_call"] : []),
           ...(governedEscalation ? ["before_agent_run", "agent_turn_prepare", "llm_output", "message_sending", "reply_payload_sending"] : []),
         ],
         intelligence: { enabled: config.intelligence.enabled },
         fallbackPlan: { status: fallbackPlan.status },
         skillRouting: {
           enabled: Boolean(skillRouting),
+          gate: skillRouting ? "before_agent_reply" : null,
+          activeGating: Boolean(skillRouting) && !skillRouting.isShadow && config.skillRouting.scope.enabled,
+          shadow: skillRouting ? skillRouting.isShadow : null,
+          catalogSize: config.skillRouting.skillCatalog.length,
           tools: skillRouting ? ["togglelogic_skill_plan", "togglelogic_skill_run"] : [],
+          childToolGuard: {
+            enabled: Boolean(childToolGuard),
+            hook: childToolGuard ? "before_tool_call" : null,
+            maxToolCalls: config.skillRouting.maxChildToolCalls,
+            perSkillPolicies: Object.keys(config.skillRouting.skillTools || {}).length,
+          },
+          calendar: {
+            enabled: config.skillRouting.calendar.enabled,
+            transportWired: calendarTransportWired,
+          },
+          spend: spendSummary || { enabled: false },
         },
       };
     },
