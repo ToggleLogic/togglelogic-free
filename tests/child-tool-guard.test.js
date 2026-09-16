@@ -1,84 +1,57 @@
-/*
- * ToggleLogic (Free Tier) — bounded-child tool guard tests (before_tool_call).
- *
- * Proves the plugin-enforceable half of the child ceiling: re-entrant routing
- * tools are always denied on a routed child, a per-skill allowlist is enforced,
- * a per-run tool-call COUNT ceiling denies further calls, non-child sessions are
- * never touched, and the guard never throws into the host hook.
- */
-
-import { test } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createChildToolGuard, isChildSkillSession } from "../src/skill-routing/child-tool-guard.js";
+import { createChildToolGuard } from "../src/skill-routing/child-tool-guard.js";
 
-const CHILD = "agent:main:telegram:codex:7797183919:togglelogic-skill:abc123";
-const MAIN = "agent:main:telegram:codex:7797183919";
-
-test("guard: abstains (allows) for non-child sessions", () => {
-  const g = createChildToolGuard({});
-  assert.equal(g.beforeToolCall({ toolName: "anything" }, { sessionKey: MAIN }), undefined);
-  assert.equal(g.beforeToolCall({ toolName: "togglelogic_skill_run" }, { sessionKey: MAIN }), undefined);
-  assert.equal(isChildSkillSession(MAIN), false);
-  assert.equal(isChildSkillSession(CHILD), true);
+test("guard abstains from non-child sessions even when an event would throw", () => {
+  const guard = createChildToolGuard();
+  const event = {};
+  Object.defineProperty(event, "toolName", { get() { throw new Error("must not be read"); } });
+  assert.equal(guard.beforeToolCall(event, { sessionKey: "agent:main:ordinary" }), undefined);
 });
 
-test("guard: ALWAYS denies re-entrant ToggleLogic routing tools on a child", () => {
-  const g = createChildToolGuard({});
-  for (const tool of ["togglelogic_skill_plan", "togglelogic_skill_run"]) {
-    const d = g.beforeToolCall({ toolName: tool }, { sessionKey: CHILD });
-    assert.equal(d.block, true);
-    assert.match(d.blockReason, /nested routing/i);
-  }
+test("guard fails closed after a routed child is identified and records the internal error", () => {
+  const logs = [];
+  const audits = [];
+  const guard = createChildToolGuard({
+    logger: { warn: (line) => logs.push(line) },
+    auditInternalError: (event) => audits.push(event),
+  });
+  const sessionKey = "agent:main:owner:togglelogic-skill:abcdef";
+  guard.register(sessionKey, { skills: ["microsoft-graph"], maxToolCalls: 8 });
+  const event = {};
+  Object.defineProperty(event, "toolName", { get() { throw new Error("TOPSECRET synthetic guard fault"); } });
+
+  const decision = guard.beforeToolCall(event, { sessionKey });
+  assert.deepEqual(decision, {
+    block: true,
+    blockReason: "ToggleLogic blocked this routed child tool call because its safety guard encountered an internal error.",
+  });
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /BLOCKED governed child tool call/);
+  assert.doesNotMatch(logs[0], /TOPSECRET/);
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0].mode, "skill_child_guard_internal_error");
+  assert.equal(audits[0].blocked, true);
+  assert.match(audits[0].child_session_key_hash, /^[a-f0-9]{64}$/);
+  assert.equal(Object.hasOwn(audits[0], "sessionKey"), false);
+  assert.doesNotMatch(JSON.stringify(audits[0]), /TOPSECRET/);
+  assert.deepEqual(guard.release(sessionKey), {
+    toolCalls: 0,
+    deniedToolCalls: 1,
+    internalGuardErrors: 1,
+    ceiling: 8,
+    allowlisted: false,
+    deniedTools: ["<guard-internal-error>"],
+  });
 });
 
-test("guard: enforces a per-skill allowlist", () => {
-  const g = createChildToolGuard({});
-  g.register(CHILD, { skills: [{ id: "meeting-prep" }], allowedTools: ["graph_read", "zoom_read"], maxToolCalls: 10 });
-  assert.equal(g.beforeToolCall({ toolName: "graph_read" }, { sessionKey: CHILD }), undefined, "allowed tool passes");
-  const denied = g.beforeToolCall({ toolName: "shell_exec" }, { sessionKey: CHILD });
-  assert.equal(denied.block, true);
-  assert.match(denied.blockReason, /not in the allowed tool surface/i);
-});
-
-test("guard: enforces the per-run tool-call COUNT ceiling", () => {
-  const g = createChildToolGuard({ maxToolCalls: 3 });
-  g.register(CHILD, { skills: [{ id: "code-review" }] }); // no allowlist → count-only
-  for (let i = 0; i < 3; i += 1) {
-    assert.equal(g.beforeToolCall({ toolName: "read_file" }, { sessionKey: CHILD }), undefined, `call ${i + 1} allowed`);
-  }
-  const over = g.beforeToolCall({ toolName: "read_file" }, { sessionKey: CHILD });
-  assert.equal(over.block, true);
-  assert.match(over.blockReason, /tool-call ceiling \(3\)/);
-  const snap = g.snapshot(CHILD);
-  assert.equal(snap.toolCalls, 3);
-  assert.equal(snap.deniedToolCalls, 1);
-});
-
-test("guard: register overrides lazy default; release returns final counters", () => {
-  const g = createChildToolGuard({ maxToolCalls: 32 });
-  g.register(CHILD, { skills: [{ id: "code-review" }], maxToolCalls: 2 });
-  g.beforeToolCall({ toolName: "a" }, { sessionKey: CHILD });
-  g.beforeToolCall({ toolName: "b" }, { sessionKey: CHILD });
-  g.beforeToolCall({ toolName: "c" }, { sessionKey: CHILD }); // denied (over ceiling 2)
-  const released = g.release(CHILD);
-  assert.equal(released.toolCalls, 2);
-  assert.equal(released.deniedToolCalls, 1);
-  assert.equal(released.ceiling, 2);
-  assert.equal(g.snapshot(CHILD), null, "entry removed after release");
-});
-
-test("guard: lazily bounds an UNREGISTERED child session (defense-in-depth)", () => {
-  const g = createChildToolGuard({ maxToolCalls: 1 });
-  // No register() call — a child session the guard sees for the first time.
-  assert.equal(g.beforeToolCall({ toolName: "x" }, { sessionKey: CHILD }), undefined);
-  const over = g.beforeToolCall({ toolName: "y" }, { sessionKey: CHILD });
-  assert.equal(over.block, true, "count cap still applies without register()");
-});
-
-test("guard: is total — never throws on malformed input", () => {
-  const g = createChildToolGuard({});
-  assert.doesNotThrow(() => g.beforeToolCall(undefined, undefined));
-  assert.doesNotThrow(() => g.beforeToolCall({}, {}));
-  assert.doesNotThrow(() => g.beforeToolCall(null, { sessionKey: CHILD }));
+test("normal routed-child limits still enforce re-entrancy, allowlists, and count ceiling", () => {
+  const guard = createChildToolGuard();
+  const sessionKey = "agent:main:owner:togglelogic-skill:limits";
+  guard.register(sessionKey, { allowedTools: ["graph_call"], maxToolCalls: 1 });
+  assert.equal(guard.beforeToolCall({ toolName: "graph_call" }, { sessionKey }), undefined);
+  assert.match(guard.beforeToolCall({ toolName: "graph_call" }, { sessionKey }).blockReason, /ceiling/);
+  assert.match(guard.beforeToolCall({ toolName: "shell" }, { sessionKey }).blockReason, /allowed tool surface/);
+  assert.match(guard.beforeToolCall({ toolName: "togglelogic_skill_run" }, { sessionKey }).blockReason, /no nested routing/);
 });

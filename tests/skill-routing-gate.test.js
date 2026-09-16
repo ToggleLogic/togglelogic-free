@@ -135,7 +135,7 @@ test("ACCEPTANCE 3: wrong / replayed token is BLOCKED (never executes inline)", 
   // Stage a real pending choice with a SAFE (non-meeting) skill so an education
   // choice is actually staged — a past-meeting prompt would clarify instead.
   const first = await h.coordinator.handleGate(reply("run the code-review skill on this diff"), OWNER_CTX);
-  assert.match(first.reply.text, /Reply 1, 2, or 3/);
+  assert.match(first.reply.text, /Reply 1 or 2/);
   // wrong token
   const wrong = await h.coordinator.handleGate(reply("TL-000000 1"), OWNER_CTX);
   assert.equal(wrong.handled, true);

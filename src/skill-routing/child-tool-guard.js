@@ -21,10 +21,13 @@
  *      the residual gap).
  * It also records the ACTUAL tool-call count for the post-run usage audit.
  *
- * It NEVER interferes with non-child sessions (returns undefined = allow) and
- * NEVER throws into the host hook (fail-open on internal error; the wall-clock
- * timeout + fresh session still bound the child).
+ * It NEVER interferes with non-child sessions (returns undefined = abstain) and
+ * NEVER throws into the host hook. Once the session has been positively
+ * identified as a routed child, an internal guard error FAILS CLOSED: the call
+ * is blocked, counted, logged, and surfaced in the post-run usage audit.
  */
+
+import crypto from "node:crypto";
 
 const SKILL_SESSION_MARKER = ":togglelogic-skill:";
 // Re-entrant ToggleLogic tools are ALWAYS denied inside a routed child.
@@ -36,7 +39,7 @@ export function isChildSkillSession(sessionKey) {
   return typeof sessionKey === "string" && sessionKey.includes(SKILL_SESSION_MARKER);
 }
 
-export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, logger } = {}) {
+export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, logger, auditInternalError } = {}) {
   const defaultMax = Number.isFinite(maxToolCalls) && maxToolCalls >= 0 ? Math.floor(maxToolCalls) : DEFAULT_MAX_TOOL_CALLS;
   // childSessionKey -> { count, denied, max, allowedTools:Set|null, skills:[], deniedTools:[] }
   const sessions = new Map();
@@ -51,7 +54,7 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
   function ensure(childSessionKey) {
     let entry = sessions.get(childSessionKey);
     if (!entry) {
-      entry = { count: 0, denied: 0, max: defaultMax, allowedTools: null, skills: [], deniedTools: [] };
+      entry = { count: 0, denied: 0, internalErrors: 0, max: defaultMax, allowedTools: null, skills: [], deniedTools: [] };
       sessions.set(childSessionKey, entry);
       prune();
     }
@@ -67,6 +70,7 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
     sessions.set(childSessionKey, {
       count: 0,
       denied: 0,
+      internalErrors: 0,
       max: Number.isFinite(max) && max >= 0 ? Math.floor(max) : defaultMax,
       allowedTools: Array.isArray(allowedTools) ? new Set(allowedTools) : null,
       skills: (skills || []).map((s) => (typeof s === "string" ? s : s?.id)).filter(Boolean),
@@ -79,7 +83,14 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
   function snapshot(childSessionKey) {
     const e = sessions.get(childSessionKey);
     if (!e) return null;
-    return { toolCalls: e.count, deniedToolCalls: e.denied, ceiling: e.max, allowlisted: Boolean(e.allowedTools), deniedTools: [...e.deniedTools] };
+    return {
+      toolCalls: e.count,
+      deniedToolCalls: e.denied,
+      internalGuardErrors: e.internalErrors || 0,
+      ceiling: e.max,
+      allowlisted: Boolean(e.allowedTools),
+      deniedTools: [...e.deniedTools],
+    };
   }
 
   /** Remove the entry after the run; returns its final counters for the audit. */
@@ -100,9 +111,12 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
    * to allow / abstain. Total: never throws into the host.
    */
   function beforeToolCall(event = {}, ctx = {}) {
+    let sessionKey = null;
+    let identifiedChild = false;
     try {
-      const sessionKey = ctx?.sessionKey;
+      sessionKey = ctx?.sessionKey;
       if (!isChildSkillSession(sessionKey)) return undefined; // not our child — abstain (allow)
+      identifiedChild = true;
       const toolName = event?.toolName;
       const entry = ensure(sessionKey);
 
@@ -124,8 +138,36 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
       entry.count += 1;
       return undefined; // allowed
     } catch (error) {
-      try { logger?.warn?.(`togglelogic child tool guard: internal error, allowing tool call: ${String(error?.message ?? error).slice(0, 160)}`); } catch { /* ignore */ }
-      return undefined; // fail-open: wall-clock + fresh session still bound the child
+      // If the session could not be positively identified as one of ours, the
+      // plugin has no authority to interfere. Once identified, however, allowing
+      // on a guard fault would bypass the exact safety boundary this hook owns.
+      if (!identifiedChild) return undefined;
+      try {
+        const entry = ensure(sessionKey);
+        entry.internalErrors = (entry.internalErrors || 0) + 1;
+        recordDenied(entry, "<guard-internal-error>");
+      } catch { /* the block below is authoritative even if accounting also fails */ }
+      try {
+        const errorType = typeof error?.name === "string" && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(error.name)
+          ? error.name : "Error";
+        auditInternalError?.({
+          mode: "skill_child_guard_internal_error",
+          child_session_key_hash: crypto.createHash("sha256").update(sessionKey).digest("hex"),
+          error_type: errorType,
+          blocked: true,
+        });
+      } catch { /* audit is best-effort; never weaken the block */ }
+      try {
+        const log = typeof logger?.error === "function" ? logger.error.bind(logger)
+          : typeof logger?.warn === "function" ? logger.warn.bind(logger) : null;
+        const errorType = typeof error?.name === "string" && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(error.name)
+          ? error.name : "Error";
+        log?.(`togglelogic child tool guard: internal ${errorType}; BLOCKED governed child tool call`);
+      } catch { /* logging is best-effort; never weaken the block */ }
+      return {
+        block: true,
+        blockReason: "ToggleLogic blocked this routed child tool call because its safety guard encountered an internal error.",
+      };
     }
   }
 

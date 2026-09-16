@@ -17,10 +17,19 @@ paired with `src/skill-routing/coordinator.js` (`executeBoundedChild`) and
 | **Empty tool surface (per skill)** | `SubagentRunParams.disableTools: true` when the skill's policy declares no tools | host `SubagentRunParams:disableTools?` |
 | **Per-skill tool allowlist** | `before_tool_call` guard denies (`{block:true}`) any tool outside the declared allowlist on the child session | host `before_tool_call` → `{block, blockReason}`; `child-tool-guard.js` |
 | **Hard tool-call COUNT ceiling** | `before_tool_call` guard denies further tool calls after `maxChildToolCalls` on the child | `child-tool-guard.js` |
+| **Fail-closed guard errors** | Non-child sessions are ignored, but after `:togglelogic-skill:` identification any internal guard error blocks the call and emits an immediate hashed audit plus the post-run counter | `child-tool-guard.js`; coordinator usage audit |
 | **No nested routing** | guard always denies `togglelogic_skill_plan`/`togglelogic_skill_run` on a child (+ system-prompt instruction + `sessionKey` re-entry check) | `child-tool-guard.js`; coordinator |
 | **Wall-clock timeout** | `subagent.waitForRun({ timeoutMs })` bounds the wait; config `agents.defaults.subagents.runTimeoutSeconds` bounds the run host-side | host `SubagentWaitParams:timeoutMs`; `agents.defaults.subagents.runTimeoutSeconds` |
 | **Pre-flight estimate gate** | refuse to start when the plan's own token/cost estimate exceeds `maxChildTokens`/`maxChildCostUsd` | `coordinator.js` |
 | **Post-run usage audit** | emit actual tool-call count, denied count, wall-clock, stopReason after every child run (success or failure) | `coordinator.js` finally block; `auditUsage` |
+
+For a multi-skill route, component tool-call ceilings form a bounded composite:
+each unique non-disabled skill contributes its declared ceiling, contributions
+are summed, and the sum is capped by the deployment-wide
+`maxChildToolCalls`. An undeclared component contributes the global ceiling, so
+composition can never expand authority beyond the hard deployment limit. This
+allows Graph+Zoom or Graph+artifact workflows to use both declared budgets while
+preventing the old minimum-component rule from prematurely stopping valid work.
 
 ## The residual gap (NOT closable by the plugin on 2026.9.4)
 

@@ -32,11 +32,14 @@ you configure in OpenClaw.
 - **Optional model-family aliases.** Name a family for a configured route and
   resolve it only within providers you have approved. Resolution safely passes
   through when freshness, provider, or price requirements are not satisfied.
-- **Skill-aware routing (1.6.1-rc.5).** A guaranteed pre-execution gate
+- **Skill-aware routing (1.7.0).** A guaranteed pre-execution gate
   (`before_agent_reply`, host-enforced user turns only) resolves the skills a
   message references DETERMINISTICALLY from the deployment's installed-skill
-  catalog, then — for an in-scope owner turn — replies with cost, benchmark, and
-  Intelligence choices and a one-time token BEFORE any model runs. The learned
+  catalog, then — for an in-scope owner turn — presents distinct Economy,
+  Recommended, and Premium lineages with skill-specific strengths, trade-offs,
+  workflow cost ranges, and a reasoned Intelligence recommendation BEFORE any
+  model runs. If only one lineage is eligible, it is shown once rather than
+  repeated under multiple policy labels. The learned
   strategy or model lineage is reused deterministically and executed in a bounded
   child. Active routing/education is scoped to configured trusted identities
   (e.g. one owner channel); every out-of-scope turn stays passthrough. Numbered
@@ -53,15 +56,13 @@ Its public engine can be inspected and contributed to; eligible startups registe
 
 ## OpenClaw compatibility
 
-> **Backward-compatible with OpenClaw 2026.6.5 and later; validated through
-> OpenClaw 2026.9.4.**
+> **Requires OpenClaw 2026.9.4 or later; validated on OpenClaw 2026.9.4.**
 
-The minimum gateway version remains `>=2026.6.5`, and the plugin API floor
-remains `>=2026.5.2`. Those lower bounds are intentional: they preserve support
-for existing OpenClaw deployments and do not mean ToggleLogic depends on an
-obsolete host release. ToggleLogic Free 1.5.0 was packaged and passed its full
-release quality gate on OpenClaw `2026.9.4`. OpenClaw versions newer than the
-stated validation point should be verified before production promotion.
+The minimum gateway version is `>=2026.9.4`; the plugin API floor remains
+`>=2026.5.2`. The newer gateway floor reflects the owner-scoped pre-execution
+and bounded-child integration used by skill routing. OpenClaw versions newer
+than the stated validation point should be verified before production
+promotion.
 
 ## Governed model escalation
 
@@ -133,9 +134,10 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
 Bring your own provider credentials. Set your routing policy. The evidence stays
 local.
 
-### Skill-aware routing (1.6.1-rc.5)
+### Skill-aware routing (1.7.0)
 
-This capability is opt-in and requires ToggleLogic Intelligence 1.4.1-rc.5.
+This capability is opt-in and requires a compatible ToggleLogic Intelligence
+1.7 marketplace planner.
 
 **How it intercepts.** The 1.6.0 design gated on structured planned-skill
 metadata that the OpenClaw host never supplies on the routing hooks, so it could

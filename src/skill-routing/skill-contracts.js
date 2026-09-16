@@ -254,6 +254,12 @@ export function createSkillContracts(rawConfig = {}) {
   // Deployment-declared per-skill tool policy, enforced on the bounded child by the
   // before_tool_call guard: { "<skillId>": { allowedTools:[...], maxToolCalls, disableTools } }.
   const skillTools = rawConfig.skillTools && typeof rawConfig.skillTools === "object" ? rawConfig.skillTools : {};
+  // The configured guard ceiling is also the hard cap for a composite route.
+  // Component ceilings may add together because a Graph+Zoom (or Graph+artifact)
+  // workflow legitimately needs both skills' tool budgets, but composition can
+  // never expand beyond this global bound.
+  const compositeToolCallCeiling = Number.isFinite(rawConfig.maxChildToolCalls) && rawConfig.maxChildToolCalls >= 0
+    ? Math.floor(rawConfig.maxChildToolCalls) : 32;
   // Calendar-capable installed skills (deployment-overridable). Authoritative =
   // Outlook via Microsoft Graph; subordinate = Zoom (never a calendar).
   const authoritativeCalendarSkills = normalizeIdList(rawConfig.calendarSkillIds, DEFAULT_AUTHORITATIVE_CALENDAR_SKILLS);
@@ -266,6 +272,12 @@ export function createSkillContracts(rawConfig = {}) {
    * allowedTools=null → no allowlist (count-only); a non-null list is enforced by
    * the guard. To avoid breaking a skill whose tools are undeclared, an allowlist
    * only applies when EVERY non-disabled skill declared one.
+   *
+   * The count ceiling is a BOUNDED COMPOSITE: each unique non-disabled skill
+   * contributes its declared ceiling (or the global ceiling when undeclared),
+   * the contributions are summed, and the result is capped by the configured
+   * global ceiling. This gives Graph+Zoom enough room for both workflows without
+   * letting composition multiply the deployment's hard safety limit.
    */
   function toolPolicyFor(skills) {
     const list = Array.isArray(skills) ? skills : [];
@@ -273,9 +285,12 @@ export function createSkillContracts(rawConfig = {}) {
     let disableAll = true;
     let anyUnrestricted = false;
     const combinedAllow = new Set();
-    let minCalls = null;
+    let compositeCalls = 0;
+    const seenSkills = new Set();
     for (const skill of list) {
       const id = cleanString(typeof skill === "string" ? skill : skill?.id);
+      if (!id || seenSkills.has(id)) continue;
+      seenSkills.add(id);
       const policy = id && skillTools[id] && typeof skillTools[id] === "object" ? skillTools[id] : null;
       const disable = policy?.disableTools === true;
       const allow = Array.isArray(policy?.allowedTools)
@@ -284,13 +299,14 @@ export function createSkillContracts(rawConfig = {}) {
       if (!disable) disableAll = false;
       if (!disable && !allow) anyUnrestricted = true;
       if (allow) for (const t of allow) combinedAllow.add(t);
-      if (maxCalls !== null) minCalls = minCalls === null ? maxCalls : Math.min(minCalls, maxCalls);
+      if (!disable) compositeCalls += maxCalls ?? compositeToolCallCeiling;
     }
     const disableTools = disableAll;
     const allowedTools = disableTools
       ? []
       : (anyUnrestricted || combinedAllow.size === 0 ? null : [...combinedAllow]);
-    return { disableTools, allowedTools, maxToolCalls: minCalls };
+    const maxToolCalls = disableTools ? 0 : Math.min(compositeToolCallCeiling, compositeCalls);
+    return { disableTools, allowedTools, maxToolCalls };
   }
 
   // Ordered, deduped identity prompt blocks for the RESOLVED skill set. Only ids

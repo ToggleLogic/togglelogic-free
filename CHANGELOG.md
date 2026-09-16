@@ -2,6 +2,32 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.1 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.1)
+
+- Replaces three policy labels that could all resolve to the same model with an
+  honest skill-specific marketplace: Economy, Recommended, and Premium routes
+  are distinct durable model lineages when those alternatives are eligible.
+- Shows each route's skill-specific advantage, trade-off, estimated workflow
+  cost range, and the reason for ToggleLogic's recommendation.
+- Collapses the prompt to one plainly labeled choice when only one eligible
+  lineage exists; ToggleLogic no longer disguises one route as three choices.
+- Keeps simple owner replies (`1`, `2`, or `3`) session- and sender-bound and
+  persists the exact strategy and lineage shown for the current skill version.
+- Separates planned routing from observed execution in owner receipts. A planned
+  model is never described as the model actually used unless the completed child
+  transcript supplies host-observed provider/model evidence.
+- Retains the 1.6 owner-only scope, fail-closed skill boundary, bounded child,
+  budget, privacy, and capability safeguards. Global and unattended enforcement
+  remain unavailable pending the OpenClaw in-flight runtime safeguard.
+- Makes the routed-child tool guard fail closed after a child session is
+  positively identified. Internal guard errors now block the call, emit an
+  immediate hashed audit/log entry, and appear in the post-run usage audit;
+  unrelated non-child sessions still remain untouched.
+- Replaces minimum-component tool ceilings on multi-skill work with an explicit
+  bounded composite: unique component budgets add together but can never exceed
+  the deployment-wide `maxChildToolCalls`. This prevents valid Graph+Zoom and
+  presentation workflows from inheriting only the smallest component budget.
+
 ## 1.6.2 — 2026-09-16 (security-review metadata; pairs with Intelligence 1.4.2)
 
 - Adds a permanent packaged security-review note documenting the plugin's
