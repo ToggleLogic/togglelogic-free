@@ -2,6 +2,12 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.6.1-rc.13 — 2026-09-16 (ClawHub replacement; pairs with Intelligence 1.4.1-rc.14)
+
+- Replaces the unreadable ClawHub rc.12 reservation created by a registry-side
+  publication failure.
+- Runtime behavior and corrected publication metadata are unchanged from rc.12.
+
 ## 1.6.1-rc.12 — 2026-09-16 (publication metadata correction; pairs with Intelligence 1.4.1-rc.13)
 
 - Revises the public package summary to describe the owner-scoped skill-aware
