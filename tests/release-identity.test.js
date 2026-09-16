@@ -19,7 +19,7 @@ test("public package and OpenClaw manifest share one release identity", () => {
 
 test("published compatibility metadata preserves the floor and records current validation", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-  assert.equal(pkg.openclaw.install.minHostVersion, ">=2026.6.5");
+  assert.equal(pkg.openclaw.install.minHostVersion, ">=2026.9.4");
   assert.equal(pkg.openclaw.compat.pluginApi, ">=2026.5.2");
   assert.equal(pkg.openclaw.build.openclawVersion, "2026.9.4");
 });
