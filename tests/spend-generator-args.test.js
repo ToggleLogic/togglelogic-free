@@ -16,8 +16,15 @@ import {
   parseArgs,
   usageCostArgs,
   effectiveDays,
+  usageCacheIsRefreshing,
   MIN_USAGE_DAYS,
 } from "../scripts/generate-spend-snapshot.mjs";
+
+test("a warming OpenClaw usage cache is retried instead of accepted as zero spend", () => {
+  assert.equal(usageCacheIsRefreshing({ cacheStatus: { status: "refreshing" }, totals: { totalCost: 0 } }), true);
+  assert.equal(usageCacheIsRefreshing({ cacheStatus: { status: "fresh" }, totals: { totalCost: 24.47 } }), false);
+  assert.equal(usageCacheIsRefreshing({ totals: { totalCost: 24.47 } }), false);
+});
 
 test("MIN_USAGE_DAYS covers the longest month with slack", () => {
   assert.ok(MIN_USAGE_DAYS >= 35, "must exceed 31 days plus timezone slack");

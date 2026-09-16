@@ -47,6 +47,8 @@ import {
 // for the owner-local month boundary, so day 1 is never dropped regardless of when
 // in the month the refresh runs. The month filter downstream discards older rows.
 export const MIN_USAGE_DAYS = 35;
+export const USAGE_CACHE_RETRY_MS = 2000;
+export const USAGE_CACHE_MAX_ATTEMPTS = 16;
 
 export function parseArgs(argv) {
   const args = {
@@ -81,6 +83,14 @@ export function usageCostArgs(days = MIN_USAGE_DAYS) {
   return ["gateway", "usage-cost", "--all-agents", "--expect-final", "--json", "--days", String(effectiveDays(days))];
 }
 
+export function usageCacheIsRefreshing(usageJson) {
+  return usageJson?.cacheStatus?.status === "refreshing";
+}
+
+function waitSync(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
 function expandHome(p) {
   if (!p) return p;
   return p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : p;
@@ -105,13 +115,20 @@ function main() {
   const execArgs = usageCostArgs(days);
   let usageJson;
   try {
-    const raw = execFileSync(args.openclaw, execArgs, {
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    });
-    usageJson = JSON.parse(raw);
+    for (let attempt = 1; attempt <= USAGE_CACHE_MAX_ATTEMPTS; attempt += 1) {
+      const raw = execFileSync(args.openclaw, execArgs, {
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
+      usageJson = JSON.parse(raw);
+      if (!usageCacheIsRefreshing(usageJson)) break;
+      if (attempt === USAGE_CACHE_MAX_ATTEMPTS) {
+        throw new Error(`usage-cost cache remained refreshing after ${USAGE_CACHE_MAX_ATTEMPTS} attempts`);
+      }
+      waitSync(USAGE_CACHE_RETRY_MS);
+    }
   } catch (error) {
-    process.stderr.write(`generate-spend-snapshot: could not run \`${args.openclaw} ${execArgs.join(" ")}\`: ${error.message}\n`);
+    process.stderr.write(`generate-spend-snapshot: could not obtain a settled usage-cost response from \`${args.openclaw} ${execArgs.join(" ")}\`: ${error.message}\n`);
     process.exit(2);
   }
 
