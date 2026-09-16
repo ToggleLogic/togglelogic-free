@@ -2,6 +2,17 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.6.1-rc.12 — 2026-09-16 (publication metadata correction; pairs with Intelligence 1.4.1-rc.13)
+
+- Revises the public package summary to describe the owner-scoped skill-aware
+  1.6 release accurately and to state that ToggleLogic Intelligence is privately
+  distributed under its own license.
+- Declares OpenClaw `2026.9.4` as the minimum tested host for this feature set,
+  eliminating the ClawHub host-version drift warning.
+- Documents that global and unattended enforcement remain unavailable pending
+  an OpenClaw hard in-flight model token/cost/pass abort safeguard.
+- Runtime routing behavior is unchanged from rc.11.
+
 ## 1.6.1-rc.11 — 2026-09-16 (prerelease; pairs with Intelligence 1.4.1-rc.12)
 
 - Separates human conversation from actionable work at the bounded local
