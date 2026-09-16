@@ -2,6 +2,13 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.6.1 — 2026-09-16 (owner-scoped release; pairs with Intelligence 1.4.1)
+
+- Promotes the tested owner-scoped 1.6 release candidate to stable distribution.
+- Global and unattended enforcement remain explicitly unavailable pending an
+  OpenClaw hard in-flight model token/cost/pass abort safeguard.
+- Runtime behavior is unchanged from rc.13.
+
 ## 1.6.1-rc.13 — 2026-09-16 (ClawHub replacement; pairs with Intelligence 1.4.1-rc.14)
 
 - Replaces the unreadable ClawHub rc.12 reservation created by a registry-side
