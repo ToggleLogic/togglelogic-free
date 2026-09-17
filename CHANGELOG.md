@@ -2,6 +2,18 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0 — 2026-09-17 (owner-scoped stable release; pairs with private Intelligence 1.5.0)
+
+- Promotes the owner-tested RC13 model marketplace, skill-aware routing,
+  verified child execution, and trusted artifact-delivery behavior to stable.
+- Keeps teaching and execution owner-scoped and opt-in. Global and unattended
+  enforcement remain unavailable pending an OpenClaw in-flight runtime
+  safeguard.
+- Final owner UAT verified a composed Microsoft Graph and Zoom workflow with
+  actual source calls, matching planned and observed models, and no denied tool
+  calls or guard errors.
+- Runtime behavior is unchanged from RC13.
+
 ## 1.7.0-rc.13 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.13)
 
 - Expands the reference meeting-prep recipe to recognize the common noun form

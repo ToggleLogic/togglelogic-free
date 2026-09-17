@@ -1,4 +1,7 @@
-# ToggleLogic Free 1.7.0-rc.13
+# ToggleLogic Free 1.7.0
+
+ToggleLogic 1.7 promotes the owner-tested RC13 behavior to the stable public
+release. Runtime logic is unchanged from RC13.
 
 ## RC13 candidate: natural meeting vocabulary and platform aliases
 
