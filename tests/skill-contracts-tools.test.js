@@ -69,6 +69,17 @@ test("PowerPoint contract requires staging, parent delivery, note order, measure
   assert.match(prompt, /Do not claim final delivery or completion when any required verification tool call was denied/);
 });
 
+test("QuickBooks contract uses one all-realm A/R call and avoids redundant healthchecks", () => {
+  const contracts = createSkillContracts({});
+  const prompt = contracts.contractPrompt([{ id: "quickbooks-online" }], "Summarize A/R across our companies");
+  assert.match(prompt, /aged_receivables_all/);
+  assert.match(prompt, /make this ONE tool call/);
+  assert.match(prompt, /do not make separate per-company tool calls/);
+  assert.match(prompt, /Do not run a separate healthcheck before a normal report/);
+  assert.match(prompt, /Keep every QBO realm legally and structurally separate/);
+  assert.match(prompt, /Remain read-only/);
+});
+
 test("undeclared or duplicate component policies cannot multiply the global ceiling", () => {
   const contracts = createSkillContracts({
     maxChildToolCalls: 20,

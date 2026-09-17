@@ -2,6 +2,18 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.10 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.10)
+
+- Adds a permanent QuickBooks execution contract that keeps financial answers
+  grounded in live QBO data, preserves legal separation between realms, and
+  distinguishes sourced balances from prioritization judgments.
+- Directs all-company A/R work through one deterministic, read-only broker
+  command whose per-realm token refresh and authentication preflight are
+  internal. This removes a redundant healthcheck, separate model-driven
+  per-company commands, and an avoidable retry caused by omitted date flags.
+- Requires explicit ISO report dates and retains fail-closed clarification when
+  the requested financial period is ambiguous.
+
 ## 1.7.0-rc.9 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.9)
 
 - Recognizes an absolute source `.pptx` followed by ordinary sentence-ending

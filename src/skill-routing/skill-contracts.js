@@ -68,9 +68,20 @@ const POWERPOINT_EDITOR_CONTRACT = [
   "6. Do not claim final delivery or completion when any required verification tool call was denied, failed, or skipped. Never speculate about final-destination permissions; only the trusted parent performs and verifies delivery.",
 ].join("\n");
 
+const QUICKBOOKS_ONLINE_CONTRACT = [
+  "QUICKBOOKS ONLINE EXECUTION CONTRACT (mandatory, non-negotiable):",
+  "1. Treat financial reads as source-grounded work: query QuickBooks Online and never manufacture balances, customers, invoices, dates, or company names from conversation history.",
+  "2. Keep every QBO realm legally and structurally separate. A cross-company summary may compare separately labeled results, but must never merge ledgers or imply that one realm is another.",
+  "3. For an A/R aging request covering all configured companies, use the deterministic one-command fast path: python3 skills/quickbooks-online/main.py --action aged_receivables_all --start-date YYYY-MM-DD --end-date YYYY-MM-DD. Resolve the requested date first, then make this ONE tool call; do not make separate per-company tool calls.",
+  "4. The report command performs credential refresh and a live authentication preflight internally for each realm. Do not run a separate healthcheck before a normal report unless the report itself returns a verified authentication failure.",
+  "5. All report dates must be explicit ISO dates. If the owner's requested period is ambiguous, ask for clarification instead of guessing.",
+  "6. Remain read-only unless the owner explicitly asks for a specific mutation. Clearly distinguish verified QBO facts from recommendations or prioritization judgments.",
+].join("\n");
+
 export const BUILTIN_CONTRACTS = Object.freeze({
   "meeting-prep": Object.freeze({ timeSensitive: true, contract: MEETING_CALENDAR_CONTRACT }),
   "powerpoint-editor": Object.freeze({ timeSensitive: false, contract: POWERPOINT_EDITOR_CONTRACT }),
+  "quickbooks-online": Object.freeze({ timeSensitive: false, contract: QUICKBOOKS_ONLINE_CONTRACT }),
 });
 
 // The ELIGIBLE calendar-capable skills on the reference host. AUTHORITATIVE =

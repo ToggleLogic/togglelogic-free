@@ -1,6 +1,6 @@
 {
   "name": "togglelogic",
-  "version": "1.7.0-rc.9",
+  "version": "1.7.0-rc.10",
   "private": true,
   "description": "Owner-scoped skill-aware model routing for OpenClaw with learned policies, benchmark-capable Intelligence integration, bounded child execution, budget controls, audit records, and transparent cost estimates. Bring your own provider credentials. The separate ToggleLogic Intelligence package is privately distributed under its own license. Global and unattended enforcement require a future OpenClaw in-flight runtime safeguard.",
   "type": "module",

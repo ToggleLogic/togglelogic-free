@@ -1,4 +1,14 @@
-# ToggleLogic Free 1.7.0-rc.9
+# ToggleLogic Free 1.7.0-rc.10
+
+## RC10 candidate: deterministic QuickBooks multi-company reads
+
+The `quickbooks-online` execution contract now sends an all-company A/R request
+through one read-only broker command. The broker still authenticates and queries
+each QBO realm independently and returns separately labeled results; no ledgers
+are merged. Token refresh and live authentication checks happen inside the
+report command, so the child does not spend additional model turns on a separate
+healthcheck or on one command per company. Explicit ISO dates are mandatory, and
+the contract distinguishes verified QBO facts from SAM's prioritization advice.
 
 ## RC9 candidate: natural-language path authorization correction
 
