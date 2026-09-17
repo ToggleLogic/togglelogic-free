@@ -1,4 +1,12 @@
-# ToggleLogic Free 1.7.0-rc.12
+# ToggleLogic Free 1.7.0-rc.13
+
+## RC13 candidate: natural meeting vocabulary and platform aliases
+
+The reference policy now recognizes “meeting preparation” as well as
+“prepare/prep/brief,” and explicitly supplements the verified inventory with
+`microsoft graph`/`outlook` and `zoom` aliases. The exact owner rerun wording
+therefore composes Graph plus Zoom deterministically instead of resolving only
+the explicitly named Graph component.
 
 ## RC12 candidate: Zoom evidence and truthful role overlap
 

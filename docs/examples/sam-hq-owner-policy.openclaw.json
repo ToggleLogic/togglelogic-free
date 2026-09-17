@@ -26,6 +26,10 @@
             "ownerTimezone": "America/New_York",
             "inventorySnapshotPath": "~/.openclaw/togglelogic/skill-inventory.snapshot.json",
             "inventoryMaxAgeHours": 24,
+            "skillCatalog": [
+              { "id": "microsoft-graph", "aliases": ["microsoft graph", "outlook"] },
+              { "id": "zoom-meetings", "aliases": ["zoom", "zoom meeting", "zoom meetings"] }
+            ],
             "spend": {
               "enabled": true,
               "snapshotPath": "~/.openclaw/togglelogic/cloud-spend.snapshot.json",
@@ -51,7 +55,7 @@
               {
                 "id": "high-precision-meeting-prep",
                 "allTerms": ["meeting"],
-                "anyTerms": ["prepare", "prep", "brief", "briefing", "get ready", "ready for", "prep me"],
+                "anyTerms": ["prepare", "preparation", "prep", "brief", "briefing", "get ready", "ready for", "prep me"],
                 "skillIds": ["microsoft-graph", "zoom-meetings"]
               },
               {

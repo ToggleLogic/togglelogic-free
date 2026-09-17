@@ -2,6 +2,17 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.13 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.13)
+
+- Expands the reference meeting-prep recipe to recognize the common noun form
+  “preparation,” preventing a natural rerun request from falling through to only
+  an explicitly named component skill.
+- Adds explicit deployment aliases for Microsoft Graph/Outlook and Zoom so
+  natural platform names resolve their verified installed skills without relying
+  on probabilistic classification.
+- Adds the exact RC12 owner rerun wording as a deterministic Graph+Zoom
+  composition regression.
+
 ## 1.7.0-rc.12 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.12)
 
 - Requires a real Zoom API/search/list operation after Outlook confirms a

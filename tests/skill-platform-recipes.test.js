@@ -37,7 +37,7 @@ import { createIntentRecipes } from "../src/skill-routing/intent-recipes.js";
 // (explicit `gmail` + an email term -> `gog`); that recipe and its precision +
 // per-skill mailbox identity are covered in tests/skill-mailbox-identity.test.js.
 export const PLATFORM_RECIPES = [
-  { id: "high-precision-meeting-prep", allTerms: ["meeting"], anyTerms: ["prepare", "prep", "brief", "briefing", "get ready", "ready for", "prep me"], skillIds: ["microsoft-graph", "zoom-meetings"] },
+  { id: "high-precision-meeting-prep", allTerms: ["meeting"], anyTerms: ["prepare", "preparation", "prep", "brief", "briefing", "get ready", "ready for", "prep me"], skillIds: ["microsoft-graph", "zoom-meetings"] },
   { id: "outlook-mail", allTerms: ["outlook"], anyTerms: ["email", "emails", "mail", "inbox", "message", "messages"], skillIds: ["microsoft-graph"] },
   { id: "zoom-recording", allTerms: ["zoom"], anyTerms: ["transcript", "transcripts", "recording", "recordings", "recorded"], skillIds: ["zoom-meetings"] },
 ];
@@ -92,6 +92,16 @@ test("zoom-recording does NOT capture generic meeting text (no 'zoom' token)", (
 
 test("meeting-prep is preserved as a Graph+Zoom composition", () => {
   const r = createIntentRecipes(PLATFORM_RECIPES).resolve("Prepare me for my 2 PM meeting today", { installedIds: INSTALLED });
+  assert.equal(r.status, "resolved");
+  assert.equal(r.ruleId, "high-precision-meeting-prep");
+  assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
+});
+
+test("meeting preparation noun form preserves the Graph+Zoom composition", () => {
+  const r = createIntentRecipes(PLATFORM_RECIPES).resolve(
+    "Rerun my preparation for today's meeting and perform an actual Zoom history search.",
+    { installedIds: INSTALLED },
+  );
   assert.equal(r.status, "resolved");
   assert.equal(r.ruleId, "high-precision-meeting-prep");
   assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
