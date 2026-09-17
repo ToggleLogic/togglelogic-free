@@ -322,6 +322,14 @@ export function formatSkillExecutionReceipt(details) {
   const child = details?.planned_model_ref || details?.resolved_child || details?.selected_model_ref || "model unavailable";
   const cost = Number.isFinite(details?.estimated_cost_usd) ? money(details.estimated_cost_usd) : "estimate unavailable";
   const observed = cleanString(details?.observed_model_ref);
+  const deniedToolCalls = Number.isFinite(details?.denied_tool_calls) ? details.denied_tool_calls : 0;
+  if (deniedToolCalls > 0 || details?.execution_status === "tool_guard_denied") {
+    return `— EXECUTION INCOMPLETE: ToggleLogic planned ${lineage} → ${child}, but the bounded-child guard denied ${deniedToolCalls || "one or more"} tool call(s). Verification was incomplete, so the result was not accepted as completed work.`;
+  }
+  const mismatch = observed && child !== "model unavailable" && observed.toLowerCase() !== child.toLowerCase();
+  if (mismatch) {
+    return `— EXECUTION MODEL MISMATCH: ToggleLogic planned ${lineage} → ${child}, but the host observed ${observed}. The result was not accepted as successfully routed execution.`;
+  }
   const evidence = observed
     ? `Observed execution model: ${observed}.`
     : "The host did not expose the execution model, so the planned model is not claimed as the model actually used.";
@@ -679,6 +687,7 @@ export function createSkillRoutingCoordinator({
       skills,
       allowedTools: toolPolicy.allowedTools,
       maxToolCalls: toolPolicy.maxToolCalls,
+      plannedModelRef: modelRef,
     });
 
     let wait;
@@ -686,6 +695,8 @@ export function createSkillRoutingCoordinator({
     let text;
     let observedModelRef = null;
     let usage = null;
+    let modelMismatch = false;
+    let toolGuardDenied = false;
     try {
       run = await rt.subagent.run({
         sessionKey: childSessionKey,
@@ -718,6 +729,10 @@ export function createSkillRoutingCoordinator({
       text = assistantText(transcript?.messages);
       observedModelRef = observedAssistantModelRef(transcript?.messages);
       if (!text) throw new Error(`skill execution ${wait?.status || "completed"} without an assistant result`);
+      if (observedModelRef && observedModelRef.toLowerCase() !== modelRef.toLowerCase()) {
+        modelMismatch = true;
+        throw new Error(`skill execution model mismatch: planned ${modelRef}, observed ${observedModelRef}; result rejected`);
+      }
     } finally {
       // POST-RUN ACTUAL USAGE AUDIT. The run/wait metadata is not execution proof.
       // A provider/model pair on the returned assistant event IS recorded as
@@ -727,6 +742,7 @@ export function createSkillRoutingCoordinator({
       // counts and wall time are still actual observations. This fires whether
       // the run succeeded or failed.
       usage = childToolGuard?.release?.(childSessionKey) || null;
+      toolGuardDenied = Number(usage?.deniedToolCalls || 0) > 0;
       const wallClockMs = Number.isFinite(wait?.startedAt) && Number.isFinite(wait?.endedAt)
         ? wait.endedAt - wait.startedAt : null;
       try {
@@ -741,7 +757,9 @@ export function createSkillRoutingCoordinator({
           // observed runtime evidence; use observed_model_ref below.
           resolved_child: modelRef,
           observed_model_ref: observedModelRef,
-          execution_status: wait?.status ?? "unknown",
+          execution_status: modelMismatch ? "model_mismatch" : toolGuardDenied ? "tool_guard_denied" : (wait?.status ?? "unknown"),
+          model_match_verified: observedModelRef ? !modelMismatch : null,
+          completion_verified: !modelMismatch && !toolGuardDenied && wait?.status === "ok",
           stop_reason: wait?.stopReason ?? null,
           provider_started: wait?.providerStarted ?? null,
           wall_clock_ms: wallClockMs,
@@ -763,6 +781,9 @@ export function createSkillRoutingCoordinator({
         });
       } catch { /* audit is best-effort; never raise into the caller */ }
     }
+    if (toolGuardDenied) {
+      throw new Error(`skill execution incomplete: bounded-child guard denied ${usage.deniedToolCalls} tool call(s); result rejected because verification may not have completed`);
+    }
     return {
       text,
       details: {
@@ -777,7 +798,9 @@ export function createSkillRoutingCoordinator({
         estimated_cost_usd: Number.isFinite(estimatedCostUsd) ? estimatedCostUsd : null,
         child_run_id: run.runId,
         child_session_key_hash: childSessionHash,
-        execution_status: wait.status,
+        execution_status: modelMismatch ? "model_mismatch" : toolGuardDenied ? "tool_guard_denied" : wait.status,
+        model_match_verified: observedModelRef ? !modelMismatch : null,
+        completion_verified: !modelMismatch && !toolGuardDenied && wait.status === "ok",
         runtime: run.runtime || null,
         prompt_mode: "minimal",
         light_context: true,
@@ -790,6 +813,7 @@ export function createSkillRoutingCoordinator({
         tool_call_ceiling: (childToolGuard && Number.isFinite(toolPolicy.maxToolCalls))
           ? toolPolicy.maxToolCalls : (childToolGuard ? childToolGuard.defaultMax : null),
         guard_internal_errors: usage?.internalGuardErrors ?? null,
+        denied_tool_calls: usage?.deniedToolCalls ?? null,
         // These are PRE-FLIGHT estimate ceilings, not live runtime enforcement.
         preflight_ceiling_tokens: maxChildTokens,
         preflight_ceiling_cost_usd: maxChildCostUsd,
@@ -807,6 +831,11 @@ export function createSkillRoutingCoordinator({
   function evaluateScope(hookContext = {}) {
     const scopeDecision = scope ? scope.evaluate(hookContext) : { inScope: false, reason: "no_scope" };
     return { scopeDecision, active: scopeDecision.inScope && shadow !== true };
+  }
+
+  function routeBindingFor(childSessionKey) {
+    return childToolGuard && typeof childToolGuard.routeBindingFor === "function"
+      ? childToolGuard.routeBindingFor(childSessionKey) : null;
   }
 
   /**
@@ -1107,6 +1136,7 @@ export function createSkillRoutingCoordinator({
     evaluateScope,
     resolvePlannedSkills,
     executeBoundedChild,
+    routeBindingFor,
     structuredPlannedSkills,
     formatSkillPlan,
     isShadow: shadow === true,

@@ -19,6 +19,8 @@ paired with `src/skill-routing/coordinator.js` (`executeBoundedChild`) and
 | **Hard tool-call COUNT ceiling** | `before_tool_call` guard denies further tool calls after `maxChildToolCalls` on the child | `child-tool-guard.js` |
 | **Fail-closed guard errors** | Non-child sessions are ignored, but after `:togglelogic-skill:` identification any internal guard error blocks the call and emits an immediate hashed audit plus the post-run counter | `child-tool-guard.js`; coordinator usage audit |
 | **No nested routing** | guard always denies `togglelogic_skill_plan`/`togglelogic_skill_run` on a child (+ system-prompt instruction + `sessionKey` re-entry check) | `child-tool-guard.js`; coordinator |
+| **Exact child-model binding** | coordinator registers the planned provider/model before spawn; child `before_model_resolve` uses that binding without owner reclassification and refuses a missing binding | `child-tool-guard.js`; `interceptor.js` |
+| **Observed-model mismatch rejection** | a host-observed provider/model different from the binding marks the audit `model_mismatch` and rejects the result | `coordinator.js` |
 | **Wall-clock timeout** | `subagent.waitForRun({ timeoutMs })` bounds the wait; config `agents.defaults.subagents.runTimeoutSeconds` bounds the run host-side | host `SubagentWaitParams:timeoutMs`; `agents.defaults.subagents.runTimeoutSeconds` |
 | **Pre-flight estimate gate** | refuse to start when the plan's own token/cost estimate exceeds `maxChildTokens`/`maxChildCostUsd` | `coordinator.js` |
 | **Post-run usage audit** | emit actual tool-call count, denied count, wall-clock, stopReason after every child run (success or failure) | `coordinator.js` finally block; `auditUsage` |
@@ -30,6 +32,17 @@ are summed, and the sum is capped by the deployment-wide
 composition can never expand authority beyond the hard deployment limit. This
 allows Graph+Zoom or Graph+artifact workflows to use both declared budgets while
 preventing the old minimum-component rule from prematurely stopping valid work.
+
+A guard denial makes the entire child result incomplete: even if the model later
+returns prose claiming success, the coordinator records `tool_guard_denied` and
+rejects the result. This is essential for artifact workflows where calls after
+the edit perform reopen/render/content verification.
+
+`powerpoint-editor` has a 24-call workflow floor, still capped by the global
+ceiling. The allocation covers inspection, edit/write, rendering and visual QA,
+reopen/content verification, and bounded recovery. An explicit zero remains
+zero. This replaces the RC3 12-call configuration that exhausted before final
+verification.
 
 ## The residual gap (NOT closable by the plugin on 2026.9.4)
 

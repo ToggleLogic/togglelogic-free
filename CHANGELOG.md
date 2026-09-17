@@ -2,6 +2,20 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.4 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.4)
+
+- Binds each governed child session to the exact provider/model selected by the
+  parent route before the child starts. Child model resolution no longer
+  reclassifies the fresh session as a non-owner turn, and a missing binding or
+  observed model mismatch fails closed.
+- Rejects completion text when the bounded-child guard denied any required tool
+  call; audits now distinguish `model_mismatch` and `tool_guard_denied` from a
+  verified successful execution.
+- Raises the PowerPoint workflow allowance to a bounded 24-call floor, still
+  constrained by the deployment-wide ceiling, and requires final note order,
+  measured timing, saved-artifact reopening, rendering, and verification before
+  SAM may report completion.
+
 ## 1.7.0-rc.3 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.3)
 
 - Rejects an impossible token or cost plan before showing and persisting an
@@ -42,6 +56,18 @@ All notable changes to ToggleLogic (Free Tier) are documented here.
   bounded composite: unique component budgets add together but can never exceed
   the deployment-wide `maxChildToolCalls`. This prevents valid Graph+Zoom and
   presentation workflows from inheriting only the smallest component budget.
+- Binds every routed child session to the exact owner-taught provider/model
+  before it starts. Child `before_model_resolve` bypasses owner reclassification
+  and generic defaults, fails closed if its binding is missing, and rejects the
+  result if the host-observed model differs from the planned child.
+- Raises the `powerpoint-editor` workflow floor from the unsafe 12-call RC3
+  configuration to 24 calls (still capped by the hard global ceiling) so
+  inspect/edit/render/reopen/verify can finish. Its execution contract requires
+  3-minute notes, then 6-minute notes, then original notes; final-text word and
+  duration measurements; and truthful verification.
+- Rejects child results whenever the bounded tool guard denied a call. The
+  usage audit and any defensive receipt mark the execution incomplete instead
+  of allowing a model-written completion claim after verification was blocked.
 
 ## 1.6.2 — 2026-09-16 (security-review metadata; pairs with Intelligence 1.4.2)
 

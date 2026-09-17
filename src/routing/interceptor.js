@@ -16,6 +16,7 @@ import {
 } from "./session-store.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
 import crypto from "node:crypto";
+import { isChildSkillSession } from "../skill-routing/child-tool-guard.js";
 
 /** Safe audit emit — never raise into the hook caller. */
 function _emit(audit, event, partial) {
@@ -106,6 +107,40 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
   }
 
   async function resolveBeforeModel(event, hookContext) {
+    // A routed child inherits authorization from the already-governed parent
+    // turn. It MUST NOT be reclassified as a fresh non-owner session: doing so
+    // allowed the general-purpose default to replace the owner-taught child in
+    // RC3. The coordinator registers this exact binding before subagent.run.
+    const childSessionKey = normalizeOptionalString(hookContext?.sessionKey);
+    if (isChildSkillSession(childSessionKey)) {
+      const binding = skillRouting?.routeBindingFor?.(childSessionKey) || null;
+      if (!binding?.providerOverride || !binding?.modelOverride || !binding?.modelRef) {
+        _emit(audit, EVENTS.ROUTING_DECISION, {
+          outcome: OUTCOMES.FAILURE,
+          principal: { source: "plugin-host" },
+          subject: { hook: "before_model_resolve", capability: "skillRouting" },
+          details: {
+            mode: "skill_child_route_binding_missing",
+            child_session_key_hash: crypto.createHash("sha256").update(childSessionKey).digest("hex"),
+            blocked: true,
+          },
+        });
+        throw new Error("ToggleLogic routed child has no registered model binding; refusing unbound execution");
+      }
+      _emit(audit, EVENTS.ROUTING_DECISION, {
+        outcome: OUTCOMES.SUCCESS,
+        principal: { source: "plugin-host" },
+        subject: { hook: "before_model_resolve", capability: "skillRouting" },
+        details: {
+          mode: "skill_child_route_binding",
+          planned_model_ref: binding.modelRef,
+          child_session_key_hash: crypto.createHash("sha256").update(childSessionKey).digest("hex"),
+          owner_reclassification_bypassed: true,
+        },
+      });
+      return { providerOverride: binding.providerOverride, modelOverride: binding.modelOverride };
+    }
+
     const decision = newDecision({ event, hookContext, mode: config.mode, version });
 
     _emit(audit, EVENTS.ROUTING_HOOK_FIRE, {

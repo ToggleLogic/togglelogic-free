@@ -95,8 +95,9 @@ test("receipt separates planned, observed, and unobserved execution identity", (
     model_lineage: "xai/grok", planned_model_ref: "xai/grok-4.3",
     observed_model_ref: "google/gemini-3.5-flash", estimated_cost_usd: 0.01,
   });
-  assert.match(mismatch, /ToggleLogic plan: xai\/grok → xai\/grok-4\.3/);
-  assert.match(mismatch, /Observed execution model: google\/gemini-3.5-flash/);
+  assert.match(mismatch, /planned xai\/grok/);
+  assert.match(mismatch, /EXECUTION MODEL MISMATCH/);
+  assert.match(mismatch, /result was not accepted as successfully routed execution/);
   assert.doesNotMatch(mismatch, /Routed by ToggleLogic to/);
 
   const unobserved = formatSkillExecutionReceipt({

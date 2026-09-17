@@ -41,7 +41,9 @@ export function isChildSkillSession(sessionKey) {
 
 export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, logger, auditInternalError } = {}) {
   const defaultMax = Number.isFinite(maxToolCalls) && maxToolCalls >= 0 ? Math.floor(maxToolCalls) : DEFAULT_MAX_TOOL_CALLS;
-  // childSessionKey -> { count, denied, max, allowedTools:Set|null, skills:[], deniedTools:[] }
+  // childSessionKey -> { count, denied, max, allowedTools:Set|null, skills:[],
+  // plannedModelRef, deniedTools:[] }. The model binding is registered before
+  // subagent.run and is the authority used by before_model_resolve for this child.
   const sessions = new Map();
 
   function prune() {
@@ -54,7 +56,7 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
   function ensure(childSessionKey) {
     let entry = sessions.get(childSessionKey);
     if (!entry) {
-      entry = { count: 0, denied: 0, internalErrors: 0, max: defaultMax, allowedTools: null, skills: [], deniedTools: [] };
+      entry = { count: 0, denied: 0, internalErrors: 0, max: defaultMax, allowedTools: null, skills: [], plannedModelRef: null, deniedTools: [] };
       sessions.set(childSessionKey, entry);
       prune();
     }
@@ -65,7 +67,7 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
    * Register the precise policy for a child BEFORE it runs. Overwrites any lazily
    * created entry. `allowedTools` null = no allowlist (count-only); [] = no tools.
    */
-  function register(childSessionKey, { skills = [], allowedTools = null, maxToolCalls: max } = {}) {
+  function register(childSessionKey, { skills = [], allowedTools = null, maxToolCalls: max, plannedModelRef = null } = {}) {
     if (!childSessionKey) return;
     sessions.set(childSessionKey, {
       count: 0,
@@ -74,6 +76,8 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
       max: Number.isFinite(max) && max >= 0 ? Math.floor(max) : defaultMax,
       allowedTools: Array.isArray(allowedTools) ? new Set(allowedTools) : null,
       skills: (skills || []).map((s) => (typeof s === "string" ? s : s?.id)).filter(Boolean),
+      plannedModelRef: typeof plannedModelRef === "string" && /^[^/\s]+\/[^/\s]+$/.test(plannedModelRef)
+        ? plannedModelRef : null,
       deniedTools: [],
     });
     prune();
@@ -98,6 +102,23 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
     const snap = snapshot(childSessionKey);
     sessions.delete(childSessionKey);
     return snap;
+  }
+
+  /**
+   * Return the execution-bound provider/model override for a registered routed
+   * child. No owner/scope classification is consulted: authorization happened
+   * on the parent turn before this binding was created.
+   */
+  function routeBindingFor(childSessionKey) {
+    if (!isChildSkillSession(childSessionKey)) return null;
+    const modelRef = sessions.get(childSessionKey)?.plannedModelRef;
+    if (!modelRef) return null;
+    const slash = modelRef.indexOf("/");
+    return {
+      modelRef,
+      providerOverride: modelRef.slice(0, slash),
+      modelOverride: modelRef.slice(slash + 1),
+    };
   }
 
   function recordDenied(entry, toolName) {
@@ -171,5 +192,5 @@ export function createChildToolGuard({ maxToolCalls = DEFAULT_MAX_TOOL_CALLS, lo
     }
   }
 
-  return { register, release, snapshot, beforeToolCall, isChildSkillSession, defaultMax };
+  return { register, release, snapshot, routeBindingFor, beforeToolCall, isChildSkillSession, defaultMax };
 }

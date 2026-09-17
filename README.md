@@ -280,12 +280,14 @@ grounding port above apply once it is.
           "default": { "requiredTier": "tool_calling_strong", "requiresTools": true },
           "skills": {
             "microsoft-graph": { "requiredTier": "tool_calling_strong", "requiresTools": true },
-            "zoom-meetings": { "requiredTier": "tool_calling_strong", "requiresTools": true }
+            "zoom-meetings": { "requiredTier": "tool_calling_strong", "requiresTools": true },
+            "powerpoint-editor": { "requiredTier": "tool_calling_strong", "requiresTools": true }
           }
         },
         "skillTools": {
           "microsoft-graph": { "maxToolCalls": 12 },
-          "zoom-meetings": { "maxToolCalls": 8 }
+          "zoom-meetings": { "maxToolCalls": 8 },
+          "powerpoint-editor": { "maxToolCalls": 24 }
         },
         "scope": {
           "enabled": true,

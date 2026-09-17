@@ -38,6 +38,34 @@ test("PowerPoint artifact work keeps its declared budget and composite work stay
   });
 });
 
+test("PowerPoint workflow upgrades the unsafe RC3 12-call policy to 24 while retaining the hard global cap", () => {
+  const normal = createSkillContracts({
+    maxChildToolCalls: 32,
+    skillTools: { "powerpoint-editor": { maxToolCalls: 12 } },
+  });
+  assert.equal(normal.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 24);
+
+  const tighterDeployment = createSkillContracts({
+    maxChildToolCalls: 20,
+    skillTools: { "powerpoint-editor": { maxToolCalls: 12 } },
+  });
+  assert.equal(tighterDeployment.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 20);
+
+  const explicitlyZero = createSkillContracts({
+    maxChildToolCalls: 32,
+    skillTools: { "powerpoint-editor": { maxToolCalls: 0 } },
+  });
+  assert.equal(explicitlyZero.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 0);
+});
+
+test("PowerPoint contract requires note order, measured timing, and completed verification", () => {
+  const contracts = createSkillContracts({});
+  const prompt = contracts.contractPrompt([{ id: "powerpoint-editor" }], "Edit this deck");
+  assert.match(prompt, /3-MINUTE SCRIPT first, 6-MINUTE SCRIPT second, and ORIGINAL NOTES last/);
+  assert.match(prompt, /Compute word counts from the FINAL text actually written/);
+  assert.match(prompt, /Do not claim completion when any required verification tool call was denied/);
+});
+
 test("undeclared or duplicate component policies cannot multiply the global ceiling", () => {
   const contracts = createSkillContracts({
     maxChildToolCalls: 20,
@@ -58,4 +86,3 @@ test("all-disabled composite has an exact empty surface and zero tool budget", (
     maxToolCalls: 0,
   });
 });
-

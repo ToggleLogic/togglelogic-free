@@ -103,7 +103,8 @@ test("bounded child: the guard is registered for the child and enforces the allo
     skillTools: { "toolful-skill": { allowedTools: ["read_file"], maxToolCalls: 5 } },
     onChildTools: ["read_file", "shell_exec", "togglelogic_skill_run"],
   });
-  await h.coordinator.handleGate(reply("run the toolful-skill skill"), OWNER_CTX);
+  const gate = await h.coordinator.handleGate(reply("run the toolful-skill skill"), OWNER_CTX);
+  assert.equal(gate.reason, "skill_routing_gate_error", "a denied verification/tool call prevents a completion claim");
   const byTool = Object.fromEntries(h.toolDecisions.map((d) => [d.toolName, d.decision]));
   assert.equal(byTool.read_file, undefined, "allowlisted tool passes");
   assert.equal(byTool.shell_exec.block, true, "off-allowlist tool denied");
@@ -115,11 +116,13 @@ test("bounded child: the post-run usage audit reports ACTUAL tool calls and mark
     skillTools: { "toolful-skill": { allowedTools: ["read_file"] } },
     onChildTools: ["read_file", "read_file", "shell_exec"], // 2 allowed, 1 denied
   });
-  await h.coordinator.handleGate(reply("run the toolful-skill skill"), OWNER_CTX);
+  const gate = await h.coordinator.handleGate(reply("run the toolful-skill skill"), OWNER_CTX);
+  assert.equal(gate.reason, "skill_routing_gate_error");
   assert.equal(h.usageAudits.length, 1);
   const a = h.usageAudits[0];
   assert.equal(a.mode, "skill_child_usage_audit");
-  assert.equal(a.execution_status, "ok");
+  assert.equal(a.execution_status, "tool_guard_denied");
+  assert.equal(a.completion_verified, false);
   assert.equal(a.actual_tool_calls, 2, "counted the allowed tool calls");
   assert.equal(a.denied_tool_calls, 1, "counted the denied tool call");
   assert.deepEqual(a.allowed_tools, ["read_file"]);

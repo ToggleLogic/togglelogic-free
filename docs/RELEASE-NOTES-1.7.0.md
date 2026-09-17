@@ -1,4 +1,4 @@
-# ToggleLogic Free 1.7.0-rc.3
+# ToggleLogic Free 1.7.0-rc.4
 
 ToggleLogic 1.7 changes first-use skill teaching from three abstract policies
 into an owner-facing model marketplace.
@@ -42,6 +42,18 @@ Receipts now distinguish:
 If OpenClaw does not expose that evidence, the receipt says so and does not call
 the planned model the model actually used. Token and metered-cost limitations
 remain explicit.
+
+The planned model is also registered as an execution binding on the bounded
+child session. Child model resolution uses that binding directly rather than
+reclassifying the child as a non-owner turn. A missing binding or an observed
+model mismatch fails closed, and a denied verification tool call marks the
+execution incomplete; none of those cases can produce a successful routing
+receipt.
+
+PowerPoint editing receives a bounded 24-call workflow floor under the global
+tool ceiling. Its contract requires scripts in the requested order (3-minute,
+6-minute, then original notes), measured counts and timing from the final saved
+text, and reopen/render/content verification before completion is claimed.
 
 ## Scope and safety
 

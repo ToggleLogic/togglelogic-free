@@ -58,8 +58,18 @@ const MEETING_CALENDAR_CONTRACT = [
   "6. If Microsoft Graph / Outlook is not actually callable, say so plainly and ask how to proceed — do not fabricate a calendar, attendees, or agenda.",
 ].join("\n");
 
+const POWERPOINT_EDITOR_CONTRACT = [
+  "POWERPOINT EDITING EXECUTION CONTRACT (mandatory, non-negotiable):",
+  "1. Preserve the source presentation unchanged and write the result to a new output file unless the owner explicitly requests an in-place edit.",
+  "2. When adding the requested speaking scripts to slide notes, use this exact order: 3-MINUTE SCRIPT first, 6-MINUTE SCRIPT second, and ORIGINAL NOTES last at the bottom.",
+  "3. Compute word counts from the FINAL text actually written to the output. Compute duration from that verified word count and the stated words-per-minute rate; never estimate or repeat a draft count as though it were measured.",
+  "4. Reopen the saved PPTX and verify slide count, note order/content, output-file integrity, and companion text files. Render and inspect the edited presentation when the task requires visual QA.",
+  "5. Do not claim completion when any required verification tool call was denied, failed, or skipped. Report the work as incomplete and identify the unverified step.",
+].join("\n");
+
 export const BUILTIN_CONTRACTS = Object.freeze({
   "meeting-prep": Object.freeze({ timeSensitive: true, contract: MEETING_CALENDAR_CONTRACT }),
+  "powerpoint-editor": Object.freeze({ timeSensitive: false, contract: POWERPOINT_EDITOR_CONTRACT }),
 });
 
 // The ELIGIBLE calendar-capable skills on the reference host. AUTHORITATIVE =
@@ -70,6 +80,16 @@ export const BUILTIN_CONTRACTS = Object.freeze({
 // meetingSubordinateSkillIds }).
 const DEFAULT_AUTHORITATIVE_CALENDAR_SKILLS = Object.freeze(["microsoft-graph"]);
 const DEFAULT_SUBORDINATE_MEETING_SKILLS = Object.freeze(["zoom-meetings"]);
+
+// Artifact editing requires a complete inspect → edit → render → verify loop.
+// The 12-call presentation policy observed in RC3 exhausted during rendering and
+// denied four verification calls. Twenty-four is deliberately bounded below the
+// default global 32: 4 inspection + 4 edit/write + 8 render/visual QA + 4 reopen/
+// content verification + 4 recovery calls. The global ceiling always wins when
+// configured lower, so this floor never expands deployment-wide authority.
+export const BUILTIN_WORKFLOW_TOOL_CALL_FLOORS = Object.freeze({
+  "powerpoint-editor": 24,
+});
 
 // Deterministic calendar/meeting INTENT. High-precision, meeting/calendar
 // vocabulary ONLY — it must NOT fire on generic Graph email/contact work
@@ -295,11 +315,16 @@ export function createSkillContracts(rawConfig = {}) {
       const disable = policy?.disableTools === true;
       const allow = Array.isArray(policy?.allowedTools)
         ? policy.allowedTools.map(cleanString).filter(Boolean) : null;
-      const maxCalls = Number.isFinite(policy?.maxToolCalls) && policy.maxToolCalls >= 0 ? Math.floor(policy.maxToolCalls) : null;
+      const configuredMaxCalls = Number.isFinite(policy?.maxToolCalls) && policy.maxToolCalls >= 0 ? Math.floor(policy.maxToolCalls) : null;
+      const workflowFloor = BUILTIN_WORKFLOW_TOOL_CALL_FLOORS[id] ?? 0;
+      const maxCalls = disable || configuredMaxCalls === 0 ? 0 : Math.min(
+        compositeToolCallCeiling,
+        Math.max(configuredMaxCalls ?? compositeToolCallCeiling, workflowFloor),
+      );
       if (!disable) disableAll = false;
       if (!disable && !allow) anyUnrestricted = true;
       if (allow) for (const t of allow) combinedAllow.add(t);
-      if (!disable) compositeCalls += maxCalls ?? compositeToolCallCeiling;
+      if (!disable) compositeCalls += maxCalls;
     }
     const disableTools = disableAll;
     const allowedTools = disableTools
