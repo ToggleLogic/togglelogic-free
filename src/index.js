@@ -14,8 +14,9 @@ import { normalizeConfig } from "./config/normalize.js";
 import { createAuditLogger } from "./audit/audit-logger.js";
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 import { registerCapabilities } from "./capabilities.js";
+import { shouldSkipRuntimeRegistration } from "./registration-mode.js";
 
-const PLUGIN_VERSION = "1.6.2";
+const PLUGIN_VERSION = "1.7.0";
 
 /**
  * ToggleLogic (Free Tier) plugin entry.
@@ -43,6 +44,11 @@ const plugin = definePluginEntry({
     "benchmark-driven automatic selection; it is not included here.",
 
   register(api) {
+    // OpenClaw loads installed plugins in a metadata-only process for ordinary
+    // CLI commands. That process intentionally has no runtime. ToggleLogic has
+    // no root CLI command to contribute, so runtime hooks must not be registered
+    // there (and must not emit false gateway-health warnings).
+    if (shouldSkipRuntimeRegistration(api?.registrationMode)) return;
     const config = normalizeConfig(api.pluginConfig);
     const audit = createAuditLogger(config.audit, api.logger, {
       pluginId: "togglelogic",

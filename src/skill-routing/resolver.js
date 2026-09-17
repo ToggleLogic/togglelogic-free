@@ -138,6 +138,19 @@ export function createSkillResolver(rawConfig = {}) {
   }
 
   /**
+   * Return the verified catalog identity for an exact installed skill id.
+   * Intent recipes and the bounded classifier deliberately traffic in ids only;
+   * callers MUST re-hydrate those ids here before planning or learning so a
+   * profile can never silently degrade to version="*" / fingerprint=null.
+   */
+  function identityFor(id) {
+    const wanted = cleanString(id);
+    if (!wanted) return null;
+    const entry = catalog.find((item) => item.id === wanted);
+    return entry ? structuredIdentity(entry) : null;
+  }
+
+  /**
    * resolve(text) → structured resolution decision. Never throws.
    *   status: "resolved"  — one or more installed skills recognized deterministically
    *           "ambiguous" — a skill invocation was requested but names an
@@ -225,7 +238,7 @@ export function createSkillResolver(rawConfig = {}) {
     return catalog.map((entry) => ({ id: entry.id, description: entry.description || "" }));
   }
 
-  return { resolve, clarificationText, suggest, classifierCatalog, catalog, catalogIds, mode, ambiguityPolicy };
+  return { resolve, clarificationText, suggest, classifierCatalog, identityFor, catalog, catalogIds, mode, ambiguityPolicy };
 }
 
 /**

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { resolveOpenClawPath } from "../path-utils.js";
+import { artifactDeliveryInstructions, deliverArtifactManifest } from "./artifact-delivery.js";
 
 const MAX_STATE_BYTES = 1024 * 1024;
 const MAX_PENDING_SESSIONS = 256;
@@ -60,16 +61,111 @@ export function structuredPlannedSkills(event = {}, hookContext = {}) {
   return single ? [{ id: single, execution_class: "default" }] : [];
 }
 
-function parseChoice(text, expectedToken) {
+function parseChoiceNumber(text, expectedToken) {
   const normalized = String(text || "").trim();
   const tokenMatch = normalized.match(/^TL-([A-Fa-f0-9]{6})\s+([123])$/);
-  const choice = tokenMatch
+  return tokenMatch
     ? (tokenMatch[1].toLowerCase() === String(expectedToken || "").toLowerCase() ? tokenMatch[2] : null)
     : (normalized.match(/^([123])$/)?.[1] || null);
-  if (choice === "1") return "lowest_cost";
-  if (choice === "2") return "benchmark_best";
-  if (choice === "3") return "intelligence";
+}
+
+const PRESENTATION_ROLES = Object.freeze(["economy", "recommended", "premium"]);
+const ROLE_LABELS = Object.freeze({
+  economy: "Economy",
+  recommended: "Recommended",
+  premium: "Premium",
+});
+
+function choiceRole(choice) {
+  const explicit = cleanString(choice?.role || choice?.presentation_role || choice?.marketplace_tier);
+  if (explicit && PRESENTATION_ROLES.includes(explicit.toLowerCase())) return explicit.toLowerCase();
+  // Backward compatibility with 1.6 Intelligence plans. These labels affect the
+  // owner presentation only; the legacy strategy remains attached to the choice
+  // and is what gets persisted.
+  if (choice?.kind === "lowest_cost") return "economy";
+  if (choice?.kind === "intelligence") return "recommended";
+  if (choice?.kind === "benchmark_best") return "premium";
   return null;
+}
+
+function choiceRoleLabel(choice, fallbackRole) {
+  const roles = Array.isArray(choice?.roles)
+    ? [...new Set(choice.roles.map((item) => cleanString(item)?.toLowerCase()).filter((item) => PRESENTATION_ROLES.includes(item)))]
+    : [];
+  if (roles.length > 1) return roles.map((role) => ROLE_LABELS[role]).join(" · ");
+  const role = roles[0] || fallbackRole;
+  return ROLE_LABELS[role] || "Model";
+}
+
+function recommendationMatches(choice, recommendation) {
+  if (!recommendation) return choice?.recommended === true;
+  if (typeof recommendation === "string") {
+    return [choice?.choice_id, choice?.id, choice?.role, choice?.presentation_role,
+      choice?.marketplace_tier, choice?.model_lineage, choice?.resolved_child]
+      .some((value) => cleanString(value)?.toLowerCase() === recommendation.toLowerCase());
+  }
+  if (typeof recommendation === "object") {
+    return ["choice_id", "id", "role", "model_lineage", "resolved_child"]
+      .some((key) => cleanString(recommendation[key]) && cleanString(recommendation[key]) === cleanString(choice?.[key]));
+  }
+  return choice?.recommended === true;
+}
+
+/**
+ * Build the owner-visible marketplace from Intelligence output. A numbered
+ * choice must always mean one durable route. Duplicate children/lineages are
+ * therefore collapsed instead of displaying three labels that all execute the
+ * same model (the 1.6 Grok/Grok/Grok defect).
+ */
+export function skillPlanPresentationChoices(plan) {
+  const raw = Array.isArray(plan?.choices) ? plan.choices.filter((item) => item && typeof item === "object") : [];
+  const recommendation = plan?.intelligence_recommendation ?? null;
+  const unique = [];
+  const seen = new Set();
+  for (const choice of raw) {
+    const lineage = cleanString(choice.model_lineage);
+    const child = cleanString(choice.resolved_child);
+    if (!child) continue;
+    // A lineage is the durable target. Different numbered children of the same
+    // lineage are not honest owner alternatives under the family architecture.
+    const key = lineage ? `lineage:${lineage.toLowerCase()}` : `child:${child.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ ...choice, _role: choiceRole(choice), _recommended: recommendationMatches(choice, recommendation) });
+  }
+  if (unique.length === 1) {
+    return [{ ...unique[0], presentation_role: "recommended", presentation_label: "Only eligible model", choice_number: 1 }];
+  }
+
+  const used = new Set();
+  const result = [];
+  // Preserve explicit marketplace roles. In particular, a two-option market is
+  // Economy + Premium; it must not relabel Premium as Recommended merely to fill
+  // a visual slot.
+  for (const role of PRESENTATION_ROLES) {
+    let index = unique.findIndex((choice, i) => !used.has(i) && choice._role === role);
+    if (index < 0) continue;
+    used.add(index);
+    result.push({
+      ...unique[index],
+      presentation_role: role,
+      presentation_label: choiceRoleLabel(unique[index], role),
+      choice_number: result.length + 1,
+    });
+  }
+  for (let index = 0; index < unique.length && result.length < 3; index += 1) {
+    if (used.has(index)) continue;
+    const availableRole = PRESENTATION_ROLES.find((role) => !result.some((item) => item.presentation_role === role));
+    if (!availableRole) break;
+    result.push({
+      ...unique[index],
+      presentation_role: availableRole,
+      presentation_label: choiceRoleLabel(unique[index], availableRole),
+      choice_number: result.length + 1,
+    });
+  }
+  result.forEach((item, index) => { item.choice_number = index + 1; });
+  return result;
 }
 
 // A message that LOOKS like a token reply (TL-xxxxxx N) — used to distinguish a
@@ -111,12 +207,46 @@ function assistantText(messages) {
   return null;
 }
 
+/**
+ * Read execution identity only from the assistant event the host returned for
+ * the completed child. The requested override and run-start metadata are plans,
+ * not proof, and are deliberately excluded.
+ */
+export function observedAssistantModelRef(messages) {
+  for (let index = (messages || []).length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.role !== "assistant") continue;
+    const provider = cleanString(message.provider || message.metadata?.provider || message.runtime?.provider);
+    const model = cleanString(message.model || message.modelId || message.metadata?.model || message.metadata?.modelId || message.runtime?.model);
+    if (!model) return null;
+    if (model.includes("/")) return model;
+    return provider ? `${provider}/${model}` : null;
+  }
+  return null;
+}
+
 function money(value, location = "cloud") {
   if (!Number.isFinite(value)) return "unpriced";
   const basis = location === "local" ? "allocated local cost" : "external AI estimate";
   if (value === 0) return `$0.00 ${basis}`;
   if (value < 0.01) return `<$0.01 ${basis}`;
   return `$${value.toFixed(2)} ${basis}`;
+}
+
+function costRange(choice) {
+  const raw = choice?.estimated_workflow_cost_usd ?? choice?.estimated_cost_range_usd ?? choice?.estimated_cost_range;
+  const low = Number.isFinite(raw?.min) ? raw.min
+    : Number.isFinite(raw?.low) ? raw.low
+      : Number.isFinite(raw?.low_usd) ? raw.low_usd
+      : Number.isFinite(choice?.estimated_cost_min_usd) ? choice.estimated_cost_min_usd : null;
+  const high = Number.isFinite(raw?.max) ? raw.max
+    : Number.isFinite(raw?.high) ? raw.high
+      : Number.isFinite(raw?.high_usd) ? raw.high_usd
+      : Number.isFinite(choice?.estimated_cost_max_usd) ? choice.estimated_cost_max_usd : null;
+  if (Number.isFinite(low) && Number.isFinite(high)) {
+    return `${money(low, choice.location)}–${money(high, choice.location)}`;
+  }
+  return money(choice?.estimated_cost_usd, choice?.location);
 }
 
 export function formatSkillPlan(plan) {
@@ -134,16 +264,42 @@ export function formatSkillPlan(plan) {
     lines.push("An authenticated owner must start this teaching choice; no routing profile was staged.");
     return lines.join("\n");
   }
-  lines.push("Choose a model policy:");
-  const labels = { lowest_cost: "Lowest expected cost", benchmark_best: "Benchmark-best within budget", intelligence: "Let ToggleLogic Intelligence decide" };
-  (plan.choices || []).forEach((item, index) => {
+  const choices = Array.isArray(plan.presentation_choices)
+    ? plan.presentation_choices : skillPlanPresentationChoices(plan);
+  if (choices.length === 1) {
+    lines.push("Only one eligible model is available for this skill right now:");
+  } else if (choices.length === 0) {
+    lines.push("No eligible model alternatives were returned. No routing choice was staged.");
+    return lines.join("\n");
+  } else {
+    lines.push("Choose a model for this skill:");
+  }
+  choices.forEach((item, index) => {
     const overage = item.over_monthly_budget === true
       ? `; over monthly allowance by $${Number(item.monthly_overage_after_usd || 0).toFixed(2)} after this run`
       : "";
-    lines.push(`${index + 1}. ${labels[item.kind] || item.kind}: ${item.model_lineage || "unclassified lineage"} → ${item.resolved_child} (${item.location}, ${money(item.estimated_cost_usd, item.location)}${overage})`);
+    const recommended = item._recommended === true || item.presentation_role === "recommended" && plan.intelligence_recommendation
+      ? " — ToggleLogic recommends this" : "";
+    lines.push(`${index + 1}. ${item.presentation_label || ROLE_LABELS[item.presentation_role] || "Model"}${recommended}`);
+    lines.push(`   Model: ${item.model_lineage || "unclassified lineage"} → ${item.resolved_child}`);
+    lines.push(`   Estimated workflow cost: ${costRange(item)}${overage}`);
+    const advantage = cleanString(item.advantage || item.skill_advantage)
+      || (Array.isArray(item.advantages) ? cleanString(item.advantages[0]) : null);
+    const tradeoff = cleanString(item.tradeoff || item.skill_tradeoff)
+      || (Array.isArray(item.tradeoffs) ? cleanString(item.tradeoffs[0]) : null);
+    lines.push(`   Advantage: ${advantage || "Meets this skill’s declared capability requirements."}`);
+    lines.push(`   Trade-off: ${tradeoff || "No skill-specific trade-off evidence was supplied."}`);
+    lines.push(`   Why this option: ${cleanString(item.option_reason || item.role_reason) || `${item.presentation_label || "This"} is the route ToggleLogic Intelligence identified for this skill.`}`);
+    if (item._recommended === true || (item.presentation_role === "recommended" && choices.length === 1)) {
+      lines.push(`   Why recommended: ${cleanString(item.why_recommended || item.recommendation_reason || plan.intelligence_recommendation?.reason) || "It is the best supported eligible route for this skill under the current policy."}`);
+    }
   });
-  if (plan.choices_converged === true) {
-    lines.push("All three choices currently use the same model; your choice controls what happens when the available models change.");
+  for (const item of choices.filter((choice) => Array.isArray(choice.roles) && choice.roles.length > 1)) {
+    const roleNames = item.roles.map((role) => ROLE_LABELS[role] || role).join(" and ");
+    lines.push(`${roleNames} resolve to the same model for this skill, so ToggleLogic combines those roles instead of listing the same model twice.`);
+  }
+  if ((plan.choices || []).length > choices.length && choices.length === 1) {
+    lines.push("Other policy labels resolved to this same lineage, so they were collapsed instead of being presented as different choices.");
   }
   const budget = plan.economic_policy?.effective_monthly_budget_usd
     ?? plan.economic_policy?.monthly_cloud_budget_usd;
@@ -154,15 +310,32 @@ export function formatSkillPlan(plan) {
   if ((plan.choices || []).some((item) => item.over_monthly_budget === true)) {
     lines.push("Your cloud budget is used up. Replying with a number approves this one run, or say: Set my ToggleLogic budget to $25 per month.");
   }
-  lines.push("Reply 1, 2, or 3. I’ll remember the choice for these skill versions.");
+  const numbers = choices.map((item) => String(item.choice_number));
+  const replyList = numbers.length === 2 ? `${numbers[0]} or ${numbers[1]}`
+    : numbers.length > 2 ? `${numbers.slice(0, -1).join(", ")}, or ${numbers.at(-1)}` : numbers[0];
+  lines.push(choices.length === 1
+    ? "Reply 1 to use and remember this model for these skill versions."
+    : `Reply ${replyList}. I’ll remember the choice for these skill versions.`);
   return lines.join("\n");
 }
 
-function executionFooter(details) {
+export function formatSkillExecutionReceipt(details) {
   const lineage = details?.model_lineage || details?.selected_lineage || "lineage unavailable";
-  const child = details?.resolved_child || details?.selected_model_ref || "model unavailable";
+  const child = details?.planned_model_ref || details?.resolved_child || details?.selected_model_ref || "model unavailable";
   const cost = Number.isFinite(details?.estimated_cost_usd) ? money(details.estimated_cost_usd) : "estimate unavailable";
-  return `— Routed by ToggleLogic to ${lineage} → ${child} in a bounded child session (estimated ${cost}; metered cost is logged separately).`;
+  const observed = cleanString(details?.observed_model_ref);
+  const deniedToolCalls = Number.isFinite(details?.denied_tool_calls) ? details.denied_tool_calls : 0;
+  if (deniedToolCalls > 0 || details?.execution_status === "tool_guard_denied") {
+    return `— EXECUTION INCOMPLETE: ToggleLogic planned ${lineage} → ${child}, but the bounded-child guard denied ${deniedToolCalls || "one or more"} tool call(s). Verification was incomplete, so the result was not accepted as completed work.`;
+  }
+  const mismatch = observed && child !== "model unavailable" && observed.toLowerCase() !== child.toLowerCase();
+  if (mismatch) {
+    return `— EXECUTION MODEL MISMATCH: ToggleLogic planned ${lineage} → ${child}, but the host observed ${observed}. The result was not accepted as successfully routed execution.`;
+  }
+  const evidence = observed
+    ? `Observed execution model: ${observed}.`
+    : "The host did not expose the execution model, so the planned model is not claimed as the model actually used.";
+  return `— ToggleLogic plan: ${lineage} → ${child} in a bounded child session (estimated ${cost}). ${evidence}`;
 }
 
 export function createSkillRoutingCoordinator({
@@ -265,6 +438,31 @@ export function createSkillRoutingCoordinator({
     return { status: "none", skills: [], source: "none", resolution: null };
   }
 
+  // Recipes and the bounded classifier are intentionally allowed to return only
+  // installed ids. Before those ids cross the routing/learning boundary, replace
+  // them with the exact identity from the verified inventory catalog. Missing
+  // version or fingerprint is an integrity failure, never a wildcard profile.
+  function hydrateVerifiedSkillIds(ids) {
+    if (!resolver || typeof resolver.identityFor !== "function") return null;
+    const hydrated = [];
+    for (const id of [...new Set(Array.isArray(ids) ? ids : [])].slice(0, MAX_SKILLS_PER_PLAN)) {
+      const identity = resolver.identityFor(id);
+      if (!identity || !cleanString(identity.version) || !cleanString(identity.fingerprint)) return null;
+      hydrated.push(identity);
+    }
+    return hydrated.length > 0 ? normalizeSkills(hydrated) : null;
+  }
+
+  function skillIdentityUnavailable(source, ids) {
+    const skillIds = [...new Set(Array.isArray(ids) ? ids : [])].slice(0, MAX_SKILLS_PER_PLAN);
+    return {
+      handled: true,
+      reply: { text: `ToggleLogic matched the installed skill (${skillIds.join(", ") || "unknown"}), but its verified version and fingerprint are unavailable. I held this turn so no wildcard routing profile could be learned. Refresh the verified skill inventory and try again.` },
+      reason: "skill_identity_unavailable",
+      audit: { mode: "skill_identity_unavailable", source, skill_ids: skillIds },
+    };
+  }
+
   async function plan({ prompt, plannedSkills, estimatedTokens, monthlyCloudSpendUsd, originalTask }, hookContext = {}) {
     const skills = normalizeSkills(plannedSkills);
     if (skills.length === 0) throw new Error("at least one planned skill is required");
@@ -272,9 +470,27 @@ export function createSkillRoutingCoordinator({
     // resolved skills. Passed to Intelligence.planSkills as routing CONSTRAINTS so
     // first-use education for a tool-using skill excludes general_purpose-only local
     // rows; combined there with the legacy task classifier and any learned profile.
-    const skillRequirements = requirements && typeof requirements.aggregate === "function"
+    const aggregatedRequirements = requirements && typeof requirements.aggregate === "function"
       ? requirements.aggregate(skills)
       : null;
+    const requestedEstimate = Math.max(
+      Number.isFinite(estimatedTokens) ? estimatedTokens : config.defaultEstimatedTokens,
+      Number.isFinite(aggregatedRequirements?.estimatedTokens) ? aggregatedRequirements.estimatedTokens : 0,
+    );
+    // Never advertise or stage a route that the bounded-child executor is
+    // guaranteed to reject. This invariant belongs before owner education, not
+    // after the owner has selected and persisted a model profile.
+    if (requestedEstimate > maxChildTokens) {
+      throw new Error(`skill task estimated at ${requestedEstimate} tokens exceeds the bounded-child ceiling (${maxChildTokens}); no unrunnable model choice was staged`);
+    }
+    // Make the execution hard cap a planner constraint as well. A stricter
+    // per-skill cap still wins; the global ceiling can never be widened here.
+    const skillRequirements = aggregatedRequirements ? {
+      ...aggregatedRequirements,
+      maxCostUsdPerRun: Number.isFinite(aggregatedRequirements.maxCostUsdPerRun)
+        ? Math.min(aggregatedRequirements.maxCostUsdPerRun, maxChildCostUsd)
+        : maxChildCostUsd,
+    } : null;
     // Month-to-date cloud spend. AUTHORITATIVE PRECEDENCE (WI4, 1.6.1-rc.3): when a
     // live spend provider is wired (skillRouting.spend.enabled), the VALIDATED live
     // snapshot ALWAYS wins — no caller/event/tool parameter may override it (a
@@ -325,11 +541,16 @@ export function createSkillRoutingCoordinator({
     const result = await seam.planSkillRoute({
       prompt,
       plannedSkills: skills,
-      estimatedTokens: estimatedTokens || config.defaultEstimatedTokens,
+      estimatedTokens: requestedEstimate,
       monthlyCloudSpendUsd: Number.isFinite(effectiveSpend) ? effectiveSpend : config.monthlyCloudSpendUsd,
       ...(skillRequirements ? { skillRequirements } : {}),
     });
     if (!result) throw new Error("ToggleLogic Intelligence skill planning is unavailable");
+    const unsafeChoice = (result.choices || []).find((choice) => Number.isFinite(choice?.estimated_cost_usd)
+      && choice.estimated_cost_usd > maxChildCostUsd);
+    if (unsafeChoice) {
+      throw new Error(`routing plan returned a $${unsafeChoice.estimated_cost_usd.toFixed(2)} choice above the bounded-child cost ceiling ($${maxChildCostUsd.toFixed(2)}); no unrunnable model choice was staged`);
+    }
     const key = sessionId(hookContext);
     // ONE trusted owner decision (scope.isOwner), NOT the raw senderIsOwner bit —
     // before_agent_reply omits that bit, so a configured trusted owner would
@@ -344,6 +565,12 @@ export function createSkillRoutingCoordinator({
       shadow: shadow === true,
       ...(choiceToken ? { choice_token: choiceToken } : {}),
     };
+    if (result.status === "education_required") {
+      // Persist exactly the routes the owner saw. This prevents a later numeric
+      // reply from being reinterpreted against a reordered registry result and
+      // makes the sender/session-bound pending record the decision authority.
+      authorizedResult.presentation_choices = skillPlanPresentationChoices(result);
+    }
     if (result.status === "education_required" && key && teachingAuthorized) {
       prune();
       state.pending[key] = {
@@ -369,19 +596,38 @@ export function createSkillRoutingCoordinator({
     prune();
     const pending = state.pending[key];
     if (!pending) return null;
-    const kind = parseChoice(prompt, pending.plan.choice_token);
-    if (!kind) return null;
+    const choiceNumber = parseChoiceNumber(prompt, pending.plan.choice_token);
+    if (!choiceNumber) return null;
     const replySender = senderId(hookContext);
     if (pending.owner_sender_hash && pending.owner_sender_hash !== replySender) return null;
-    const selected = pending.plan.choices.find((item) => item.kind === kind);
+    const presented = Array.isArray(pending.plan.presentation_choices)
+      ? pending.plan.presentation_choices : skillPlanPresentationChoices(pending.plan);
+    const selected = presented[Number(choiceNumber) - 1] || null;
     if (!selected) return null;
+    // 1.7 Intelligence supplies a stable persistence strategy separately from
+    // the marketplace label. Legacy 1.6 choices use kind directly.
+    const strategy = cleanString(selected.strategy || selected.kind || selected.presentation_role);
+    if (!strategy) throw new Error("selected skill route has no persistence strategy");
+    const {
+      _role: _presentationRole,
+      _recommended: _presentationRecommended,
+      presentation_label: _presentationLabel,
+      choice_number: _choiceNumber,
+      ...choiceForPersistence
+    } = selected;
     const statuses = new Map((pending.plan.profile_matches || []).map((item) => [item.skill_id, item.status]));
-    const invalidSkills = pending.plan.planned_skills.filter((skill) => statuses.get(skill.id) !== "current");
-    const skillsToTeach = invalidSkills.length > 0 ? invalidSkills : pending.plan.planned_skills;
+    // Persist against the coordinator's verified resolution snapshot, not a
+    // planner echo that could omit version/fingerprint. This is the authority
+    // the owner actually approved and makes fingerprint drift invalidate the
+    // learned profile on the next plan.
+    const authoritativeSkills = normalizeSkills(pending.resolved_skills || pending.plan.planned_skills);
+    const invalidSkills = authoritativeSkills.filter((skill) => statuses.get(skill.id) !== "current");
+    const skillsToTeach = invalidSkills.length > 0 ? invalidSkills : authoritativeSkills;
     for (const skill of skillsToTeach) {
       await seam.recordSkillChoice({
         skill,
-        choice: selected,
+        choice: choiceForPersistence,
+        strategy,
         requiredTier: pending.plan.required_tier,
         requiredSurface: pending.plan.required_surface,
         privacy: pending.plan.privacy,
@@ -402,11 +648,11 @@ export function createSkillRoutingCoordinator({
       skills,
       plan: planSnapshot,
       choice: selected,
-      strategy: kind,
+      strategy,
       details: {
         matched_rule: "owner_taught_skill_profile",
         planned_skills: pending.plan.planned_skills,
-        strategy: kind,
+        strategy,
         model_lineage: selected.model_lineage,
         resolved_child: selected.resolved_child,
         estimated_cost_usd: selected.estimated_cost_usd,
@@ -450,6 +696,11 @@ export function createSkillRoutingCoordinator({
     const childSessionKey = `${parentSession}:togglelogic-skill:${suffix}`;
     const childSessionHash = crypto.createHash("sha256").update(childSessionKey).digest("hex");
     const skillList = skills.map((item) => item.id).join(", ");
+    const artifactWorkflow = skills.some((item) => item.id === "powerpoint-editor");
+    const artifactStagingDir = artifactWorkflow
+      ? path.join(resolveOpenClawPath(config.artifactStagingRoot || "~/.openclaw/workspace/.togglelogic-artifacts"), suffix)
+      : null;
+    if (artifactStagingDir) fs.mkdirSync(artifactStagingDir, { recursive: true, mode: 0o700 });
     const contractPrompt = contracts ? contracts.contractPrompt(skills, task) : null;
     // Credential-free per-skill execution identity (mailbox/sender/label) actually
     // applied to this route — for the audit/receipt. Keyed only to the resolved
@@ -459,6 +710,7 @@ export function createSkillRoutingCoordinator({
     const extraSystemPrompt = [
       "This is already a ToggleLogic-routed child execution. Do not call togglelogic_skill_plan or togglelogic_skill_run. Execute the bounded task directly and return only its result.",
       ...(contractPrompt ? [contractPrompt] : []),
+      ...(artifactStagingDir ? [artifactDeliveryInstructions(artifactStagingDir)] : []),
     ].join("\n\n");
 
     // Per-skill bounded tool surface. disableTools:true → an exact empty tool
@@ -473,11 +725,17 @@ export function createSkillRoutingCoordinator({
       skills,
       allowedTools: toolPolicy.allowedTools,
       maxToolCalls: toolPolicy.maxToolCalls,
+      plannedModelRef: modelRef,
     });
 
     let wait;
     let run;
     let text;
+    let observedModelRef = null;
+    let usage = null;
+    let modelMismatch = false;
+    let toolGuardDenied = false;
+    let artifactDelivery = null;
     try {
       run = await rt.subagent.run({
         sessionKey: childSessionKey,
@@ -508,15 +766,36 @@ export function createSkillRoutingCoordinator({
       signal?.throwIfAborted?.();
       const transcript = await rt.subagent.getSessionMessages({ sessionKey: run.sessionKey || childSessionKey, limit: 20 });
       text = assistantText(transcript?.messages);
+      observedModelRef = observedAssistantModelRef(transcript?.messages);
       if (!text) throw new Error(`skill execution ${wait?.status || "completed"} without an assistant result`);
+      if (observedModelRef && observedModelRef.toLowerCase() !== modelRef.toLowerCase()) {
+        modelMismatch = true;
+        throw new Error(`skill execution model mismatch: planned ${modelRef}, observed ${observedModelRef}; result rejected`);
+      }
+      if (artifactStagingDir) {
+        artifactDelivery = deliverArtifactManifest({ text, ownerPrompt: task, stagingDir: artifactStagingDir, allowBesidePromptedPptx: true });
+        text = artifactDelivery.cleanText;
+        const deliveredPaths = artifactDelivery.entries.filter((item) => item.status === "delivered").map((item) => item.destination);
+        const failed = artifactDelivery.entries.filter((item) => item.status !== "delivered");
+        if (artifactDelivery.status === "complete") {
+          text = `${text}\n\nArtifact delivery verified by ToggleLogic (${artifactDelivery.delivered}/${artifactDelivery.total}):\n${deliveredPaths.map((item) => `- ${item}`).join("\n")}`.trim();
+        } else {
+          const failures = failed.length > 0
+            ? failed.map((item) => `- ${item.destination || "unknown destination"}: ${item.error || "verification failed"}`).join("\n")
+            : `- ${artifactDelivery.error || "delivery manifest verification failed"}`;
+          text = `ARTIFACT DELIVERY INCOMPLETE. The child result below is staging-only and is not a final-delivery or completion claim.\n${failures}\n\n${text}`.trim();
+        }
+      }
     } finally {
-      // POST-RUN ACTUAL USAGE AUDIT. The host does not expose child model token/cost
-      // via SubagentRunResult/AgentWaitResult, so the plugin audits what it CAN
-      // measure: the actual tool-call count (from the guard), denied tool calls, and
-      // wall-clock duration — with model token/cost explicitly marked not
-      // host-observable. This closes the "post-run actual usage audit" requirement
-      // honestly and fires whether the run succeeded or failed.
-      const usage = childToolGuard?.release?.(childSessionKey) || null;
+      // POST-RUN ACTUAL USAGE AUDIT. The run/wait metadata is not execution proof.
+      // A provider/model pair on the returned assistant event IS recorded as
+      // observed; otherwise it remains null and the receipt explicitly says the
+      // host did not expose it. Token/cost remain estimates because the host does
+      // not expose child usage through SubagentRunResult/AgentWaitResult. Tool
+      // counts and wall time are still actual observations. This fires whether
+      // the run succeeded or failed.
+      usage = childToolGuard?.release?.(childSessionKey) || null;
+      toolGuardDenied = Number(usage?.deniedToolCalls || 0) > 0;
       const wallClockMs = Number.isFinite(wait?.startedAt) && Number.isFinite(wait?.endedAt)
         ? wait.endedAt - wait.startedAt : null;
       try {
@@ -525,8 +804,15 @@ export function createSkillRoutingCoordinator({
           child_session_key_hash: childSessionHash,
           child_run_id: run?.runId ?? null,
           planned_skills: skills.map((s) => s.id),
+          planned_model_lineage: details?.model_lineage ?? null,
+          planned_model_ref: modelRef,
+          // Backward-compatible planned child field. Never interpret this as
+          // observed runtime evidence; use observed_model_ref below.
           resolved_child: modelRef,
-          execution_status: wait?.status ?? "unknown",
+          observed_model_ref: observedModelRef,
+          execution_status: modelMismatch ? "model_mismatch" : toolGuardDenied ? "tool_guard_denied" : (wait?.status ?? "unknown"),
+          model_match_verified: observedModelRef ? !modelMismatch : null,
+          completion_verified: !modelMismatch && !toolGuardDenied && wait?.status === "ok" && (!artifactWorkflow || artifactDelivery?.status === "complete"),
           stop_reason: wait?.stopReason ?? null,
           provider_started: wait?.providerStarted ?? null,
           wall_clock_ms: wallClockMs,
@@ -534,6 +820,7 @@ export function createSkillRoutingCoordinator({
           estimated_cost_usd: Number.isFinite(estimatedCostUsd) ? estimatedCostUsd : null,
           actual_tool_calls: usage?.toolCalls ?? null,
           denied_tool_calls: usage?.deniedToolCalls ?? null,
+          guard_internal_errors: usage?.internalGuardErrors ?? null,
           denied_tools: usage?.deniedTools ?? [],
           tool_call_ceiling: usage?.ceiling ?? null,
           disable_tools: toolPolicy.disableTools === true,
@@ -542,10 +829,15 @@ export function createSkillRoutingCoordinator({
           execution_identity: executionIdentity,
           // The residual gap (documented): the host exposes no model token/pass cap
           // or in-flight abort, so actual model spend is not observable here.
-          model_usage_host_observable: false,
+          model_usage_host_observable: observedModelRef !== null,
           runtime_token_ceiling_enforced: false,
+          artifact_delivery_status: artifactDelivery?.status ?? null,
+          artifact_delivery: artifactDelivery?.entries ?? [],
         });
       } catch { /* audit is best-effort; never raise into the caller */ }
+    }
+    if (toolGuardDenied) {
+      throw new Error(`skill execution incomplete: bounded-child guard denied ${usage.deniedToolCalls} tool call(s); result rejected because verification may not have completed`);
     }
     return {
       text,
@@ -554,11 +846,16 @@ export function createSkillRoutingCoordinator({
         executed: true,
         planned_skills: skills,
         model_lineage: details?.model_lineage ?? null,
+        planned_model_ref: modelRef,
         resolved_child: modelRef,
+        observed_model_ref: observedModelRef,
+        model_usage_host_observable: observedModelRef !== null,
         estimated_cost_usd: Number.isFinite(estimatedCostUsd) ? estimatedCostUsd : null,
         child_run_id: run.runId,
         child_session_key_hash: childSessionHash,
-        execution_status: wait.status,
+        execution_status: modelMismatch ? "model_mismatch" : toolGuardDenied ? "tool_guard_denied" : wait.status,
+        model_match_verified: observedModelRef ? !modelMismatch : null,
+        completion_verified: !modelMismatch && !toolGuardDenied && wait.status === "ok" && (!artifactWorkflow || artifactDelivery?.status === "complete"),
         runtime: run.runtime || null,
         prompt_mode: "minimal",
         light_context: true,
@@ -570,6 +867,10 @@ export function createSkillRoutingCoordinator({
         execution_identity: executionIdentity,
         tool_call_ceiling: (childToolGuard && Number.isFinite(toolPolicy.maxToolCalls))
           ? toolPolicy.maxToolCalls : (childToolGuard ? childToolGuard.defaultMax : null),
+        guard_internal_errors: usage?.internalGuardErrors ?? null,
+        denied_tool_calls: usage?.deniedToolCalls ?? null,
+        artifact_delivery_status: artifactDelivery?.status ?? null,
+        artifact_delivery: artifactDelivery?.entries ?? [],
         // These are PRE-FLIGHT estimate ceilings, not live runtime enforcement.
         preflight_ceiling_tokens: maxChildTokens,
         preflight_ceiling_cost_usd: maxChildCostUsd,
@@ -587,6 +888,11 @@ export function createSkillRoutingCoordinator({
   function evaluateScope(hookContext = {}) {
     const scopeDecision = scope ? scope.evaluate(hookContext) : { inScope: false, reason: "no_scope" };
     return { scopeDecision, active: scopeDecision.inScope && shadow !== true };
+  }
+
+  function routeBindingFor(childSessionKey) {
+    return childToolGuard && typeof childToolGuard.routeBindingFor === "function"
+      ? childToolGuard.routeBindingFor(childSessionKey) : null;
   }
 
   /**
@@ -664,8 +970,9 @@ export function createSkillRoutingCoordinator({
         });
         return {
           handled: true,
-          reply: { text: `${result.text}\n\n${executionFooter(consumed.details)}` },
-          reason: "skill_choice_executed",
+          reply: { text: `${result.text}\n\n${formatSkillExecutionReceipt({ ...consumed.details, ...result.details })}` },
+          reason: result.details.artifact_delivery_status && result.details.artifact_delivery_status !== "complete"
+            ? "skill_choice_artifact_delivery_incomplete" : "skill_choice_executed",
           audit: { mode: "skill_routing", ...consumed.details, ...result.details },
         };
       }
@@ -701,6 +1008,49 @@ export function createSkillRoutingCoordinator({
       return { handled: true, reply: { text: NO_SKILL_FAILSAFE }, reason: "skill_named_unavailable", audit: { mode: "skill_named_unavailable", named } };
     }
 
+    // DEPLOYMENT-OWNED DETERMINISTIC INTENT RECIPES. Evaluate these even when
+    // the prompt already names an installed skill. A composed workflow often
+    // names its authoritative source explicitly (for example Microsoft Graph in
+    // meeting prep); treating that exact match as terminal used to discard the
+    // recipe's additional required skills (Zoom transcripts in that example).
+    //
+    // A recipe may augment an exact text match only when it is a SUPERSET of
+    // every deterministically matched skill. A disjoint/contradictory recipe
+    // fails closed instead of silently overriding an explicit skill reference.
+    // Structured host metadata remains authoritative and is never augmented by
+    // prompt recipes.
+    let recipeStatus = "not_configured";
+    if (active && resolved.source !== "structured_host_metadata" && intentRecipes && typeof intentRecipes.resolve === "function") {
+      const installedIds = resolver ? [...resolver.catalogIds] : [];
+      const recipe = intentRecipes.resolve(text, { installedIds });
+      recipeStatus = recipe.status === "resolved" || recipe.status === "ambiguous" ? recipe.status : (recipe.reason || recipe.status);
+      if (recipe.status === "resolved") {
+        const exactIds = new Set((resolved.skills || []).map((skill) => skill.id));
+        const recipeIds = new Set(recipe.skills || []);
+        const compatible = resolved.status !== "resolved" || [...exactIds].every((id) => recipeIds.has(id));
+        if (!compatible) {
+          return {
+            handled: true,
+            reply: { text: `Your request explicitly references ${[...exactIds].join(", ")}, but the configured ${recipe.ruleId} workflow requires ${[...recipeIds].join(", ")}. Which skill or workflow should I use?` },
+            reason: "skill_recipe_exact_conflict",
+            audit: { mode: "skill_recipe_exact_conflict", rule_id: recipe.ruleId, exact_skills: [...exactIds], recipe_skills: [...recipeIds] },
+          };
+        }
+        const hydrated = hydrateVerifiedSkillIds(recipe.skills);
+        if (!hydrated) return skillIdentityUnavailable("intent_recipe", recipe.skills);
+        resolved = {
+          status: "resolved",
+          skills: hydrated,
+          source: exactIds.size > 0 ? "intent_recipe_augmented_exact" : "intent_recipe",
+          resolution: { reason: exactIds.size > 0 ? "intent_recipe_augmented_exact" : "intent_recipe", ruleId: recipe.ruleId },
+        };
+      } else if (recipe.status === "ambiguous") {
+        const ids = [...new Set((recipe.candidates || []).flatMap((candidate) => candidate.skills))].slice(0, 8);
+        const ruleIds = (recipe.candidates || []).map((candidate) => candidate.ruleId);
+        return { handled: true, reply: { text: `Your request matches more than one configured intent recipe (${ruleIds.join(", ")}), which resolve to different skills (${ids.join(", ")}). Which should I use? Reply with the skill name.` }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
+      }
+    }
+
     if (resolved.status !== "resolved" || resolved.skills.length === 0) {
       // No active installed skill relates to this request (deterministically).
       if (!active) return null; // out-of-scope/shadow: prior safe passthrough behavior
@@ -709,31 +1059,6 @@ export function createSkillRoutingCoordinator({
       const category = nonAction ? nonAction.match(text) : { matched: false };
       if (category.matched) {
         return { handled: false, audit: { mode: "non_action_category", category: category.category, kind: category.kind } };
-      }
-      // DEPLOYMENT-OWNED DETERMINISTIC INTENT RECIPES. Evaluated ONLY after exact
-      // installed-skill resolution returned none, and BEFORE the bounded classifier.
-      // A recipe resolves a declared token pattern to one-or-more INSTALLED skills,
-      // but only when every target skill is present in the fresh verified inventory
-      // (else inert). Conflicting recipes fail closed with a bounded clarification.
-      let recipeStatus = "not_configured";
-      if (intentRecipes && typeof intentRecipes.resolve === "function") {
-        const installedIds = resolver ? [...resolver.catalogIds] : [];
-        const recipe = intentRecipes.resolve(text, { installedIds });
-        // Record the specific reason (e.g. "recipe_skills_absent") for a non-resolve
-        // so the fail-safe audit shows WHY a matched recipe stayed inert.
-        recipeStatus = recipe.status === "resolved" || recipe.status === "ambiguous" ? recipe.status : (recipe.reason || recipe.status);
-        if (recipe.status === "resolved") {
-          resolved = {
-            status: "resolved",
-            skills: normalizeSkills(recipe.skills.map((id) => ({ id }))),
-            source: "intent_recipe",
-            resolution: { reason: "intent_recipe", ruleId: recipe.ruleId },
-          };
-        } else if (recipe.status === "ambiguous") {
-          const ids = [...new Set((recipe.candidates || []).flatMap((c) => c.skills))].slice(0, 8);
-          const ruleIds = (recipe.candidates || []).map((c) => c.ruleId);
-          return { handled: true, reply: { text: `Your request matches more than one configured intent recipe (${ruleIds.join(", ")}), which resolve to different skills (${ids.join(", ")}). Which should I use? Reply with the skill name.` }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
-        }
       }
       // A natural-language request that names no skill AND matched no recipe may
       // still map to an eligible skill via the BOUNDED resolution classifier (a
@@ -753,7 +1078,9 @@ export function createSkillRoutingCoordinator({
         classifierStatus = decision.status;
         if (decision.status === "resolved") {
           // Fall through to normal planning with the classifier-resolved skill.
-          resolved = { status: "resolved", skills: normalizeSkills([{ id: decision.skillId }]), source: "bounded_classifier", resolution: { reason: "classifier_resolved", confidence: decision.confidence } };
+          const hydrated = hydrateVerifiedSkillIds([decision.skillId]);
+          if (!hydrated) return skillIdentityUnavailable("bounded_classifier", [decision.skillId]);
+          resolved = { status: "resolved", skills: hydrated, source: "bounded_classifier", resolution: { reason: "classifier_resolved", confidence: decision.confidence } };
         } else if (decision.status === "ambiguous") {
           const ids = (decision.candidates || []).slice(0, 4);
           return { handled: true, reply: { text: `Your request could map to more than one installed skill (${ids.join(", ")}). Which single skill should I use? Reply with the skill name.` }, reason: "skill_classifier_ambiguous", audit: { mode: "skill_classifier_ambiguous", candidates: ids, confidence: decision.confidence } };
@@ -854,7 +1181,13 @@ export function createSkillRoutingCoordinator({
         estimatedCostUsd: details.estimated_cost_usd,
         details,
       });
-      return { handled: true, reply: { text: `${result.text}\n\n${executionFooter(details)}` }, reason: "skill_selected_executed", audit: { mode: "skill_routing", ...details, ...result.details } };
+      return {
+        handled: true,
+        reply: { text: `${result.text}\n\n${formatSkillExecutionReceipt({ ...details, ...result.details })}` },
+        reason: result.details.artifact_delivery_status && result.details.artifact_delivery_status !== "complete"
+          ? "skill_selected_artifact_delivery_incomplete" : "skill_selected_executed",
+        audit: { mode: "skill_routing", ...details, ...result.details },
+      };
     }
     if (["profile_conflict", "requirements_conflict", "no_eligible_model", "education_disabled"].includes(planResult.status)) {
       return { handled: true, reply: { text: formatSkillPlan(planResult) }, reason: `skill_${planResult.status}`, audit: { mode: "skill_routing", status: planResult.status, planned_skills: planResult.planned_skills } };
@@ -887,6 +1220,7 @@ export function createSkillRoutingCoordinator({
     evaluateScope,
     resolvePlannedSkills,
     executeBoundedChild,
+    routeBindingFor,
     structuredPlannedSkills,
     formatSkillPlan,
     isShadow: shadow === true,
@@ -903,7 +1237,7 @@ export function createSkillRoutingTool(coordinator, defaultContext = {}) {
     promptGuidelines: [
       "Use togglelogic_skill_plan only to inspect or explain a route without executing the task.",
       "Automatic skill routing is enforced by ToggleLogic's before_agent_reply gate; this tool is an optional planning/cost-preview surface and does not itself gate execution.",
-      "If the result asks for education, present its three choices verbatim and stop; do not perform the task until the owner replies.",
+      "If the result asks for education, present its distinct displayed choices verbatim and stop; do not perform the task until the owner replies.",
     ],
     parameters: {
       type: "object",
@@ -957,7 +1291,7 @@ export function createSkillRoutingRunTool(coordinator, runtime, config, defaultC
     promptSnippet: "Route and execute planned skill work through its learned ToggleLogic profile.",
     promptGuidelines: [
       "Skill routing is enforced automatically by ToggleLogic's before_agent_reply gate; this tool is an optional explicit surface for the same bounded execution.",
-      "If education is required, present the returned choices verbatim and stop until the authenticated owner replies with the displayed one-time token.",
+      "If education is required, present the returned choices verbatim and stop until the authenticated owner replies with the displayed number.",
       "If execution succeeds, return the child result without repeating the task in the parent model.",
     ],
     parameters: {

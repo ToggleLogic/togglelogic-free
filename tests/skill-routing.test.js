@@ -240,7 +240,7 @@ test("tool gives SAM a structured planning surface", async () => {
     skills: [{ id: "meeting-prep", version: "1.0.0" }],
   });
   assert.equal(result.details.status, "education_required");
-  assert.match(result.content[0].text, /Reply 1, 2, or 3/);
+  assert.match(result.content[0].text, /Reply 1 or 2/);
 });
 
 test("learned skill work executes in a child run pinned to the resolved child", async () => {
@@ -375,7 +375,7 @@ test("configured ownerSenderIds stages teaching when senderIsOwner is absent (be
   assert.match(plan.choice_token, /^[a-f0-9]{6}$/);
   // The owner-facing render offers the choices, never the authenticated-owner denial.
   assert.doesNotMatch(formatSkillPlan(plan), /authenticated owner must start/);
-  assert.match(formatSkillPlan(plan), /Reply 1, 2, or 3/);
+  assert.match(formatSkillPlan(plan), /Reply 1 or 2/);
   // The choice was staged restart-safe and bound to this trusted sender.
   const saved = JSON.parse(fs.readFileSync(path.join(directory, "pending.json"), "utf8"));
   assert.equal(Object.keys(saved.pending).length, 1);

@@ -21,12 +21,13 @@
  *   - skillIds : the installed skills this recipe composes to.
  *   A rule RESOLVES only if every target skill is present in the FRESH verified
  *   inventory; if any target skill is absent the rule is inert (fail safe). When
- *   several matching rules resolve to DIFFERENT skill sets the result is AMBIGUOUS
- *   (clarify / fail closed) — never a silent pick.
+ *   several matching rules resolve to DIFFERENT skill sets, a single strict
+ *   superset composition may dominate its component recipes; otherwise the
+ *   result is AMBIGUOUS (clarify / fail closed) — never a silent pick.
  *
- * Evaluated ONLY after exact installed-skill resolution returns "none" and BEFORE
- * the bounded classifier (see coordinator.handleGate). Default set is EMPTY so a
- * deployment opts in explicitly; nothing composes without a declared recipe.
+ * Evaluated before the bounded classifier and may safely augment compatible exact
+ * installed-skill matches (see coordinator.handleGate). Default set is EMPTY so
+ * a deployment opts in explicitly; nothing composes without a declared recipe.
  */
 
 const MAX_RULES = 64;
@@ -147,6 +148,26 @@ export function createIntentRecipes(rawRules) {
       if (!distinct.has(key)) distinct.set(key, rule);
     }
     if (distinct.size > 1) {
+      // A composition recipe may naturally overlap its component recipes. If
+      // exactly one matched skill set contains every other matched set, it is
+      // the deterministic most-specific workflow. Example: meeting prep
+      // {Graph, Zoom} dominates the simultaneously matched Zoom-transcript
+      // component {Zoom}. Disjoint or partially overlapping sets remain
+      // ambiguous and fail closed.
+      const distinctRules = [...distinct.values()];
+      const dominant = distinctRules.filter((candidate) => {
+        const candidateSet = new Set(candidate.skillIds);
+        return distinctRules.every((other) => other.skillIds.every((id) => candidateSet.has(id)));
+      });
+      if (dominant.length === 1) {
+        const chosen = dominant[0];
+        return {
+          status: "resolved",
+          ruleId: chosen.id,
+          skills: [...new Set(chosen.skillIds)],
+          matchedRuleIds: matchedResolvable.map((rule) => rule.id),
+        };
+      }
       return {
         status: "ambiguous",
         reason: "conflicting_recipes",

@@ -44,6 +44,8 @@ const ID_RE = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$/;
 const SURFACE_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const MAX_SKILL_ENTRIES = 256;
 const MAX_ESTIMATED_TOKENS = 10_000_000;
+const MAX_BENCHMARK_DIMENSIONS = 16;
+const BENCHMARK_FIELD_RE = /^[A-Za-z0-9_.:-]{1,96}$/;
 
 // The hard-coded conservative fallback. Used when the deployment declares no
 // `default`, or its `default` is malformed. tool_calling_strong + requiresTools
@@ -58,6 +60,7 @@ export const CONSERVATIVE_DEFAULT = Object.freeze({
   minimumBenchmarkScore: null,
   maxCostUsdPerRun: null,
   maxCostUsdPerMonth: null,
+  capabilityContract: null,
 });
 
 function cleanString(value) {
@@ -72,6 +75,40 @@ function tierRank(tier) {
 function privacyRank(privacy) {
   const index = PRIVACY.indexOf(privacy);
   return index < 0 ? 0 : index;
+}
+
+function boundedText(value, maxLength) {
+  const text = cleanString(value);
+  return text ? text.slice(0, maxLength) : null;
+}
+
+function normalizeCapabilityContract(raw, fallback = null) {
+  if (raw === undefined || raw === null) return fallback;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fallback;
+  const rawDimensions = Array.isArray(raw.benchmarkDimensions) ? raw.benchmarkDimensions
+    : Array.isArray(raw.benchmark_dimensions) ? raw.benchmark_dimensions : null;
+  if (!rawDimensions) return fallback;
+  const benchmarkDimensions = rawDimensions.slice(0, MAX_BENCHMARK_DIMENSIONS).map((item) => {
+    const value = typeof item === "string" ? { field: item } : item;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const field = cleanString(value.field);
+    if (!field || !BENCHMARK_FIELD_RE.test(field)) return null;
+    return {
+      field,
+      ...(boundedText(value.label, 80) ? { label: boundedText(value.label, 80) } : {}),
+      weight: Number.isFinite(value.weight) && value.weight > 0 && value.weight <= 100 ? value.weight : 1,
+      ...(boundedText(value.advantageText ?? value.advantage_text, 240)
+        ? { advantageText: boundedText(value.advantageText ?? value.advantage_text, 240) } : {}),
+      ...(boundedText(value.tradeoffText ?? value.tradeoff_text, 240)
+        ? { tradeoffText: boundedText(value.tradeoffText ?? value.tradeoff_text, 240) } : {}),
+    };
+  }).filter(Boolean);
+  if (benchmarkDimensions.length === 0) return fallback;
+  return {
+    ...(boundedText(raw.contractId ?? raw.contract_id, 128) ? { contractId: boundedText(raw.contractId ?? raw.contract_id, 128) } : {}),
+    ...(boundedText(raw.name, 120) ? { name: boundedText(raw.name, 120) } : {}),
+    benchmarkDimensions,
+  };
 }
 
 // Coerce one raw requirement object against a fallback. Each field is validated
@@ -95,6 +132,10 @@ function coerceRequirement(raw, fallback) {
       ? r.maxCostUsdPerRun : fallback.maxCostUsdPerRun,
     maxCostUsdPerMonth: Number.isFinite(r.maxCostUsdPerMonth) && r.maxCostUsdPerMonth >= 0
       ? r.maxCostUsdPerMonth : fallback.maxCostUsdPerMonth,
+    capabilityContract: normalizeCapabilityContract(
+      r.capabilityContract ?? r.capability_contract,
+      fallback.capabilityContract,
+    ),
   };
 }
 
@@ -158,6 +199,7 @@ export function createSkillRequirements(rawConfig) {
     let estimatedTokens = null;
     let maxCostUsdPerRun = null;
     let maxCostUsdPerMonth = null;
+    const contracts = [];
     for (const id of list) {
       const req = requirementFor(id);
       perSkill[id] = req;
@@ -177,8 +219,32 @@ export function createSkillRequirements(rawConfig) {
       if (Number.isFinite(req.maxCostUsdPerMonth)) {
         maxCostUsdPerMonth = Math.min(maxCostUsdPerMonth ?? Infinity, req.maxCostUsdPerMonth);
       }
+      if (req.capabilityContract) contracts.push({ skillId: id, ...req.capabilityContract });
     }
     const requiredSurfaces = [...surfaces].sort();
+    const mergedDimensions = new Map();
+    for (const contract of contracts) {
+      for (const dimension of contract.benchmarkDimensions || []) {
+        const current = mergedDimensions.get(dimension.field);
+        if (!current) {
+          mergedDimensions.set(dimension.field, { ...dimension });
+        } else {
+          current.weight = Math.max(current.weight, dimension.weight);
+          if (!current.label && dimension.label) current.label = dimension.label;
+          if (!current.advantageText && dimension.advantageText) current.advantageText = dimension.advantageText;
+          if (!current.tradeoffText && dimension.tradeoffText) current.tradeoffText = dimension.tradeoffText;
+        }
+      }
+    }
+    const capabilityContract = mergedDimensions.size > 0 ? {
+      contractId: contracts.length === 1
+        ? (contracts[0].contractId || `${contracts[0].skillId}/marketplace`)
+        : `combined/${contracts.map((item) => item.skillId).sort().join("+")}`,
+      name: contracts.length === 1
+        ? (contracts[0].name || contracts[0].skillId)
+        : `Combined requirements: ${contracts.map((item) => item.name || item.skillId).join(", ")}`,
+      benchmarkDimensions: [...mergedDimensions.values()],
+    } : null;
     return {
       requiredTier,
       requiredSurfaces,
@@ -189,6 +255,7 @@ export function createSkillRequirements(rawConfig) {
       estimatedTokens: Number.isFinite(estimatedTokens) && estimatedTokens > 0 ? estimatedTokens : null,
       maxCostUsdPerRun: Number.isFinite(maxCostUsdPerRun) ? maxCostUsdPerRun : null,
       maxCostUsdPerMonth: Number.isFinite(maxCostUsdPerMonth) ? maxCostUsdPerMonth : null,
+      capabilityContract,
       skillCount: list.length,
       perSkill,
     };

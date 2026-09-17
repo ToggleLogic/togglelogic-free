@@ -25,7 +25,10 @@ function pricingWith(modelsDev, cfg = {}) {
   // shadows another's fetched feed.
   const cachePath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tl-pricecache-")), `c${cacheSeq++}.json`);
   return createPricing(
-    { sourceUrl: "https://example.invalid/none", cachePath, ...cfg },
+    // Test isolation is authoritative: normalized production defaults may
+    // contain the live ~/.openclaw cache path, so apply the temporary path
+    // after the supplied configuration rather than allowing it to be replaced.
+    { ...cfg, sourceUrl: "https://example.invalid/none", cachePath },
     { warn() {} },
     { fetchImpl: async () => ({ ok: true, json: async () => modelsDev }), now: () => 1_800_000_000_000 },
   );

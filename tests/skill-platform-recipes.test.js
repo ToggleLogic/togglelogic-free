@@ -37,7 +37,7 @@ import { createIntentRecipes } from "../src/skill-routing/intent-recipes.js";
 // (explicit `gmail` + an email term -> `gog`); that recipe and its precision +
 // per-skill mailbox identity are covered in tests/skill-mailbox-identity.test.js.
 export const PLATFORM_RECIPES = [
-  { id: "high-precision-meeting-prep", allTerms: ["meeting"], anyTerms: ["prepare", "prep", "brief", "briefing", "get ready", "ready for", "prep me"], skillIds: ["microsoft-graph", "zoom-meetings"] },
+  { id: "high-precision-meeting-prep", allTerms: ["meeting"], anyTerms: ["prepare", "preparation", "prep", "brief", "briefing", "get ready", "ready for", "prep me"], skillIds: ["microsoft-graph", "zoom-meetings"] },
   { id: "outlook-mail", allTerms: ["outlook"], anyTerms: ["email", "emails", "mail", "inbox", "message", "messages"], skillIds: ["microsoft-graph"] },
   { id: "zoom-recording", allTerms: ["zoom"], anyTerms: ["transcript", "transcripts", "recording", "recordings", "recorded"], skillIds: ["zoom-meetings"] },
 ];
@@ -97,6 +97,27 @@ test("meeting-prep is preserved as a Graph+Zoom composition", () => {
   assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
 });
 
+test("meeting preparation noun form preserves the Graph+Zoom composition", () => {
+  const r = createIntentRecipes(PLATFORM_RECIPES).resolve(
+    "Rerun my preparation for today's meeting and perform an actual Zoom history search.",
+    { installedIds: INSTALLED },
+  );
+  assert.equal(r.status, "resolved");
+  assert.equal(r.ruleId, "high-precision-meeting-prep");
+  assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
+});
+
+test("a composed recipe deterministically dominates its simultaneously matched component recipe", () => {
+  const r = createIntentRecipes(PLATFORM_RECIPES).resolve(
+    "Prepare me for my meeting through Microsoft Graph and use the Zoom transcript if relevant.",
+    { installedIds: INSTALLED },
+  );
+  assert.equal(r.status, "resolved");
+  assert.equal(r.ruleId, "high-precision-meeting-prep");
+  assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
+  assert.deepEqual(r.matchedRuleIds.sort(), ["high-precision-meeting-prep", "zoom-recording"]);
+});
+
 test("a platform recipe is INERT when its target skill is not installed (falls to fail-safe upstream)", () => {
   const r = createIntentRecipes(PLATFORM_RECIPES).resolve("Get the Zoom recording transcript for the launch.", { installedIds: ["microsoft-graph", "code-review"] });
   assert.equal(r.status, "none");
@@ -112,10 +133,10 @@ const OWNER_CTX = Object.freeze({
   trigger: "user", inputProvenance: { kind: "external_user" },
 });
 const CATALOG = [
-  { id: "microsoft-graph", description: "Email, calendar, and contacts via Microsoft Graph (authoritative Outlook calendar)" },
-  { id: "zoom-meetings", description: "Zoom meeting recordings and transcripts" },
-  { id: "gog", description: "Google organizational graph directory lookups" },
-  { id: "code-review", description: "Review a diff for correctness" },
+  { id: "microsoft-graph", version: "3.2.0", fingerprint: "fp-graph-a837", execution_class: "tool", description: "Email, calendar, and contacts via Microsoft Graph (authoritative Outlook calendar)" },
+  { id: "zoom-meetings", version: "2.4.1", fingerprint: "fp-zoom-19bc", execution_class: "tool", description: "Zoom meeting recordings and transcripts" },
+  { id: "gog", version: "1.6.0", fingerprint: "fp-gog-33f1", execution_class: "tool", description: "Google organizational graph directory lookups" },
+  { id: "code-review", version: "1.8.0", fingerprint: "fp-review-442a", execution_class: "artifact", description: "Review a diff for correctness" },
 ];
 
 function educationPlan(id) {
@@ -188,6 +209,31 @@ test("GATE: explicit Zoom recording resolves zoom-meetings via recipe — classi
   assert.equal(h.planCalls.length, 1);
   assert.equal(h.planCalls[0].plannedSkills[0].id, "zoom-meetings");
   assert.equal(h.invokeCalls.length, 0, "recipe resolved deterministically; classifier not consulted");
+});
+
+test("GATE: a meeting-prep recipe safely augments an exact Microsoft Graph match with Zoom", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply(
+    "Prepare me for my next real meeting tomorrow. Check my Outlook calendar through Microsoft Graph first, and use Zoom only if a prior transcript is relevant.",
+  ), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "skill_education_required");
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id).sort(), ["microsoft-graph", "zoom-meetings"]);
+  assert.equal(h.invokeCalls.length, 0);
+  assert.equal(h.planCalls.length, 1);
+});
+
+test("GATE: a recipe that conflicts with an explicit skill reference fails closed", async () => {
+  const h = harness({
+    recipes: [{ id: "meeting-only", allTerms: ["meeting"], anyTerms: ["prepare"], skillIds: ["zoom-meetings"] }],
+  });
+  const gate = await h.coordinator.handleGate(reply("Use Microsoft Graph to prepare for my meeting"), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "skill_recipe_exact_conflict");
+  assert.deepEqual(gate.audit.exact_skills, ["microsoft-graph"]);
+  assert.deepEqual(gate.audit.recipe_skills, ["zoom-meetings"]);
+  assert.equal(h.invokeCalls.length, 0);
+  assert.equal(h.planCalls.length, 0);
 });
 
 test("GATE: a generic Gmail email is NOT captured by outlook-mail — it reaches the classifier", async () => {

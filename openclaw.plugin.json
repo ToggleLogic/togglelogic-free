@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "description": "Owner-scoped skill-aware model routing for OpenClaw with learned policies, benchmark-capable Intelligence integration, bounded child execution, budget controls, audit records, and transparent cost estimates. Bring your own provider credentials. The separate ToggleLogic Intelligence package is privately distributed under its own license. Global and unattended enforcement require a future OpenClaw in-flight runtime safeguard.",
   "activation": {
     "onStartup": true
@@ -160,6 +160,7 @@
         "description": "Runtime settings for the owner-taught skill routing coordinator. Model choice and benchmark logic remain in the separate Intelligence layer.",
         "properties": {
           "pendingStatePath": { "type": "string", "default": "~/.openclaw/togglelogic/skill-routing-pending.json", "description": "Mode-0600 restart-safe state for an unanswered educational choice." },
+          "artifactStagingRoot": { "type": "string", "default": "~/.openclaw/workspace/.togglelogic-artifacts", "description": "Trusted root for per-run bounded-child artifact staging. Children create and verify new files here; the parent validates a machine-readable manifest before non-overwriting delivery to an exact destination explicitly present in the owner prompt." },
           "pendingTtlMinutes": { "type": "integer", "minimum": 1, "default": 15 },
           "defaultEstimatedTokens": { "type": "integer", "minimum": 1, "default": 4000 },
           "executionTimeoutSeconds": { "type": "integer", "minimum": 30, "maximum": 3600, "default": 600 },
@@ -329,7 +330,35 @@
                   "estimatedTokens": { "type": "integer", "minimum": 1, "description": "Optional per-run token hint." },
                   "minimumBenchmarkScore": { "type": "number", "minimum": 0, "description": "Optional benchmark floor a candidate must meet." },
                   "maxCostUsdPerRun": { "type": "number", "minimum": 0, "description": "Optional per-run cost cap." },
-                  "maxCostUsdPerMonth": { "type": "number", "minimum": 0, "description": "Optional per-skill monthly cost cap (min'd with the amortized cloud budget)." }
+                  "maxCostUsdPerMonth": { "type": "number", "minimum": 0, "description": "Optional per-skill monthly cost cap (min'd with the amortized cloud budget)." },
+                  "capabilityContract": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "Skill-specific benchmark dimensions used by the 1.7 Economy/Recommended/Premium marketplace. This is evidence configuration, never a model pin.",
+                    "properties": {
+                      "contractId": { "type": "string", "maxLength": 128 },
+                      "name": { "type": "string", "maxLength": 120 },
+                      "benchmarkDimensions": {
+                        "type": "array", "minItems": 1, "maxItems": 16,
+                        "items": {
+                          "oneOf": [
+                            { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,96}$" },
+                            {
+                              "type": "object", "additionalProperties": false, "required": ["field"],
+                              "properties": {
+                                "field": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,96}$" },
+                                "label": { "type": "string", "maxLength": 80 },
+                                "weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+                                "advantageText": { "type": "string", "maxLength": 240 },
+                                "tradeoffText": { "type": "string", "maxLength": 240 }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "required": ["benchmarkDimensions"]
+                  }
                 }
               },
               "skills": {
@@ -346,7 +375,34 @@
                     "estimatedTokens": { "type": "integer", "minimum": 1 },
                     "minimumBenchmarkScore": { "type": "number", "minimum": 0 },
                     "maxCostUsdPerRun": { "type": "number", "minimum": 0 },
-                    "maxCostUsdPerMonth": { "type": "number", "minimum": 0 }
+                    "maxCostUsdPerMonth": { "type": "number", "minimum": 0 },
+                    "capabilityContract": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "contractId": { "type": "string", "maxLength": 128 },
+                        "name": { "type": "string", "maxLength": 120 },
+                        "benchmarkDimensions": {
+                          "type": "array", "minItems": 1, "maxItems": 16,
+                          "items": {
+                            "oneOf": [
+                              { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,96}$" },
+                              {
+                                "type": "object", "additionalProperties": false, "required": ["field"],
+                                "properties": {
+                                  "field": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,96}$" },
+                                  "label": { "type": "string", "maxLength": 80 },
+                                  "weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+                                  "advantageText": { "type": "string", "maxLength": 240 },
+                                  "tradeoffText": { "type": "string", "maxLength": 240 }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": ["benchmarkDimensions"]
+                    }
                   }
                 }
               }

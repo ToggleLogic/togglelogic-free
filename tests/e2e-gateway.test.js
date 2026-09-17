@@ -188,7 +188,7 @@ test("E2E: a message naming an INSTALLED active skill resolves to the 3-choice e
     assert.equal(result.handled, true);
     assert.equal(result.reason, "skill_education_required");
     assert.match(result.reply.text, /use these skills: code-review/);
-    assert.match(result.reply.text, /Reply 1, 2, or 3/);
+    assert.match(result.reply.text, /Reply 1 or 2/);
     assert.equal(gw.runCalls.length, 0, "education preflight runs no model");
   } finally {
     fs.rmSync(intel, { recursive: true, force: true });

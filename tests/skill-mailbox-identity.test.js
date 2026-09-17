@@ -201,10 +201,10 @@ const OWNER_CTX = Object.freeze({
   trigger: "user", inputProvenance: { kind: "external_user" },
 });
 const CATALOG = [
-  { id: "microsoft-graph", description: "Email, calendar, and contacts via Microsoft Graph (authoritative Outlook calendar)" },
-  { id: "zoom-meetings", description: "Zoom meeting recordings and transcripts" },
-  { id: "gog", description: "Google / Gmail service for SAM's own account" },
-  { id: "code-review", description: "Review a diff for correctness" },
+  { id: "microsoft-graph", version: "3.2.0", fingerprint: "fp-graph-a837", execution_class: "tool", description: "Email, calendar, and contacts via Microsoft Graph (authoritative Outlook calendar)" },
+  { id: "zoom-meetings", version: "2.4.1", fingerprint: "fp-zoom-19bc", execution_class: "tool", description: "Zoom meeting recordings and transcripts" },
+  { id: "gog", version: "1.6.0", fingerprint: "fp-gog-33f1", execution_class: "tool", description: "Google / Gmail service for SAM's own account" },
+  { id: "code-review", version: "1.8.0", fingerprint: "fp-review-442a", execution_class: "artifact", description: "Review a diff for correctness" },
 ];
 
 function selectedPlan(req) {

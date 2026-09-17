@@ -166,6 +166,18 @@ test("contractPrompt is intent+skill-aware: injected for a microsoft-graph meeti
   assert.equal(c.contractPrompt([{ id: "microsoft-graph" }], "send an email to finance"), null);
 });
 
+test("Graph plus Zoom meeting prep requires an actual Zoom search before claiming no history", () => {
+  const c = createSkillContracts({ ownerTimezone: TZ, now: () => FUTURE_NOW });
+  const prompt = c.contractPrompt(
+    [{ id: "microsoft-graph" }, { id: "zoom-meetings" }],
+    "Prepare me for my meeting and use Zoom history if relevant",
+  );
+  assert.match(prompt, /perform an actual Zoom API\/search\/list operation/i);
+  assert.match(prompt, /Reading the zoom-meetings skill instructions is preparation, not a Zoom history search/i);
+  assert.match(prompt, /no relevant Zoom history was found only after a successful Zoom search/i);
+  assert.match(prompt, /Zoom history was not checked/i);
+});
+
 // ————————————————————————————————————————————————————————————————
 // Part B: full before_agent_reply gate, real installed reality (meeting-prep ABSENT)
 // ————————————————————————————————————————————————————————————————

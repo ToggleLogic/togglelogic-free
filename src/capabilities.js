@@ -367,6 +367,7 @@ export const CAPABILITIES = [
         const contracts = createSkillContracts({
           ownerTimezone: config.skillRouting.ownerTimezone,
           skillTools: config.skillRouting.skillTools,
+          maxChildToolCalls: config.skillRouting.maxChildToolCalls,
           // Deployment-owned per-skill mailbox/sender identity (credential-free),
           // injected into the routed child and surfaced in the audit/receipt.
           skillIdentities: config.skillRouting.skillIdentities,
@@ -380,6 +381,13 @@ export const CAPABILITIES = [
         childToolGuard = createChildToolGuard({
           maxToolCalls: config.skillRouting.maxChildToolCalls,
           logger: fallbackLogger,
+          auditInternalError: (details) => audit.emit({
+            event: EVENTS.ROUTING_DECISION,
+            outcome: OUTCOMES.FAILURE,
+            principal: { source: "plugin-host" },
+            subject: { hook: "before_tool_call", capability: "skillRouting" },
+            details,
+          }),
         });
         // LIVE cloud-spend provider. When enabled, the coordinator consumes a
         // deployment-owned, validated, current-policy-month cloud-spend snapshot as

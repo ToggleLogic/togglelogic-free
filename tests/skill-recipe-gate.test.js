@@ -42,9 +42,9 @@ const SLACK_CTX = Object.freeze({
 // Verified catalog with real descriptions (as the snapshot would supply). No
 // aliases that could exact-match the meeting prompt — it must reach the recipe.
 const CATALOG = [
-  { id: "microsoft-graph", description: "Email, calendar, and contacts via Microsoft Graph (authoritative Outlook calendar)" },
-  { id: "zoom-meetings", description: "Zoom meeting recordings and transcripts" },
-  { id: "code-review", description: "Review a diff for correctness" },
+  { id: "microsoft-graph", version: "3.2.0", fingerprint: "fp-graph-a837", execution_class: "tool", description: "Email, calendar, and contacts via Microsoft Graph (authoritative Outlook calendar)" },
+  { id: "zoom-meetings", version: "2.4.1", fingerprint: "fp-zoom-19bc", execution_class: "tool", description: "Zoom meeting recordings and transcripts" },
+  { id: "code-review", version: "1.8.0", fingerprint: "fp-review-442a", execution_class: "artifact", description: "Review a diff for correctness" },
 ];
 const MEETING_RECIPE = {
   id: "meeting-prep-compose",
@@ -81,7 +81,7 @@ function harness({ recipes = [MEETING_RECIPE], now = INCIDENT_NOW, planFor, cata
     recordSkillChoice: async (i) => { recorded.push(i); },
   };
   const runtime = { subagent: {
-    run: async (i) => { runCalls.push(i); return { runId: `r${runCalls.length}`, sessionKey: i.sessionKey, runtime: {} }; },
+    run: async (i) => { runCalls.push(i); return { runId: `r${runCalls.length}`, sessionKey: i.sessionKey, runtime: { provider: i.provider, model: i.model } }; },
     waitForRun: async () => ({ status: "ok" }),
     getSessionMessages: async () => ({ messages: [{ role: "assistant", content: [{ type: "text", text: "BOUNDED CHILD RESULT" }] }] }),
   } };
@@ -123,6 +123,19 @@ test("RECIPE 1: 'prepare me for my 2 PM meeting today' composes microsoft-graph 
   assert.equal(h.invokeCalls.length, 0, "classifier never consulted — recipe resolved deterministically");
 });
 
+test("RECIPE 1b: an explicit Microsoft Graph reference does not suppress the Graph+Zoom meeting composition", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply(
+    "Sam, prepare me for my next real meeting tomorrow. Check my Outlook calendar through Microsoft Graph first, and use Zoom only if a prior transcript is relevant. If there is no unique meeting, ask me to clarify rather than guessing.",
+  ), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "skill_education_required");
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id).sort(), ["microsoft-graph", "zoom-meetings"]);
+  assert.equal(h.planCalls.length, 1, "the complete composed workflow reaches route planning");
+  assert.equal(h.runCalls.length, 0, "no bounded child runs before a unique calendar event exists");
+  assert.equal(h.invokeCalls.length, 0, "the deterministic recipe resolves the composition without a classifier");
+});
+
 test("RECIPE 2: a generic Outlook email (no recipe match) routes through the bounded classifier to microsoft-graph", async () => {
   const h = harness();
   const gate = await h.coordinator.handleGate(reply("Send an Outlook email to the finance team about the invoice"), OWNER_CTX);
@@ -131,7 +144,75 @@ test("RECIPE 2: a generic Outlook email (no recipe match) routes through the bou
   assert.equal(h.invokeCalls.length, 1, "the classifier resolved the un-named email request");
   assert.match(h.invokeCalls[0].system, /microsoft-graph: Email, calendar/, "classifier was given id + description");
   assert.equal(h.planCalls.length, 1, "routed to the planner");
-  assert.equal(h.planCalls[0].plannedSkills[0].id, "microsoft-graph");
+  assert.deepEqual(h.planCalls[0].plannedSkills[0], {
+    id: "microsoft-graph", version: "3.2.0", fingerprint: "fp-graph-a837", execution_class: "tool",
+  });
+});
+
+test("RECIPE identity: owner learning persists the verified version/fingerprint even when the planner echo is lossy", async () => {
+  const catalog = [{
+    id: "powerpoint-editor", version: "1.7.0", fingerprint: "fp-a837", execution_class: "artifact",
+    description: "Inspect, edit, render, and verify PowerPoint decks",
+  }];
+  const h = harness({
+    catalog,
+    recipes: [{ id: "slides", anyTerms: ["presentation"], skillIds: ["powerpoint-editor"] }],
+    planFor: (req) => ({ ...educationPlan("powerpoint-editor"), planned_skills: [{ id: "powerpoint-editor" }] }),
+  });
+  const first = await h.coordinator.handleGate(reply("Update this presentation"), OWNER_CTX);
+  assert.equal(first.reason, "skill_education_required");
+  assert.deepEqual(h.planCalls[0].plannedSkills[0], {
+    id: "powerpoint-editor", version: "1.7.0", fingerprint: "fp-a837", execution_class: "artifact",
+  });
+  await h.coordinator.handleGate(reply("1"), OWNER_CTX);
+  assert.deepEqual(h.recorded[0].skill, {
+    id: "powerpoint-editor", version: "1.7.0", fingerprint: "fp-a837", execution_class: "artifact",
+  });
+  assert.notEqual(h.recorded[0].skill.version, "*");
+});
+
+test("RECIPE identity: fingerprint change reaches Intelligence and requires re-teaching instead of reusing the old profile", async () => {
+  const learnedFingerprint = "fp-a837";
+  const planner = (req) => {
+    const skill = req.plannedSkills[0];
+    if (skill.fingerprint === learnedFingerprint) {
+      return {
+        status: "selected", planned_skills: req.plannedSkills, strategy: "lowest_cost",
+        selected_lineage: "google/gemini-flash", selected_model_ref: "google/gemini-3.5-flash",
+        estimated_tokens: 4000, choices: [{ kind: "lowest_cost", estimated_cost_usd: 0.002 }],
+      };
+    }
+    return { ...educationPlan(skill.id), planned_skills: req.plannedSkills, profile_matches: [{ skill_id: skill.id, status: "fingerprint_changed" }] };
+  };
+  const common = { recipes: [{ id: "slides", anyTerms: ["presentation"], skillIds: ["powerpoint-editor"] }], planFor: planner };
+  const current = harness({ ...common, catalog: [{ id: "powerpoint-editor", version: "1.7.0", fingerprint: learnedFingerprint, execution_class: "artifact" }] });
+  const selected = await current.coordinator.handleGate(reply("Update this presentation"), OWNER_CTX);
+  assert.equal(selected.reason, "skill_selected_artifact_delivery_incomplete", "the learned route is selected; this fixture intentionally returns no artifact manifest");
+
+  const changed = harness({ ...common, catalog: [{ id: "powerpoint-editor", version: "1.7.1", fingerprint: "fp-b991", execution_class: "artifact" }] });
+  const reteach = await changed.coordinator.handleGate(reply("Update this presentation"), OWNER_CTX);
+  assert.equal(reteach.reason, "skill_education_required");
+  assert.equal(changed.planCalls[0].plannedSkills[0].fingerprint, "fp-b991");
+});
+
+test("RECIPE identity: missing verified identity fails closed before planning", async () => {
+  const h = harness({
+    catalog: [{ id: "powerpoint-editor", description: "Edit PowerPoint decks" }],
+    recipes: [{ id: "slides", anyTerms: ["presentation"], skillIds: ["powerpoint-editor"] }],
+  });
+  const gate = await h.coordinator.handleGate(reply("Update this presentation"), OWNER_CTX);
+  assert.equal(gate.reason, "skill_identity_unavailable");
+  assert.match(gate.reply.text, /no wildcard routing profile/i);
+  assert.equal(h.planCalls.length, 0);
+  assert.equal(h.recorded.length, 0);
+});
+
+test("CLASSIFIER identity: missing verified identity fails closed before planning", async () => {
+  const h = harness({ catalog: [{ id: "microsoft-graph", description: "Email via Microsoft Graph" }] });
+  const gate = await h.coordinator.handleGate(reply("Send an Outlook email to finance"), OWNER_CTX);
+  assert.equal(gate.reason, "skill_identity_unavailable");
+  assert.equal(gate.audit.source, "bounded_classifier");
+  assert.equal(h.planCalls.length, 0);
 });
 
 test("RECIPE 3: an unrelated poem reaches the exact no-skill fail-safe (universal sentence unchanged)", async () => {

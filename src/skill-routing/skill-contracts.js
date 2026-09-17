@@ -58,8 +58,38 @@ const MEETING_CALENDAR_CONTRACT = [
   "6. If Microsoft Graph / Outlook is not actually callable, say so plainly and ask how to proceed — do not fabricate a calendar, attendees, or agenda.",
 ].join("\n");
 
+const ZOOM_HISTORY_EVIDENCE_CONTRACT = [
+  "ZOOM HISTORY EVIDENCE CONTRACT (mandatory when zoom-meetings is planned):",
+  "1. After Microsoft Graph confirms the unique Outlook event, perform an actual Zoom API/search/list operation using the verified event title, client name, or attendees to look for relevant prior recordings, transcripts, or summaries.",
+  "2. Reading the zoom-meetings skill instructions is preparation, not a Zoom history search.",
+  "3. You may state that no relevant Zoom history was found only after a successful Zoom search returned no relevant result.",
+  "4. If Zoom is unavailable, authentication fails, or the search cannot be completed, state that Zoom history was not checked. Never convert an unperformed or failed search into a negative finding.",
+].join("\n");
+
+const POWERPOINT_EDITOR_CONTRACT = [
+  "POWERPOINT EDITING EXECUTION CONTRACT (mandatory, non-negotiable):",
+  "1. Preserve the source presentation unchanged and write the result to a new output file unless the owner explicitly requests an in-place edit.",
+  "2. Create and verify output PPTX and companion teleprompter files only in the per-run staging directory supplied by ToggleLogic. Do not attempt the final destination write; return the required delivery manifest so the trusted parent can copy verified bytes to destinations explicitly named by the owner.",
+  "3. When adding the requested speaking scripts to slide notes, use this exact order: 3-MINUTE SCRIPT first, 6-MINUTE SCRIPT second, and ORIGINAL NOTES last at the bottom.",
+  "4. Compute word counts from the FINAL text actually written to the output. Compute duration from that verified word count and the stated words-per-minute rate; never estimate or repeat a draft count as though it were measured.",
+  "5. Reopen the saved PPTX and verify slide count, note order/content, output-file integrity, and companion text files. Render and inspect the edited presentation when the task requires visual QA.",
+  "6. Do not claim final delivery or completion when any required verification tool call was denied, failed, or skipped. Never speculate about final-destination permissions; only the trusted parent performs and verifies delivery.",
+].join("\n");
+
+const QUICKBOOKS_ONLINE_CONTRACT = [
+  "QUICKBOOKS ONLINE EXECUTION CONTRACT (mandatory, non-negotiable):",
+  "1. Treat financial reads as source-grounded work: query QuickBooks Online and never manufacture balances, customers, invoices, dates, or company names from conversation history.",
+  "2. Keep every QBO realm legally and structurally separate. A cross-company summary may compare separately labeled results, but must never merge ledgers or imply that one realm is another.",
+  "3. For an A/R aging request covering all configured companies, use the deterministic one-command fast path: python3 skills/quickbooks-online/main.py --action aged_receivables_all --start-date YYYY-MM-DD --end-date YYYY-MM-DD. Resolve the requested date first, then make this ONE tool call; do not make separate per-company tool calls.",
+  "4. The report command performs credential refresh and a live authentication preflight internally for each realm. Do not run a separate healthcheck before a normal report unless the report itself returns a verified authentication failure.",
+  "5. All report dates must be explicit ISO dates. If the owner's requested period is ambiguous, ask for clarification instead of guessing.",
+  "6. Remain read-only unless the owner explicitly asks for a specific mutation. Clearly distinguish verified QBO facts from recommendations or prioritization judgments.",
+].join("\n");
+
 export const BUILTIN_CONTRACTS = Object.freeze({
   "meeting-prep": Object.freeze({ timeSensitive: true, contract: MEETING_CALENDAR_CONTRACT }),
+  "powerpoint-editor": Object.freeze({ timeSensitive: false, contract: POWERPOINT_EDITOR_CONTRACT }),
+  "quickbooks-online": Object.freeze({ timeSensitive: false, contract: QUICKBOOKS_ONLINE_CONTRACT }),
 });
 
 // The ELIGIBLE calendar-capable skills on the reference host. AUTHORITATIVE =
@@ -70,6 +100,18 @@ export const BUILTIN_CONTRACTS = Object.freeze({
 // meetingSubordinateSkillIds }).
 const DEFAULT_AUTHORITATIVE_CALENDAR_SKILLS = Object.freeze(["microsoft-graph"]);
 const DEFAULT_SUBORDINATE_MEETING_SKILLS = Object.freeze(["zoom-meetings"]);
+
+// Artifact editing requires a complete inspect → edit → render → verify loop.
+// The 12-call presentation policy observed in RC3 exhausted during rendering and
+// denied four verification calls. The RC5 canary then used all 24 calls to reach
+// a truthful timing failure and had its single corrective edit denied before it
+// could re-apply and re-verify. Thirty-two is still a hard bounded workflow: it
+// covers inspection, edit/write, render/visual QA, reopen/content verification,
+// and one correction/reverification cycle. The deployment-wide ceiling always
+// wins when configured lower, so this floor never expands global authority.
+export const BUILTIN_WORKFLOW_TOOL_CALL_FLOORS = Object.freeze({
+  "powerpoint-editor": 32,
+});
 
 // Deterministic calendar/meeting INTENT. High-precision, meeting/calendar
 // vocabulary ONLY — it must NOT fire on generic Graph email/contact work
@@ -254,6 +296,12 @@ export function createSkillContracts(rawConfig = {}) {
   // Deployment-declared per-skill tool policy, enforced on the bounded child by the
   // before_tool_call guard: { "<skillId>": { allowedTools:[...], maxToolCalls, disableTools } }.
   const skillTools = rawConfig.skillTools && typeof rawConfig.skillTools === "object" ? rawConfig.skillTools : {};
+  // The configured guard ceiling is also the hard cap for a composite route.
+  // Component ceilings may add together because a Graph+Zoom (or Graph+artifact)
+  // workflow legitimately needs both skills' tool budgets, but composition can
+  // never expand beyond this global bound.
+  const compositeToolCallCeiling = Number.isFinite(rawConfig.maxChildToolCalls) && rawConfig.maxChildToolCalls >= 0
+    ? Math.floor(rawConfig.maxChildToolCalls) : 32;
   // Calendar-capable installed skills (deployment-overridable). Authoritative =
   // Outlook via Microsoft Graph; subordinate = Zoom (never a calendar).
   const authoritativeCalendarSkills = normalizeIdList(rawConfig.calendarSkillIds, DEFAULT_AUTHORITATIVE_CALENDAR_SKILLS);
@@ -266,6 +314,12 @@ export function createSkillContracts(rawConfig = {}) {
    * allowedTools=null → no allowlist (count-only); a non-null list is enforced by
    * the guard. To avoid breaking a skill whose tools are undeclared, an allowlist
    * only applies when EVERY non-disabled skill declared one.
+   *
+   * The count ceiling is a BOUNDED COMPOSITE: each unique non-disabled skill
+   * contributes its declared ceiling (or the global ceiling when undeclared),
+   * the contributions are summed, and the result is capped by the configured
+   * global ceiling. This gives Graph+Zoom enough room for both workflows without
+   * letting composition multiply the deployment's hard safety limit.
    */
   function toolPolicyFor(skills) {
     const list = Array.isArray(skills) ? skills : [];
@@ -273,24 +327,33 @@ export function createSkillContracts(rawConfig = {}) {
     let disableAll = true;
     let anyUnrestricted = false;
     const combinedAllow = new Set();
-    let minCalls = null;
+    let compositeCalls = 0;
+    const seenSkills = new Set();
     for (const skill of list) {
       const id = cleanString(typeof skill === "string" ? skill : skill?.id);
+      if (!id || seenSkills.has(id)) continue;
+      seenSkills.add(id);
       const policy = id && skillTools[id] && typeof skillTools[id] === "object" ? skillTools[id] : null;
       const disable = policy?.disableTools === true;
       const allow = Array.isArray(policy?.allowedTools)
         ? policy.allowedTools.map(cleanString).filter(Boolean) : null;
-      const maxCalls = Number.isFinite(policy?.maxToolCalls) && policy.maxToolCalls >= 0 ? Math.floor(policy.maxToolCalls) : null;
+      const configuredMaxCalls = Number.isFinite(policy?.maxToolCalls) && policy.maxToolCalls >= 0 ? Math.floor(policy.maxToolCalls) : null;
+      const workflowFloor = BUILTIN_WORKFLOW_TOOL_CALL_FLOORS[id] ?? 0;
+      const maxCalls = disable || configuredMaxCalls === 0 ? 0 : Math.min(
+        compositeToolCallCeiling,
+        Math.max(configuredMaxCalls ?? compositeToolCallCeiling, workflowFloor),
+      );
       if (!disable) disableAll = false;
       if (!disable && !allow) anyUnrestricted = true;
       if (allow) for (const t of allow) combinedAllow.add(t);
-      if (maxCalls !== null) minCalls = minCalls === null ? maxCalls : Math.min(minCalls, maxCalls);
+      if (!disable) compositeCalls += maxCalls;
     }
     const disableTools = disableAll;
     const allowedTools = disableTools
       ? []
       : (anyUnrestricted || combinedAllow.size === 0 ? null : [...combinedAllow]);
-    return { disableTools, allowedTools, maxToolCalls: minCalls };
+    const maxToolCalls = disableTools ? 0 : Math.min(compositeToolCallCeiling, compositeCalls);
+    return { disableTools, allowedTools, maxToolCalls };
   }
 
   // Ordered, deduped identity prompt blocks for the RESOLVED skill set. Only ids
@@ -381,8 +444,12 @@ export function createSkillContracts(rawConfig = {}) {
         blocks.push(spec.contract);
       }
     }
-    if (!blocks.includes(MEETING_CALENDAR_CONTRACT) && meetingApplicability(skills, text).applies) {
+    const applicability = meetingApplicability(skills, text);
+    if (!blocks.includes(MEETING_CALENDAR_CONTRACT) && applicability.applies) {
       blocks.push(MEETING_CALENDAR_CONTRACT);
+    }
+    if (applicability.applies && applicability.hasSubordinate) {
+      blocks.push(ZOOM_HISTORY_EVIDENCE_CONTRACT);
     }
     return blocks.length ? blocks.join("\n\n") : null;
   }

@@ -99,6 +99,7 @@ export const DEFAULTS = Object.freeze({
   }),
   skillRouting: Object.freeze({
     pendingStatePath: "~/.openclaw/togglelogic/skill-routing-pending.json",
+    artifactStagingRoot: "~/.openclaw/workspace/.togglelogic-artifacts",
     pendingTtlMinutes: 15,
     defaultEstimatedTokens: 4000,
     executionTimeoutSeconds: 600,
@@ -502,6 +503,8 @@ function normalizeSkillRouting(raw) {
   return {
     pendingStatePath: typeof r.pendingStatePath === "string" && r.pendingStatePath.length > 0
       ? r.pendingStatePath : defaults.pendingStatePath,
+    artifactStagingRoot: typeof r.artifactStagingRoot === "string" && r.artifactStagingRoot.length > 0
+      ? r.artifactStagingRoot : defaults.artifactStagingRoot,
     pendingTtlMinutes: Number.isFinite(r.pendingTtlMinutes) && r.pendingTtlMinutes >= 1
       ? Math.floor(r.pendingTtlMinutes) : defaults.pendingTtlMinutes,
     defaultEstimatedTokens: Number.isFinite(r.defaultEstimatedTokens) && r.defaultEstimatedTokens >= 1

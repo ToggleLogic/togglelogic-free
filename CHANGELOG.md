@@ -2,6 +2,187 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0 — 2026-09-17 (owner-scoped stable release; pairs with private Intelligence 1.5.0)
+
+- Promotes the owner-tested RC13 model marketplace, skill-aware routing,
+  verified child execution, and trusted artifact-delivery behavior to stable.
+- Keeps teaching and execution owner-scoped and opt-in. Global and unattended
+  enforcement remain unavailable pending an OpenClaw in-flight runtime
+  safeguard.
+- Final owner UAT verified a composed Microsoft Graph and Zoom workflow with
+  actual source calls, matching planned and observed models, and no denied tool
+  calls or guard errors.
+- Runtime behavior is unchanged from RC13.
+
+## 1.7.0-rc.13 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.13)
+
+- Expands the reference meeting-prep recipe to recognize the common noun form
+  “preparation,” preventing a natural rerun request from falling through to only
+  an explicitly named component skill.
+- Adds explicit deployment aliases for Microsoft Graph/Outlook and Zoom so
+  natural platform names resolve their verified installed skills without relying
+  on probabilistic classification.
+- Adds the exact RC12 owner rerun wording as a deterministic Graph+Zoom
+  composition regression.
+
+## 1.7.0-rc.12 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.12)
+
+- Requires a real Zoom API/search/list operation after Outlook confirms a
+  meeting whenever `zoom-meetings` is part of the governed meeting workflow.
+  Reading the skill manual is not evidence that Zoom history was searched.
+- Prohibits a negative Zoom-history finding unless a successful search returned
+  no relevant result. An unavailable, failed, or skipped search must be reported
+  honestly as “Zoom history was not checked.”
+- Corrects marketplace overlap disclosure so it names the roles that actually
+  share a model. An `Economy · Recommended` row no longer emits the false claim
+  that Recommended and Premium resolve to the same model.
+
+## 1.7.0-rc.11 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.11)
+
+- Corrects deterministic skill-resolution precedence so an explicit component
+  name does not suppress a compatible multi-skill workflow. Meeting preparation
+  that names Microsoft Graph now still composes `microsoft-graph` with
+  `zoom-meetings` when the deployment recipe requires both.
+- Allows one matched composition recipe to dominate its simultaneously matched
+  component recipes only when its skill set contains every component set.
+  Disjoint, partially overlapping, or contradictory matches continue to fail
+  closed for clarification.
+- Adds the exact owner UAT wording as a regression fixture and proves that the
+  complete composition resolves without invoking the bounded classifier.
+
+## 1.7.0-rc.10 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.10)
+
+- Adds a permanent QuickBooks execution contract that keeps financial answers
+  grounded in live QBO data, preserves legal separation between realms, and
+  distinguishes sourced balances from prioritization judgments.
+- Directs all-company A/R work through one deterministic, read-only broker
+  command whose per-realm token refresh and authentication preflight are
+  internal. This removes a redundant healthcheck, separate model-driven
+  per-company commands, and an avoidable retry caused by omitted date flags.
+- Requires explicit ISO report dates and retains fail-closed clarification when
+  the requested financial period is ambiguous.
+
+## 1.7.0-rc.9 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.9)
+
+- Recognizes an absolute source `.pptx` followed by ordinary sentence-ending
+  punctuation, including the natural `deck.pptx. Preserve the original`
+  construction, when authorizing same-directory PowerPoint outputs.
+- Keeps the trusted-parent boundary narrow: slash is not an accepted terminator,
+  descendant and unrelated directories remain unauthorized, and every RC8
+  staging, hash, no-overwrite, atomicity, and rollback control remains intact.
+- Adds the exact owner canary sentence as a regression fixture.
+
+## 1.7.0-rc.8 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.8)
+
+- Adds verified artifact delivery across the bounded-child sandbox. The child
+  creates and reopens artifacts only in a unique workspace staging directory,
+  then returns a versioned machine-readable manifest with source, destination,
+  child-verification state, and SHA-256.
+- Moves final filesystem delivery to the trusted parent. The parent accepts only
+  staged regular files whose hashes match, and only exact owner-named
+  destinations or (for PowerPoint) new direct children beside an absolute source
+  `.pptx` named in the owner prompt. It never overwrites an existing file.
+- Prevalidates a multi-artifact manifest before the first copy, uses exclusive
+  copies, verifies destination hashes, and rolls back files created by a failed
+  delivery set. Missing/malformed/ambiguous manifests, trailing text, unauthorized
+  paths, hash drift, and delivery failures produce an explicit incomplete result,
+  never a completion claim.
+
+## 1.7.0-rc.7 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.7)
+
+- Makes the existing-deck output location deterministic: unless the owner names
+  another destination, the edited PPTX and companion teleprompter files must be
+  written beside the source presentation, never into an internal workspace or
+  temporary directory.
+- Retains RC6's bounded 32-call correction/reverification cycle.
+
+## 1.7.0-rc.6 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.6)
+
+- Raises only the `powerpoint-editor` workflow floor from 24 to a bounded 32
+  tool calls after the RC5 owner canary proved that 24 reached a truthful timing
+  failure but denied the corrective edit before re-apply/reverification.
+- Retains the deployment-wide hard ceiling, explicit-zero behavior, exact model
+  binding, and fail-closed rejection whenever a required call is denied.
+
+## 1.7.0-rc.5 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.5)
+
+- Rehydrates intent-recipe and bounded-classifier skill matches from the
+  verified inventory before planning, so learned policies are bound to an exact
+  skill version, fingerprint, and execution class rather than a wildcard.
+- Fails closed when a matched installed skill lacks verified identity metadata;
+  no wildcard profile is staged or persisted.
+- Persists an owner's choice against the coordinator's verified resolution
+  snapshot even if a downstream planner echoes only the skill id.
+- Adds regressions for recipe and classifier identity hydration, exact profile
+  persistence, fingerprint-change invalidation, and fail-closed missing identity.
+
+## 1.7.0-rc.4 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.4)
+
+- Binds each governed child session to the exact provider/model selected by the
+  parent route before the child starts. Child model resolution no longer
+  reclassifies the fresh session as a non-owner turn, and a missing binding or
+  observed model mismatch fails closed.
+- Rejects completion text when the bounded-child guard denied any required tool
+  call; audits now distinguish `model_mismatch` and `tool_guard_denied` from a
+  verified successful execution.
+- Raises the PowerPoint workflow allowance to a bounded 24-call floor, still
+  constrained by the deployment-wide ceiling, and requires final note order,
+  measured timing, saved-artifact reopening, rendering, and verification before
+  SAM may report completion.
+
+## 1.7.0-rc.3 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.3)
+
+- Rejects an impossible token or cost plan before showing and persisting an
+  owner model choice; an advertised route must be executable by the configured
+  bounded-child preflight.
+- Threads the global bounded-child cost ceiling into Intelligence as a planning
+  constraint, while preserving any stricter per-skill ceiling.
+
+## 1.7.0-rc.2 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.2)
+
+- Explains when Recommended and Premium resolve to the same model and are
+  combined, instead of leaving a two-choice marketplace unexplained.
+- Clarifies that the recommended model has the best overall weighted result
+  even when another eligible model leads one individual benchmark.
+
+## 1.7.0-rc.1 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.1)
+
+- Replaces three policy labels that could all resolve to the same model with an
+  honest skill-specific marketplace: Economy, Recommended, and Premium routes
+  are distinct durable model lineages when those alternatives are eligible.
+- Shows each route's skill-specific advantage, trade-off, estimated workflow
+  cost range, and the reason for ToggleLogic's recommendation.
+- Collapses the prompt to one plainly labeled choice when only one eligible
+  lineage exists; ToggleLogic no longer disguises one route as three choices.
+- Keeps simple owner replies (`1`, `2`, or `3`) session- and sender-bound and
+  persists the exact strategy and lineage shown for the current skill version.
+- Separates planned routing from observed execution in owner receipts. A planned
+  model is never described as the model actually used unless the completed child
+  transcript supplies host-observed provider/model evidence.
+- Retains the 1.6 owner-only scope, fail-closed skill boundary, bounded child,
+  budget, privacy, and capability safeguards. Global and unattended enforcement
+  remain unavailable pending the OpenClaw in-flight runtime safeguard.
+- Makes the routed-child tool guard fail closed after a child session is
+  positively identified. Internal guard errors now block the call, emit an
+  immediate hashed audit/log entry, and appear in the post-run usage audit;
+  unrelated non-child sessions still remain untouched.
+- Replaces minimum-component tool ceilings on multi-skill work with an explicit
+  bounded composite: unique component budgets add together but can never exceed
+  the deployment-wide `maxChildToolCalls`. This prevents valid Graph+Zoom and
+  presentation workflows from inheriting only the smallest component budget.
+- Binds every routed child session to the exact owner-taught provider/model
+  before it starts. Child `before_model_resolve` bypasses owner reclassification
+  and generic defaults, fails closed if its binding is missing, and rejects the
+  result if the host-observed model differs from the planned child.
+- Raises the `powerpoint-editor` workflow floor from the unsafe 12-call RC3
+  configuration to 24 calls (still capped by the hard global ceiling) so
+  inspect/edit/render/reopen/verify can finish. Its execution contract requires
+  3-minute notes, then 6-minute notes, then original notes; final-text word and
+  duration measurements; and truthful verification.
+- Rejects child results whenever the bounded tool guard denied a call. The
+  usage audit and any defensive receipt mark the execution incomplete instead
+  of allowing a model-written completion claim after verification was blocked.
+
 ## 1.6.2 — 2026-09-16 (security-review metadata; pairs with Intelligence 1.4.2)
 
 - Adds a permanent packaged security-review note documenting the plugin's

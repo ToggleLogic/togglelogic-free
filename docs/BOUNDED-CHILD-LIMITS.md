@@ -17,10 +17,46 @@ paired with `src/skill-routing/coordinator.js` (`executeBoundedChild`) and
 | **Empty tool surface (per skill)** | `SubagentRunParams.disableTools: true` when the skill's policy declares no tools | host `SubagentRunParams:disableTools?` |
 | **Per-skill tool allowlist** | `before_tool_call` guard denies (`{block:true}`) any tool outside the declared allowlist on the child session | host `before_tool_call` → `{block, blockReason}`; `child-tool-guard.js` |
 | **Hard tool-call COUNT ceiling** | `before_tool_call` guard denies further tool calls after `maxChildToolCalls` on the child | `child-tool-guard.js` |
+| **Fail-closed guard errors** | Non-child sessions are ignored, but after `:togglelogic-skill:` identification any internal guard error blocks the call and emits an immediate hashed audit plus the post-run counter | `child-tool-guard.js`; coordinator usage audit |
 | **No nested routing** | guard always denies `togglelogic_skill_plan`/`togglelogic_skill_run` on a child (+ system-prompt instruction + `sessionKey` re-entry check) | `child-tool-guard.js`; coordinator |
+| **Exact child-model binding** | coordinator registers the planned provider/model before spawn; child `before_model_resolve` uses that binding without owner reclassification and refuses a missing binding | `child-tool-guard.js`; `interceptor.js` |
+| **Observed-model mismatch rejection** | a host-observed provider/model different from the binding marks the audit `model_mismatch` and rejects the result | `coordinator.js` |
+| **Verified artifact delivery** | artifact child stages in a unique workspace directory and returns a strict SHA-256 manifest; trusted parent prevalidates all entries, copies exclusively only to owner-authorized paths, re-hashes, and rolls back a failed set | `artifact-delivery.js`; coordinator |
 | **Wall-clock timeout** | `subagent.waitForRun({ timeoutMs })` bounds the wait; config `agents.defaults.subagents.runTimeoutSeconds` bounds the run host-side | host `SubagentWaitParams:timeoutMs`; `agents.defaults.subagents.runTimeoutSeconds` |
 | **Pre-flight estimate gate** | refuse to start when the plan's own token/cost estimate exceeds `maxChildTokens`/`maxChildCostUsd` | `coordinator.js` |
 | **Post-run usage audit** | emit actual tool-call count, denied count, wall-clock, stopReason after every child run (success or failure) | `coordinator.js` finally block; `auditUsage` |
+
+For a multi-skill route, component tool-call ceilings form a bounded composite:
+each unique non-disabled skill contributes its declared ceiling, contributions
+are summed, and the sum is capped by the deployment-wide
+`maxChildToolCalls`. An undeclared component contributes the global ceiling, so
+composition can never expand authority beyond the hard deployment limit. This
+allows Graph+Zoom or Graph+artifact workflows to use both declared budgets while
+preventing the old minimum-component rule from prematurely stopping valid work.
+
+A guard denial makes the entire child result incomplete: even if the model later
+returns prose claiming success, the coordinator records `tool_guard_denied` and
+rejects the result. This is essential for artifact workflows where calls after
+the edit perform reopen/render/content verification.
+
+`powerpoint-editor` has a 32-call workflow floor, still capped by the global
+ceiling. The allocation covers inspection, edit/write, rendering and visual QA,
+reopen/content verification, and one bounded correction/reverification cycle.
+An explicit zero remains zero. This replaces both the RC3 12-call configuration
+that exhausted before verification and the RC5 24-call configuration that
+truthfully detected a timing miss but could not complete its correction cycle.
+
+For `powerpoint-editor`, final delivery is deliberately outside the child
+sandbox. The child may write only to its unique run staging directory and must
+return one terminal machine-readable manifest. The parent rejects missing,
+duplicate, malformed, or trailing-content manifests; outside-stage or symlinked
+sources; unverified or hash-mismatched bytes; existing destinations; and paths
+not authorized by the owner prompt. Exact destinations in the prompt are valid.
+The one PowerPoint-specific default also allows new files directly beside an
+absolute source `.pptx` explicitly named in that prompt—never a descendant or
+sibling directory. Multi-file sets are prevalidated before copying, copied with
+exclusive-create semantics, and destination hashes are verified before the
+result can say delivery completed.
 
 ## The residual gap (NOT closable by the plugin on 2026.9.4)
 
