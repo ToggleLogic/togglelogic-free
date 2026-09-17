@@ -2,6 +2,16 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.9 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.9)
+
+- Recognizes an absolute source `.pptx` followed by ordinary sentence-ending
+  punctuation, including the natural `deck.pptx. Preserve the original`
+  construction, when authorizing same-directory PowerPoint outputs.
+- Keeps the trusted-parent boundary narrow: slash is not an accepted terminator,
+  descendant and unrelated directories remain unauthorized, and every RC8
+  staging, hash, no-overwrite, atomicity, and rollback control remains intact.
+- Adds the exact owner canary sentence as a regression fixture.
+
 ## 1.7.0-rc.8 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.8)
 
 - Adds verified artifact delivery across the bounded-child sandbox. The child

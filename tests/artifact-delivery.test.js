@@ -103,6 +103,32 @@ test("real owner prompt authorizes exactly three new artifacts beside its explic
   assert.equal(isArtifactDestinationAuthorized(prompt, "/Users/openclaw/Desktop/hidden.pptx", { allowBesidePromptedPptx: true }), false, "unmentioned directory is not authorized");
 });
 
+test("sentence punctuation after the source pptx authorizes only same-directory outputs", () => {
+  const prompt = "Sam, edit the existing PowerPoint at /Users/openclaw/Library/Mobile Documents/com\\~apple\\~CloudDocs/5. PRESENTATIONS/MASTER-Click IT Pitch Deck v3.pptx. Preserve the original, add both a 3-minute and a 6-minute slide-specific speaker-notes version, and create matching teleprompter text files.";
+  const parent = "/Users/openclaw/Library/Mobile Documents/com~apple~CloudDocs/5. PRESENTATIONS";
+  for (const filename of [
+    "MASTER-Click IT Pitch Deck v3 - speaker notes.pptx",
+    "MASTER-Click IT Pitch Deck v3 - 3-minute teleprompter.txt",
+    "MASTER-Click IT Pitch Deck v3 - 6-minute teleprompter.txt",
+  ]) {
+    assert.equal(
+      isArtifactDestinationAuthorized(prompt, path.join(parent, filename), { allowBesidePromptedPptx: true }),
+      true,
+      filename,
+    );
+  }
+  assert.equal(
+    isArtifactDestinationAuthorized(prompt, path.join(parent, "exports", "hidden.pptx"), { allowBesidePromptedPptx: true }),
+    false,
+    "descendant remains unauthorized",
+  );
+  assert.equal(
+    isArtifactDestinationAuthorized(prompt + "/../Desktop/escape", "/Users/openclaw/Desktop/hidden.pptx", { allowBesidePromptedPptx: true }),
+    false,
+    "path-like suffix does not broaden authorization",
+  );
+});
+
 test("manifest parsing rejects duplicate end markers and trailing text", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tl-artifact-"));
   const staging = path.join(root, "stage");

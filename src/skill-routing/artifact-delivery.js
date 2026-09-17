@@ -31,7 +31,12 @@ function within(root, candidate) {
 function promptedPowerpointDirectories(prompt) {
   const text = String(prompt || "");
   const directories = new Set();
-  const matches = text.matchAll(/\/(?:\\.|[^\r\n])+?\.pptx(?=\s|$)/gi);
+  // A path embedded in prose commonly ends with sentence punctuation, as in
+  // deck.pptx. followed by another sentence. Accept only whitespace, end of
+  // input, or ordinary sentence-closing punctuation after the extension.
+  // Deliberately do not accept slash, so a path-like suffix cannot broaden
+  // the authorized directory.
+  const matches = text.matchAll(/\/(?:\\.|[^\r\n])+?\.pptx(?=\s|$|[.,;:!?'"’”)\]}])/gi);
   for (const match of matches) {
     const unescaped = match[0].replace(/\\(.)/g, "$1");
     directories.add(path.dirname(path.resolve(unescaped)));

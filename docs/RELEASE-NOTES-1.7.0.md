@@ -1,6 +1,14 @@
-# ToggleLogic Free 1.7.0-rc.8
+# ToggleLogic Free 1.7.0-rc.9
 
-## RC8 candidate: verified artifact delivery boundary
+## RC9 candidate: natural-language path authorization correction
+
+The trusted parent now recognizes an explicitly named absolute source `.pptx`
+when ordinary sentence punctuation immediately follows the extension. This
+corrects the owner-canary form `deck.pptx. Preserve the original` without
+accepting slash-delimited suffixes, descendants, siblings, or unrelated
+directories. The exact owner prompt is covered by a regression test.
+
+## RC8: verified artifact delivery boundary
 
 PowerPoint children no longer attempt writes into iCloud or another final owner
 location from the bounded sandbox. Each run receives a unique directory below
