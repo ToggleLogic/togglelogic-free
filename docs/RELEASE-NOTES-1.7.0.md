@@ -1,4 +1,14 @@
-# ToggleLogic Free 1.7.0-rc.10
+# ToggleLogic Free 1.7.0-rc.11
+
+## RC11 candidate: compatible exact-match composition
+
+An explicit component name no longer prevents a deterministic multi-skill
+recipe from adding the rest of its required workflow. The owner UAT prompt that
+names Microsoft Graph while requesting meeting preparation now resolves both
+`microsoft-graph` and `zoom-meetings`. This augmentation is narrow: the recipe's
+skill set must contain every exact text match. A contradictory recipe fails
+closed, and a single composition may dominate overlapping component recipes
+only when it contains every component skill set.
 
 ## RC10 candidate: deterministic QuickBooks multi-company reads
 

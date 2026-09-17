@@ -97,6 +97,17 @@ test("meeting-prep is preserved as a Graph+Zoom composition", () => {
   assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
 });
 
+test("a composed recipe deterministically dominates its simultaneously matched component recipe", () => {
+  const r = createIntentRecipes(PLATFORM_RECIPES).resolve(
+    "Prepare me for my meeting through Microsoft Graph and use the Zoom transcript if relevant.",
+    { installedIds: INSTALLED },
+  );
+  assert.equal(r.status, "resolved");
+  assert.equal(r.ruleId, "high-precision-meeting-prep");
+  assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
+  assert.deepEqual(r.matchedRuleIds.sort(), ["high-precision-meeting-prep", "zoom-recording"]);
+});
+
 test("a platform recipe is INERT when its target skill is not installed (falls to fail-safe upstream)", () => {
   const r = createIntentRecipes(PLATFORM_RECIPES).resolve("Get the Zoom recording transcript for the launch.", { installedIds: ["microsoft-graph", "code-review"] });
   assert.equal(r.status, "none");
@@ -188,6 +199,31 @@ test("GATE: explicit Zoom recording resolves zoom-meetings via recipe — classi
   assert.equal(h.planCalls.length, 1);
   assert.equal(h.planCalls[0].plannedSkills[0].id, "zoom-meetings");
   assert.equal(h.invokeCalls.length, 0, "recipe resolved deterministically; classifier not consulted");
+});
+
+test("GATE: a meeting-prep recipe safely augments an exact Microsoft Graph match with Zoom", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply(
+    "Prepare me for my next real meeting tomorrow. Check my Outlook calendar through Microsoft Graph first, and use Zoom only if a prior transcript is relevant.",
+  ), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "skill_education_required");
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id).sort(), ["microsoft-graph", "zoom-meetings"]);
+  assert.equal(h.invokeCalls.length, 0);
+  assert.equal(h.planCalls.length, 1);
+});
+
+test("GATE: a recipe that conflicts with an explicit skill reference fails closed", async () => {
+  const h = harness({
+    recipes: [{ id: "meeting-only", allTerms: ["meeting"], anyTerms: ["prepare"], skillIds: ["zoom-meetings"] }],
+  });
+  const gate = await h.coordinator.handleGate(reply("Use Microsoft Graph to prepare for my meeting"), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "skill_recipe_exact_conflict");
+  assert.deepEqual(gate.audit.exact_skills, ["microsoft-graph"]);
+  assert.deepEqual(gate.audit.recipe_skills, ["zoom-meetings"]);
+  assert.equal(h.invokeCalls.length, 0);
+  assert.equal(h.planCalls.length, 0);
 });
 
 test("GATE: a generic Gmail email is NOT captured by outlook-mail — it reaches the classifier", async () => {

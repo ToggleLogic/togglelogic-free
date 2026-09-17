@@ -16,7 +16,7 @@ import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 import { registerCapabilities } from "./capabilities.js";
 import { shouldSkipRuntimeRegistration } from "./registration-mode.js";
 
-const PLUGIN_VERSION = "1.7.0-rc.10";
+const PLUGIN_VERSION = "1.7.0-rc.11";
 
 /**
  * ToggleLogic (Free Tier) plugin entry.

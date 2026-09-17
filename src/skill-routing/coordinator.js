@@ -1007,6 +1007,49 @@ export function createSkillRoutingCoordinator({
       return { handled: true, reply: { text: NO_SKILL_FAILSAFE }, reason: "skill_named_unavailable", audit: { mode: "skill_named_unavailable", named } };
     }
 
+    // DEPLOYMENT-OWNED DETERMINISTIC INTENT RECIPES. Evaluate these even when
+    // the prompt already names an installed skill. A composed workflow often
+    // names its authoritative source explicitly (for example Microsoft Graph in
+    // meeting prep); treating that exact match as terminal used to discard the
+    // recipe's additional required skills (Zoom transcripts in that example).
+    //
+    // A recipe may augment an exact text match only when it is a SUPERSET of
+    // every deterministically matched skill. A disjoint/contradictory recipe
+    // fails closed instead of silently overriding an explicit skill reference.
+    // Structured host metadata remains authoritative and is never augmented by
+    // prompt recipes.
+    let recipeStatus = "not_configured";
+    if (active && resolved.source !== "structured_host_metadata" && intentRecipes && typeof intentRecipes.resolve === "function") {
+      const installedIds = resolver ? [...resolver.catalogIds] : [];
+      const recipe = intentRecipes.resolve(text, { installedIds });
+      recipeStatus = recipe.status === "resolved" || recipe.status === "ambiguous" ? recipe.status : (recipe.reason || recipe.status);
+      if (recipe.status === "resolved") {
+        const exactIds = new Set((resolved.skills || []).map((skill) => skill.id));
+        const recipeIds = new Set(recipe.skills || []);
+        const compatible = resolved.status !== "resolved" || [...exactIds].every((id) => recipeIds.has(id));
+        if (!compatible) {
+          return {
+            handled: true,
+            reply: { text: `Your request explicitly references ${[...exactIds].join(", ")}, but the configured ${recipe.ruleId} workflow requires ${[...recipeIds].join(", ")}. Which skill or workflow should I use?` },
+            reason: "skill_recipe_exact_conflict",
+            audit: { mode: "skill_recipe_exact_conflict", rule_id: recipe.ruleId, exact_skills: [...exactIds], recipe_skills: [...recipeIds] },
+          };
+        }
+        const hydrated = hydrateVerifiedSkillIds(recipe.skills);
+        if (!hydrated) return skillIdentityUnavailable("intent_recipe", recipe.skills);
+        resolved = {
+          status: "resolved",
+          skills: hydrated,
+          source: exactIds.size > 0 ? "intent_recipe_augmented_exact" : "intent_recipe",
+          resolution: { reason: exactIds.size > 0 ? "intent_recipe_augmented_exact" : "intent_recipe", ruleId: recipe.ruleId },
+        };
+      } else if (recipe.status === "ambiguous") {
+        const ids = [...new Set((recipe.candidates || []).flatMap((candidate) => candidate.skills))].slice(0, 8);
+        const ruleIds = (recipe.candidates || []).map((candidate) => candidate.ruleId);
+        return { handled: true, reply: { text: `Your request matches more than one configured intent recipe (${ruleIds.join(", ")}), which resolve to different skills (${ids.join(", ")}). Which should I use? Reply with the skill name.` }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
+      }
+    }
+
     if (resolved.status !== "resolved" || resolved.skills.length === 0) {
       // No active installed skill relates to this request (deterministically).
       if (!active) return null; // out-of-scope/shadow: prior safe passthrough behavior
@@ -1015,33 +1058,6 @@ export function createSkillRoutingCoordinator({
       const category = nonAction ? nonAction.match(text) : { matched: false };
       if (category.matched) {
         return { handled: false, audit: { mode: "non_action_category", category: category.category, kind: category.kind } };
-      }
-      // DEPLOYMENT-OWNED DETERMINISTIC INTENT RECIPES. Evaluated ONLY after exact
-      // installed-skill resolution returned none, and BEFORE the bounded classifier.
-      // A recipe resolves a declared token pattern to one-or-more INSTALLED skills,
-      // but only when every target skill is present in the fresh verified inventory
-      // (else inert). Conflicting recipes fail closed with a bounded clarification.
-      let recipeStatus = "not_configured";
-      if (intentRecipes && typeof intentRecipes.resolve === "function") {
-        const installedIds = resolver ? [...resolver.catalogIds] : [];
-        const recipe = intentRecipes.resolve(text, { installedIds });
-        // Record the specific reason (e.g. "recipe_skills_absent") for a non-resolve
-        // so the fail-safe audit shows WHY a matched recipe stayed inert.
-        recipeStatus = recipe.status === "resolved" || recipe.status === "ambiguous" ? recipe.status : (recipe.reason || recipe.status);
-        if (recipe.status === "resolved") {
-          const hydrated = hydrateVerifiedSkillIds(recipe.skills);
-          if (!hydrated) return skillIdentityUnavailable("intent_recipe", recipe.skills);
-          resolved = {
-            status: "resolved",
-            skills: hydrated,
-            source: "intent_recipe",
-            resolution: { reason: "intent_recipe", ruleId: recipe.ruleId },
-          };
-        } else if (recipe.status === "ambiguous") {
-          const ids = [...new Set((recipe.candidates || []).flatMap((c) => c.skills))].slice(0, 8);
-          const ruleIds = (recipe.candidates || []).map((c) => c.ruleId);
-          return { handled: true, reply: { text: `Your request matches more than one configured intent recipe (${ruleIds.join(", ")}), which resolve to different skills (${ids.join(", ")}). Which should I use? Reply with the skill name.` }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
-        }
       }
       // A natural-language request that names no skill AND matched no recipe may
       // still map to an eligible skill via the BOUNDED resolution classifier (a

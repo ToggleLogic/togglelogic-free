@@ -123,6 +123,19 @@ test("RECIPE 1: 'prepare me for my 2 PM meeting today' composes microsoft-graph 
   assert.equal(h.invokeCalls.length, 0, "classifier never consulted — recipe resolved deterministically");
 });
 
+test("RECIPE 1b: an explicit Microsoft Graph reference does not suppress the Graph+Zoom meeting composition", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply(
+    "Sam, prepare me for my next real meeting tomorrow. Check my Outlook calendar through Microsoft Graph first, and use Zoom only if a prior transcript is relevant. If there is no unique meeting, ask me to clarify rather than guessing.",
+  ), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "skill_education_required");
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id).sort(), ["microsoft-graph", "zoom-meetings"]);
+  assert.equal(h.planCalls.length, 1, "the complete composed workflow reaches route planning");
+  assert.equal(h.runCalls.length, 0, "no bounded child runs before a unique calendar event exists");
+  assert.equal(h.invokeCalls.length, 0, "the deterministic recipe resolves the composition without a classifier");
+});
+
 test("RECIPE 2: a generic Outlook email (no recipe match) routes through the bounded classifier to microsoft-graph", async () => {
   const h = harness();
   const gate = await h.coordinator.handleGate(reply("Send an Outlook email to the finance team about the invoice"), OWNER_CTX);

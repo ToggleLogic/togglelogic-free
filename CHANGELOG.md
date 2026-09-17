@@ -2,6 +2,19 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.11 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.11)
+
+- Corrects deterministic skill-resolution precedence so an explicit component
+  name does not suppress a compatible multi-skill workflow. Meeting preparation
+  that names Microsoft Graph now still composes `microsoft-graph` with
+  `zoom-meetings` when the deployment recipe requires both.
+- Allows one matched composition recipe to dominate its simultaneously matched
+  component recipes only when its skill set contains every component set.
+  Disjoint, partially overlapping, or contradictory matches continue to fail
+  closed for clarification.
+- Adds the exact owner UAT wording as a regression fixture and proves that the
+  complete composition resolves without invoking the bounded classifier.
+
 ## 1.7.0-rc.10 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.10)
 
 - Adds a permanent QuickBooks execution contract that keeps financial answers
