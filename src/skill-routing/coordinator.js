@@ -435,9 +435,27 @@ export function createSkillRoutingCoordinator({
     // resolved skills. Passed to Intelligence.planSkills as routing CONSTRAINTS so
     // first-use education for a tool-using skill excludes general_purpose-only local
     // rows; combined there with the legacy task classifier and any learned profile.
-    const skillRequirements = requirements && typeof requirements.aggregate === "function"
+    const aggregatedRequirements = requirements && typeof requirements.aggregate === "function"
       ? requirements.aggregate(skills)
       : null;
+    const requestedEstimate = Math.max(
+      Number.isFinite(estimatedTokens) ? estimatedTokens : config.defaultEstimatedTokens,
+      Number.isFinite(aggregatedRequirements?.estimatedTokens) ? aggregatedRequirements.estimatedTokens : 0,
+    );
+    // Never advertise or stage a route that the bounded-child executor is
+    // guaranteed to reject. This invariant belongs before owner education, not
+    // after the owner has selected and persisted a model profile.
+    if (requestedEstimate > maxChildTokens) {
+      throw new Error(`skill task estimated at ${requestedEstimate} tokens exceeds the bounded-child ceiling (${maxChildTokens}); no unrunnable model choice was staged`);
+    }
+    // Make the execution hard cap a planner constraint as well. A stricter
+    // per-skill cap still wins; the global ceiling can never be widened here.
+    const skillRequirements = aggregatedRequirements ? {
+      ...aggregatedRequirements,
+      maxCostUsdPerRun: Number.isFinite(aggregatedRequirements.maxCostUsdPerRun)
+        ? Math.min(aggregatedRequirements.maxCostUsdPerRun, maxChildCostUsd)
+        : maxChildCostUsd,
+    } : null;
     // Month-to-date cloud spend. AUTHORITATIVE PRECEDENCE (WI4, 1.6.1-rc.3): when a
     // live spend provider is wired (skillRouting.spend.enabled), the VALIDATED live
     // snapshot ALWAYS wins — no caller/event/tool parameter may override it (a
@@ -488,11 +506,16 @@ export function createSkillRoutingCoordinator({
     const result = await seam.planSkillRoute({
       prompt,
       plannedSkills: skills,
-      estimatedTokens: estimatedTokens || config.defaultEstimatedTokens,
+      estimatedTokens: requestedEstimate,
       monthlyCloudSpendUsd: Number.isFinite(effectiveSpend) ? effectiveSpend : config.monthlyCloudSpendUsd,
       ...(skillRequirements ? { skillRequirements } : {}),
     });
     if (!result) throw new Error("ToggleLogic Intelligence skill planning is unavailable");
+    const unsafeChoice = (result.choices || []).find((choice) => Number.isFinite(choice?.estimated_cost_usd)
+      && choice.estimated_cost_usd > maxChildCostUsd);
+    if (unsafeChoice) {
+      throw new Error(`routing plan returned a $${unsafeChoice.estimated_cost_usd.toFixed(2)} choice above the bounded-child cost ceiling ($${maxChildCostUsd.toFixed(2)}); no unrunnable model choice was staged`);
+    }
     const key = sessionId(hookContext);
     // ONE trusted owner decision (scope.isOwner), NOT the raw senderIsOwner bit —
     // before_agent_reply omits that bit, so a configured trusted owner would

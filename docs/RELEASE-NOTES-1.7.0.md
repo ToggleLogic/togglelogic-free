@@ -1,4 +1,4 @@
-# ToggleLogic Free 1.7.0-rc.2
+# ToggleLogic Free 1.7.0-rc.3
 
 ToggleLogic 1.7 changes first-use skill teaching from three abstract policies
 into an owner-facing model marketplace.

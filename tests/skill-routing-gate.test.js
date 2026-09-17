@@ -48,7 +48,7 @@ function educationPlan(id, overrides = {}) {
   };
 }
 
-function harness({ planFor, shadow = false, scopeConfig, now = INCIDENT_NOW, calendarPort = { findEvent: async () => null }, catalog, nonActionCategories, classifier = null, clarifyOnMultiSkill = false } = {}) {
+function harness({ planFor, shadow = false, scopeConfig, now = INCIDENT_NOW, calendarPort = { findEvent: async () => null }, catalog, nonActionCategories, classifier = null, clarifyOnMultiSkill = false, maxChildTokens = 200000, maxChildCostUsd = 5, requirements = null } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tl-gate-acc-"));
   const runCalls = [];
   const recorded = [];
@@ -72,8 +72,8 @@ function harness({ planFor, shadow = false, scopeConfig, now = INCIDENT_NOW, cal
   const contracts = createSkillContracts({ ownerTimezone: "America/New_York", now: () => now, calendarPort });
   const nonAction = nonActionCategories ? createNonActionMatcher(nonActionCategories) : null;
   const coordinator = createSkillRoutingCoordinator({
-    seam, config: { pendingStatePath: path.join(dir, "pending.json"), pendingTtlMinutes: 15, defaultEstimatedTokens: 4000, executionTimeoutSeconds: 120, monthlyCloudSpendUsd: 0, maxChildTokens: 200000, maxChildCostUsd: 5, clarifyOnMultiSkill },
-    fallbackLogger: null, shadow, scope, resolver, contracts, runtime, nonAction, classifier,
+    seam, config: { pendingStatePath: path.join(dir, "pending.json"), pendingTtlMinutes: 15, defaultEstimatedTokens: 4000, executionTimeoutSeconds: 120, monthlyCloudSpendUsd: 0, maxChildTokens, maxChildCostUsd, clarifyOnMultiSkill },
+    fallbackLogger: null, shadow, scope, resolver, contracts, runtime, nonAction, classifier, requirements,
   });
   return { coordinator, runCalls, recorded, classifyCalls, planCalls, dir };
 }
@@ -237,6 +237,22 @@ test("ACCEPTANCE 8: bounded-child token ceiling FAILS CLOSED (handled), never am
   assert.equal(gate.handled, true);
   assert.equal(gate.reason, "skill_routing_gate_error");
   assert.match(gate.reply.text, /exceeds the bounded-child ceiling|held this turn/);
+  assert.equal(h.runCalls.length, 0);
+});
+
+test("ACCEPTANCE 8b: an unrunnable education plan is rejected before a choice is staged", async () => {
+  const h = harness({
+    catalog: [{ id: "powerpoint-editor", aliases: ["powerpoint"] }],
+    maxChildTokens: 32000,
+    requirements: { aggregate: () => ({ estimatedTokens: 50000, maxCostUsdPerRun: null }) },
+    planFor: () => educationPlan("powerpoint-editor", { estimated_tokens: 50000 }),
+  });
+  const gate = await h.coordinator.handleGate(reply("edit this PowerPoint using the powerpoint-editor skill"), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "skill_routing_plan_unavailable");
+  assert.match(gate.reply.text, /50000 tokens exceeds the bounded-child ceiling \(32000\)/);
+  assert.equal(h.planCalls.length, 0, "ceiling conflict is detected before Intelligence offers models");
+  assert.equal(h.recorded.length, 0, "no profile is learned for an unrunnable plan");
   assert.equal(h.runCalls.length, 0);
 });
 

@@ -2,6 +2,14 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.3 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.3)
+
+- Rejects an impossible token or cost plan before showing and persisting an
+  owner model choice; an advertised route must be executable by the configured
+  bounded-child preflight.
+- Threads the global bounded-child cost ceiling into Intelligence as a planning
+  constraint, while preserving any stricter per-skill ceiling.
+
 ## 1.7.0-rc.2 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.2)
 
 - Explains when Recommended and Premium resolve to the same model and are
