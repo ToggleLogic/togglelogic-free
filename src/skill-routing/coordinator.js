@@ -293,6 +293,9 @@ export function formatSkillPlan(plan) {
       lines.push(`   Why recommended: ${cleanString(item.why_recommended || item.recommendation_reason || plan.intelligence_recommendation?.reason) || "It is the best supported eligible route for this skill under the current policy."}`);
     }
   });
+  if (choices.some((item) => Array.isArray(item.roles) && item.roles.length > 1)) {
+    lines.push("Recommended and Premium resolve to the same model for this skill, so ToggleLogic combines them instead of listing the same model twice.");
+  }
   if ((plan.choices || []).length > choices.length && choices.length === 1) {
     lines.push("Other policy labels resolved to this same lineage, so they were collapsed instead of being presented as different choices.");
   }

@@ -84,6 +84,7 @@ test("overlapping marketplace roles are disclosed instead of hidden", () => {
   };
   const text = formatSkillPlan(plan);
   assert.match(text, /2\. Recommended · Premium — ToggleLogic recommends this/);
+  assert.match(text, /Recommended and Premium resolve to the same model/);
   assert.match(text, /Reply 1 or 2/);
 });
 

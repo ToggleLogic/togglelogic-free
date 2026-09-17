@@ -2,6 +2,13 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.2 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.2)
+
+- Explains when Recommended and Premium resolve to the same model and are
+  combined, instead of leaving a two-choice marketplace unexplained.
+- Clarifies that the recommended model has the best overall weighted result
+  even when another eligible model leads one individual benchmark.
+
 ## 1.7.0-rc.1 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.1)
 
 - Replaces three policy labels that could all resolve to the same model with an
