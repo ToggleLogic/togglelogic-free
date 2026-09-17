@@ -2,6 +2,18 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.12 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.12)
+
+- Requires a real Zoom API/search/list operation after Outlook confirms a
+  meeting whenever `zoom-meetings` is part of the governed meeting workflow.
+  Reading the skill manual is not evidence that Zoom history was searched.
+- Prohibits a negative Zoom-history finding unless a successful search returned
+  no relevant result. An unavailable, failed, or skipped search must be reported
+  honestly as “Zoom history was not checked.”
+- Corrects marketplace overlap disclosure so it names the roles that actually
+  share a model. An `Economy · Recommended` row no longer emits the false claim
+  that Recommended and Premium resolve to the same model.
+
 ## 1.7.0-rc.11 — 2026-09-17 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.11)
 
 - Corrects deterministic skill-resolution precedence so an explicit component

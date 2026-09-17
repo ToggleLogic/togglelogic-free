@@ -88,6 +88,27 @@ test("overlapping marketplace roles are disclosed instead of hidden", () => {
   assert.match(text, /Reply 1 or 2/);
 });
 
+test("overlap disclosure names the roles that actually share a model", () => {
+  const plan = {
+    status: "education_required", teaching_authorized: true,
+    planned_skills: [{ id: "microsoft-graph" }, { id: "zoom-meetings" }],
+    intelligence_recommendation: { choice_id: "economy", role: "recommended", reason: "Best balance." },
+    choices: [
+      {
+        choice_id: "economy", role: "economy", roles: ["economy", "recommended"], strategy: "lowest_cost",
+        model_lineage: "xai/grok", resolved_child: "xai/grok-4.3", location: "cloud", estimated_cost_usd: 0.05,
+      },
+      {
+        choice_id: "premium", role: "premium", roles: ["premium"], strategy: "benchmark_best",
+        model_lineage: "openai/gpt", resolved_child: "openai/gpt-5.5", location: "cloud", estimated_cost_usd: 0.34,
+      },
+    ],
+  };
+  const text = formatSkillPlan(plan);
+  assert.match(text, /Economy and Recommended resolve to the same model/);
+  assert.doesNotMatch(text, /Recommended and Premium resolve to the same model/);
+});
+
 test("receipt separates planned, observed, and unobserved execution identity", () => {
   const messages = [{ role: "assistant", provider: "google", model: "gemini-3.5-flash", content: "done" }];
   assert.equal(observedAssistantModelRef(messages), "google/gemini-3.5-flash");

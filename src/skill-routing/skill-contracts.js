@@ -58,6 +58,14 @@ const MEETING_CALENDAR_CONTRACT = [
   "6. If Microsoft Graph / Outlook is not actually callable, say so plainly and ask how to proceed — do not fabricate a calendar, attendees, or agenda.",
 ].join("\n");
 
+const ZOOM_HISTORY_EVIDENCE_CONTRACT = [
+  "ZOOM HISTORY EVIDENCE CONTRACT (mandatory when zoom-meetings is planned):",
+  "1. After Microsoft Graph confirms the unique Outlook event, perform an actual Zoom API/search/list operation using the verified event title, client name, or attendees to look for relevant prior recordings, transcripts, or summaries.",
+  "2. Reading the zoom-meetings skill instructions is preparation, not a Zoom history search.",
+  "3. You may state that no relevant Zoom history was found only after a successful Zoom search returned no relevant result.",
+  "4. If Zoom is unavailable, authentication fails, or the search cannot be completed, state that Zoom history was not checked. Never convert an unperformed or failed search into a negative finding.",
+].join("\n");
+
 const POWERPOINT_EDITOR_CONTRACT = [
   "POWERPOINT EDITING EXECUTION CONTRACT (mandatory, non-negotiable):",
   "1. Preserve the source presentation unchanged and write the result to a new output file unless the owner explicitly requests an in-place edit.",
@@ -436,8 +444,12 @@ export function createSkillContracts(rawConfig = {}) {
         blocks.push(spec.contract);
       }
     }
-    if (!blocks.includes(MEETING_CALENDAR_CONTRACT) && meetingApplicability(skills, text).applies) {
+    const applicability = meetingApplicability(skills, text);
+    if (!blocks.includes(MEETING_CALENDAR_CONTRACT) && applicability.applies) {
       blocks.push(MEETING_CALENDAR_CONTRACT);
+    }
+    if (applicability.applies && applicability.hasSubordinate) {
+      blocks.push(ZOOM_HISTORY_EVIDENCE_CONTRACT);
     }
     return blocks.length ? blocks.join("\n\n") : null;
   }

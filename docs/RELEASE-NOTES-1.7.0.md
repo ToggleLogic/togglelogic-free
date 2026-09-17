@@ -1,4 +1,14 @@
-# ToggleLogic Free 1.7.0-rc.11
+# ToggleLogic Free 1.7.0-rc.12
+
+## RC12 candidate: Zoom evidence and truthful role overlap
+
+A composed Graph+Zoom meeting workflow must now perform an actual Zoom search
+after confirming the authoritative Outlook event before reporting that no
+relevant history exists. Reading the Zoom skill instructions is explicitly not
+search evidence. A failed, unavailable, or skipped search must be disclosed as
+not checked. The model marketplace also generates overlap text from the actual
+roles attached to each displayed model, eliminating the RC11 false statement
+that Recommended and Premium shared a model when Economy and Recommended did.
 
 ## RC11 candidate: compatible exact-match composition
 
