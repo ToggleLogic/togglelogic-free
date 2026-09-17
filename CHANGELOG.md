@@ -2,6 +2,18 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.5 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.5)
+
+- Rehydrates intent-recipe and bounded-classifier skill matches from the
+  verified inventory before planning, so learned policies are bound to an exact
+  skill version, fingerprint, and execution class rather than a wildcard.
+- Fails closed when a matched installed skill lacks verified identity metadata;
+  no wildcard profile is staged or persisted.
+- Persists an owner's choice against the coordinator's verified resolution
+  snapshot even if a downstream planner echoes only the skill id.
+- Adds regressions for recipe and classifier identity hydration, exact profile
+  persistence, fingerprint-change invalidation, and fail-closed missing identity.
+
 ## 1.7.0-rc.4 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.4)
 
 - Binds each governed child session to the exact provider/model selected by the

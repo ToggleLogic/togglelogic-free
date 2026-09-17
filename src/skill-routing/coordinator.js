@@ -436,6 +436,31 @@ export function createSkillRoutingCoordinator({
     return { status: "none", skills: [], source: "none", resolution: null };
   }
 
+  // Recipes and the bounded classifier are intentionally allowed to return only
+  // installed ids. Before those ids cross the routing/learning boundary, replace
+  // them with the exact identity from the verified inventory catalog. Missing
+  // version or fingerprint is an integrity failure, never a wildcard profile.
+  function hydrateVerifiedSkillIds(ids) {
+    if (!resolver || typeof resolver.identityFor !== "function") return null;
+    const hydrated = [];
+    for (const id of [...new Set(Array.isArray(ids) ? ids : [])].slice(0, MAX_SKILLS_PER_PLAN)) {
+      const identity = resolver.identityFor(id);
+      if (!identity || !cleanString(identity.version) || !cleanString(identity.fingerprint)) return null;
+      hydrated.push(identity);
+    }
+    return hydrated.length > 0 ? normalizeSkills(hydrated) : null;
+  }
+
+  function skillIdentityUnavailable(source, ids) {
+    const skillIds = [...new Set(Array.isArray(ids) ? ids : [])].slice(0, MAX_SKILLS_PER_PLAN);
+    return {
+      handled: true,
+      reply: { text: `ToggleLogic matched the installed skill (${skillIds.join(", ") || "unknown"}), but its verified version and fingerprint are unavailable. I held this turn so no wildcard routing profile could be learned. Refresh the verified skill inventory and try again.` },
+      reason: "skill_identity_unavailable",
+      audit: { mode: "skill_identity_unavailable", source, skill_ids: skillIds },
+    };
+  }
+
   async function plan({ prompt, plannedSkills, estimatedTokens, monthlyCloudSpendUsd, originalTask }, hookContext = {}) {
     const skills = normalizeSkills(plannedSkills);
     if (skills.length === 0) throw new Error("at least one planned skill is required");
@@ -589,8 +614,13 @@ export function createSkillRoutingCoordinator({
       ...choiceForPersistence
     } = selected;
     const statuses = new Map((pending.plan.profile_matches || []).map((item) => [item.skill_id, item.status]));
-    const invalidSkills = pending.plan.planned_skills.filter((skill) => statuses.get(skill.id) !== "current");
-    const skillsToTeach = invalidSkills.length > 0 ? invalidSkills : pending.plan.planned_skills;
+    // Persist against the coordinator's verified resolution snapshot, not a
+    // planner echo that could omit version/fingerprint. This is the authority
+    // the owner actually approved and makes fingerprint drift invalidate the
+    // learned profile on the next plan.
+    const authoritativeSkills = normalizeSkills(pending.resolved_skills || pending.plan.planned_skills);
+    const invalidSkills = authoritativeSkills.filter((skill) => statuses.get(skill.id) !== "current");
+    const skillsToTeach = invalidSkills.length > 0 ? invalidSkills : authoritativeSkills;
     for (const skill of skillsToTeach) {
       await seam.recordSkillChoice({
         skill,
@@ -972,9 +1002,11 @@ export function createSkillRoutingCoordinator({
         // so the fail-safe audit shows WHY a matched recipe stayed inert.
         recipeStatus = recipe.status === "resolved" || recipe.status === "ambiguous" ? recipe.status : (recipe.reason || recipe.status);
         if (recipe.status === "resolved") {
+          const hydrated = hydrateVerifiedSkillIds(recipe.skills);
+          if (!hydrated) return skillIdentityUnavailable("intent_recipe", recipe.skills);
           resolved = {
             status: "resolved",
-            skills: normalizeSkills(recipe.skills.map((id) => ({ id }))),
+            skills: hydrated,
             source: "intent_recipe",
             resolution: { reason: "intent_recipe", ruleId: recipe.ruleId },
           };
@@ -1002,7 +1034,9 @@ export function createSkillRoutingCoordinator({
         classifierStatus = decision.status;
         if (decision.status === "resolved") {
           // Fall through to normal planning with the classifier-resolved skill.
-          resolved = { status: "resolved", skills: normalizeSkills([{ id: decision.skillId }]), source: "bounded_classifier", resolution: { reason: "classifier_resolved", confidence: decision.confidence } };
+          const hydrated = hydrateVerifiedSkillIds([decision.skillId]);
+          if (!hydrated) return skillIdentityUnavailable("bounded_classifier", [decision.skillId]);
+          resolved = { status: "resolved", skills: hydrated, source: "bounded_classifier", resolution: { reason: "classifier_resolved", confidence: decision.confidence } };
         } else if (decision.status === "ambiguous") {
           const ids = (decision.candidates || []).slice(0, 4);
           return { handled: true, reply: { text: `Your request could map to more than one installed skill (${ids.join(", ")}). Which single skill should I use? Reply with the skill name.` }, reason: "skill_classifier_ambiguous", audit: { mode: "skill_classifier_ambiguous", candidates: ids, confidence: decision.confidence } };

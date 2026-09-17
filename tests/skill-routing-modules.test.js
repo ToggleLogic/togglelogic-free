@@ -71,6 +71,8 @@ test("resolver: carries structured identity (version/fingerprint/execution_class
   const r = createSkillResolver({ catalog: [{ id: "meeting-prep", version: "2.1.0", fingerprint: "abc", execution_class: "tool" }] });
   const hit = r.resolve("meeting-prep please");
   assert.deepEqual(hit.skills[0], { id: "meeting-prep", version: "2.1.0", fingerprint: "abc", execution_class: "tool" });
+  assert.deepEqual(r.identityFor("meeting-prep"), { id: "meeting-prep", version: "2.1.0", fingerprint: "abc", execution_class: "tool" });
+  assert.equal(r.identityFor("not-installed"), null);
 });
 
 test("meeting contract: parses am/pm and 24h clock references", () => {

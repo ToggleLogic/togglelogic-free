@@ -1,4 +1,9 @@
-# ToggleLogic Free 1.7.0-rc.4
+# ToggleLogic Free 1.7.0-rc.5
+
+RC5 closes the learned-profile identity gap found during the SAM-HQ PowerPoint
+canary. Recipe and classifier matches now carry the verified installed skill's
+exact version and fingerprint through planning and owner teaching. Missing
+identity fails closed instead of creating a wildcard policy.
 
 ToggleLogic 1.7 changes first-use skill teaching from three abstract policies
 into an owner-facing model marketplace.
