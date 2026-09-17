@@ -2,6 +2,14 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.7 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.7)
+
+- Makes the existing-deck output location deterministic: unless the owner names
+  another destination, the edited PPTX and companion teleprompter files must be
+  written beside the source presentation, never into an internal workspace or
+  temporary directory.
+- Retains RC6's bounded 32-call correction/reverification cycle.
+
 ## 1.7.0-rc.6 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.6)
 
 - Raises only the `powerpoint-editor` workflow floor from 24 to a bounded 32

@@ -61,10 +61,11 @@ const MEETING_CALENDAR_CONTRACT = [
 const POWERPOINT_EDITOR_CONTRACT = [
   "POWERPOINT EDITING EXECUTION CONTRACT (mandatory, non-negotiable):",
   "1. Preserve the source presentation unchanged and write the result to a new output file unless the owner explicitly requests an in-place edit.",
-  "2. When adding the requested speaking scripts to slide notes, use this exact order: 3-MINUTE SCRIPT first, 6-MINUTE SCRIPT second, and ORIGINAL NOTES last at the bottom.",
-  "3. Compute word counts from the FINAL text actually written to the output. Compute duration from that verified word count and the stated words-per-minute rate; never estimate or repeat a draft count as though it were measured.",
-  "4. Reopen the saved PPTX and verify slide count, note order/content, output-file integrity, and companion text files. Render and inspect the edited presentation when the task requires visual QA.",
-  "5. Do not claim completion when any required verification tool call was denied, failed, or skipped. Report the work as incomplete and identify the unverified step.",
+  "2. Unless the owner names another destination, place the output PPTX and companion teleprompter files beside the source presentation, not in an internal workspace or temporary directory.",
+  "3. When adding the requested speaking scripts to slide notes, use this exact order: 3-MINUTE SCRIPT first, 6-MINUTE SCRIPT second, and ORIGINAL NOTES last at the bottom.",
+  "4. Compute word counts from the FINAL text actually written to the output. Compute duration from that verified word count and the stated words-per-minute rate; never estimate or repeat a draft count as though it were measured.",
+  "5. Reopen the saved PPTX and verify slide count, note order/content, output-file integrity, and companion text files. Render and inspect the edited presentation when the task requires visual QA.",
+  "6. Do not claim completion when any required verification tool call was denied, failed, or skipped. Report the work as incomplete and identify the unverified step.",
 ].join("\n");
 
 export const BUILTIN_CONTRACTS = Object.freeze({

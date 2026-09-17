@@ -1,6 +1,7 @@
-# ToggleLogic Free 1.7.0-rc.6
+# ToggleLogic Free 1.7.0-rc.7
 
-RC6 gives the PowerPoint workflow one bounded correction/reverification cycle
+RC7 requires edited decks and teleprompters to be saved beside the source unless
+the owner names another destination. RC6 gave the PowerPoint workflow one bounded correction/reverification cycle
 after the RC5 canary exhausted its 24 calls immediately after truthfully finding
 a timing miss. RC5 closed the learned-profile identity gap found during the SAM-HQ PowerPoint
 canary. Recipe and classifier matches now carry the verified installed skill's

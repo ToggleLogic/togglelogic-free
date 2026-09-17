@@ -61,6 +61,7 @@ test("PowerPoint workflow upgrades the exhausted RC5 24-call policy to 32 while 
 test("PowerPoint contract requires note order, measured timing, and completed verification", () => {
   const contracts = createSkillContracts({});
   const prompt = contracts.contractPrompt([{ id: "powerpoint-editor" }], "Edit this deck");
+  assert.match(prompt, /place the output PPTX and companion teleprompter files beside the source presentation/);
   assert.match(prompt, /3-MINUTE SCRIPT first, 6-MINUTE SCRIPT second, and ORIGINAL NOTES last/);
   assert.match(prompt, /Compute word counts from the FINAL text actually written/);
   assert.match(prompt, /Do not claim completion when any required verification tool call was denied/);
