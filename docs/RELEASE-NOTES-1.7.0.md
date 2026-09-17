@@ -1,7 +1,25 @@
-# ToggleLogic Free 1.7.0-rc.7
+# ToggleLogic Free 1.7.0-rc.8
 
-RC7 requires edited decks and teleprompters to be saved beside the source unless
-the owner names another destination. RC6 gave the PowerPoint workflow one bounded correction/reverification cycle
+## RC8 candidate: verified artifact delivery boundary
+
+PowerPoint children no longer attempt writes into iCloud or another final owner
+location from the bounded sandbox. Each run receives a unique directory below
+`skillRouting.artifactStagingRoot`; the child creates, reopens, and hashes its
+artifacts there and returns a strict delivery manifest. The trusted parent
+prevalidates the complete set, copies with no-overwrite semantics, recomputes
+destination hashes, and reports delivery only after they match.
+
+Destinations are not model authority. The parent accepts an exact absolute path
+present in the owner prompt, or—for `powerpoint-editor` only—a new filename
+directly beside an absolute source `.pptx` explicitly present in that prompt.
+Subdirectories, sibling directories, arbitrary child-supplied paths, existing
+destinations, outside-stage sources, symlinks, hash drift, malformed/duplicate
+manifests, and unverified artifacts fail closed. A multi-file set is validated
+before its first copy and rolled back if a later copy or verification fails.
+
+RC7 required edited decks and teleprompters beside the source unless the owner
+named another destination; the RC8 boundary makes the trusted parent perform and
+verify that delivery. RC6 gave the PowerPoint workflow one bounded correction/reverification cycle
 after the RC5 canary exhausted its 24 calls immediately after truthfully finding
 a timing miss. RC5 closed the learned-profile identity gap found during the SAM-HQ PowerPoint
 canary. Recipe and classifier matches now carry the verified installed skill's

@@ -2,6 +2,22 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.8 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.8)
+
+- Adds verified artifact delivery across the bounded-child sandbox. The child
+  creates and reopens artifacts only in a unique workspace staging directory,
+  then returns a versioned machine-readable manifest with source, destination,
+  child-verification state, and SHA-256.
+- Moves final filesystem delivery to the trusted parent. The parent accepts only
+  staged regular files whose hashes match, and only exact owner-named
+  destinations or (for PowerPoint) new direct children beside an absolute source
+  `.pptx` named in the owner prompt. It never overwrites an existing file.
+- Prevalidates a multi-artifact manifest before the first copy, uses exclusive
+  copies, verifies destination hashes, and rolls back files created by a failed
+  delivery set. Missing/malformed/ambiguous manifests, trailing text, unauthorized
+  paths, hash drift, and delivery failures produce an explicit incomplete result,
+  never a completion claim.
+
 ## 1.7.0-rc.7 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.7)
 
 - Makes the existing-deck output location deterministic: unless the owner names

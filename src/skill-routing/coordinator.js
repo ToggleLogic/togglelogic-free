@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { resolveOpenClawPath } from "../path-utils.js";
+import { artifactDeliveryInstructions, deliverArtifactManifest } from "./artifact-delivery.js";
 
 const MAX_STATE_BYTES = 1024 * 1024;
 const MAX_PENDING_SESSIONS = 256;
@@ -694,6 +695,11 @@ export function createSkillRoutingCoordinator({
     const childSessionKey = `${parentSession}:togglelogic-skill:${suffix}`;
     const childSessionHash = crypto.createHash("sha256").update(childSessionKey).digest("hex");
     const skillList = skills.map((item) => item.id).join(", ");
+    const artifactWorkflow = skills.some((item) => item.id === "powerpoint-editor");
+    const artifactStagingDir = artifactWorkflow
+      ? path.join(resolveOpenClawPath(config.artifactStagingRoot || "~/.openclaw/workspace/.togglelogic-artifacts"), suffix)
+      : null;
+    if (artifactStagingDir) fs.mkdirSync(artifactStagingDir, { recursive: true, mode: 0o700 });
     const contractPrompt = contracts ? contracts.contractPrompt(skills, task) : null;
     // Credential-free per-skill execution identity (mailbox/sender/label) actually
     // applied to this route — for the audit/receipt. Keyed only to the resolved
@@ -703,6 +709,7 @@ export function createSkillRoutingCoordinator({
     const extraSystemPrompt = [
       "This is already a ToggleLogic-routed child execution. Do not call togglelogic_skill_plan or togglelogic_skill_run. Execute the bounded task directly and return only its result.",
       ...(contractPrompt ? [contractPrompt] : []),
+      ...(artifactStagingDir ? [artifactDeliveryInstructions(artifactStagingDir)] : []),
     ].join("\n\n");
 
     // Per-skill bounded tool surface. disableTools:true → an exact empty tool
@@ -727,6 +734,7 @@ export function createSkillRoutingCoordinator({
     let usage = null;
     let modelMismatch = false;
     let toolGuardDenied = false;
+    let artifactDelivery = null;
     try {
       run = await rt.subagent.run({
         sessionKey: childSessionKey,
@@ -763,6 +771,20 @@ export function createSkillRoutingCoordinator({
         modelMismatch = true;
         throw new Error(`skill execution model mismatch: planned ${modelRef}, observed ${observedModelRef}; result rejected`);
       }
+      if (artifactStagingDir) {
+        artifactDelivery = deliverArtifactManifest({ text, ownerPrompt: task, stagingDir: artifactStagingDir, allowBesidePromptedPptx: true });
+        text = artifactDelivery.cleanText;
+        const deliveredPaths = artifactDelivery.entries.filter((item) => item.status === "delivered").map((item) => item.destination);
+        const failed = artifactDelivery.entries.filter((item) => item.status !== "delivered");
+        if (artifactDelivery.status === "complete") {
+          text = `${text}\n\nArtifact delivery verified by ToggleLogic (${artifactDelivery.delivered}/${artifactDelivery.total}):\n${deliveredPaths.map((item) => `- ${item}`).join("\n")}`.trim();
+        } else {
+          const failures = failed.length > 0
+            ? failed.map((item) => `- ${item.destination || "unknown destination"}: ${item.error || "verification failed"}`).join("\n")
+            : `- ${artifactDelivery.error || "delivery manifest verification failed"}`;
+          text = `ARTIFACT DELIVERY INCOMPLETE. The child result below is staging-only and is not a final-delivery or completion claim.\n${failures}\n\n${text}`.trim();
+        }
+      }
     } finally {
       // POST-RUN ACTUAL USAGE AUDIT. The run/wait metadata is not execution proof.
       // A provider/model pair on the returned assistant event IS recorded as
@@ -789,7 +811,7 @@ export function createSkillRoutingCoordinator({
           observed_model_ref: observedModelRef,
           execution_status: modelMismatch ? "model_mismatch" : toolGuardDenied ? "tool_guard_denied" : (wait?.status ?? "unknown"),
           model_match_verified: observedModelRef ? !modelMismatch : null,
-          completion_verified: !modelMismatch && !toolGuardDenied && wait?.status === "ok",
+          completion_verified: !modelMismatch && !toolGuardDenied && wait?.status === "ok" && (!artifactWorkflow || artifactDelivery?.status === "complete"),
           stop_reason: wait?.stopReason ?? null,
           provider_started: wait?.providerStarted ?? null,
           wall_clock_ms: wallClockMs,
@@ -808,6 +830,8 @@ export function createSkillRoutingCoordinator({
           // or in-flight abort, so actual model spend is not observable here.
           model_usage_host_observable: observedModelRef !== null,
           runtime_token_ceiling_enforced: false,
+          artifact_delivery_status: artifactDelivery?.status ?? null,
+          artifact_delivery: artifactDelivery?.entries ?? [],
         });
       } catch { /* audit is best-effort; never raise into the caller */ }
     }
@@ -830,7 +854,7 @@ export function createSkillRoutingCoordinator({
         child_session_key_hash: childSessionHash,
         execution_status: modelMismatch ? "model_mismatch" : toolGuardDenied ? "tool_guard_denied" : wait.status,
         model_match_verified: observedModelRef ? !modelMismatch : null,
-        completion_verified: !modelMismatch && !toolGuardDenied && wait.status === "ok",
+        completion_verified: !modelMismatch && !toolGuardDenied && wait.status === "ok" && (!artifactWorkflow || artifactDelivery?.status === "complete"),
         runtime: run.runtime || null,
         prompt_mode: "minimal",
         light_context: true,
@@ -844,6 +868,8 @@ export function createSkillRoutingCoordinator({
           ? toolPolicy.maxToolCalls : (childToolGuard ? childToolGuard.defaultMax : null),
         guard_internal_errors: usage?.internalGuardErrors ?? null,
         denied_tool_calls: usage?.deniedToolCalls ?? null,
+        artifact_delivery_status: artifactDelivery?.status ?? null,
+        artifact_delivery: artifactDelivery?.entries ?? [],
         // These are PRE-FLIGHT estimate ceilings, not live runtime enforcement.
         preflight_ceiling_tokens: maxChildTokens,
         preflight_ceiling_cost_usd: maxChildCostUsd,
@@ -944,7 +970,8 @@ export function createSkillRoutingCoordinator({
         return {
           handled: true,
           reply: { text: `${result.text}\n\n${formatSkillExecutionReceipt({ ...consumed.details, ...result.details })}` },
-          reason: "skill_choice_executed",
+          reason: result.details.artifact_delivery_status && result.details.artifact_delivery_status !== "complete"
+            ? "skill_choice_artifact_delivery_incomplete" : "skill_choice_executed",
           audit: { mode: "skill_routing", ...consumed.details, ...result.details },
         };
       }
@@ -1137,7 +1164,13 @@ export function createSkillRoutingCoordinator({
         estimatedCostUsd: details.estimated_cost_usd,
         details,
       });
-      return { handled: true, reply: { text: `${result.text}\n\n${formatSkillExecutionReceipt({ ...details, ...result.details })}` }, reason: "skill_selected_executed", audit: { mode: "skill_routing", ...details, ...result.details } };
+      return {
+        handled: true,
+        reply: { text: `${result.text}\n\n${formatSkillExecutionReceipt({ ...details, ...result.details })}` },
+        reason: result.details.artifact_delivery_status && result.details.artifact_delivery_status !== "complete"
+          ? "skill_selected_artifact_delivery_incomplete" : "skill_selected_executed",
+        audit: { mode: "skill_routing", ...details, ...result.details },
+      };
     }
     if (["profile_conflict", "requirements_conflict", "no_eligible_model", "education_disabled"].includes(planResult.status)) {
       return { handled: true, reply: { text: formatSkillPlan(planResult) }, reason: `skill_${planResult.status}`, audit: { mode: "skill_routing", status: planResult.status, planned_skills: planResult.planned_skills } };

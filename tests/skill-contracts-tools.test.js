@@ -58,13 +58,15 @@ test("PowerPoint workflow upgrades the exhausted RC5 24-call policy to 32 while 
   assert.equal(explicitlyZero.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 0);
 });
 
-test("PowerPoint contract requires note order, measured timing, and completed verification", () => {
+test("PowerPoint contract requires staging, parent delivery, note order, measured timing, and completed verification", () => {
   const contracts = createSkillContracts({});
   const prompt = contracts.contractPrompt([{ id: "powerpoint-editor" }], "Edit this deck");
-  assert.match(prompt, /place the output PPTX and companion teleprompter files beside the source presentation/);
+  assert.match(prompt, /only in the per-run staging directory/);
+  assert.match(prompt, /Do not attempt the final destination write/);
+  assert.match(prompt, /trusted parent can copy verified bytes/);
   assert.match(prompt, /3-MINUTE SCRIPT first, 6-MINUTE SCRIPT second, and ORIGINAL NOTES last/);
   assert.match(prompt, /Compute word counts from the FINAL text actually written/);
-  assert.match(prompt, /Do not claim completion when any required verification tool call was denied/);
+  assert.match(prompt, /Do not claim final delivery or completion when any required verification tool call was denied/);
 });
 
 test("undeclared or duplicate component policies cannot multiply the global ceiling", () => {

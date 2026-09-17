@@ -21,6 +21,7 @@ paired with `src/skill-routing/coordinator.js` (`executeBoundedChild`) and
 | **No nested routing** | guard always denies `togglelogic_skill_plan`/`togglelogic_skill_run` on a child (+ system-prompt instruction + `sessionKey` re-entry check) | `child-tool-guard.js`; coordinator |
 | **Exact child-model binding** | coordinator registers the planned provider/model before spawn; child `before_model_resolve` uses that binding without owner reclassification and refuses a missing binding | `child-tool-guard.js`; `interceptor.js` |
 | **Observed-model mismatch rejection** | a host-observed provider/model different from the binding marks the audit `model_mismatch` and rejects the result | `coordinator.js` |
+| **Verified artifact delivery** | artifact child stages in a unique workspace directory and returns a strict SHA-256 manifest; trusted parent prevalidates all entries, copies exclusively only to owner-authorized paths, re-hashes, and rolls back a failed set | `artifact-delivery.js`; coordinator |
 | **Wall-clock timeout** | `subagent.waitForRun({ timeoutMs })` bounds the wait; config `agents.defaults.subagents.runTimeoutSeconds` bounds the run host-side | host `SubagentWaitParams:timeoutMs`; `agents.defaults.subagents.runTimeoutSeconds` |
 | **Pre-flight estimate gate** | refuse to start when the plan's own token/cost estimate exceeds `maxChildTokens`/`maxChildCostUsd` | `coordinator.js` |
 | **Post-run usage audit** | emit actual tool-call count, denied count, wall-clock, stopReason after every child run (success or failure) | `coordinator.js` finally block; `auditUsage` |
@@ -44,6 +45,18 @@ reopen/content verification, and one bounded correction/reverification cycle.
 An explicit zero remains zero. This replaces both the RC3 12-call configuration
 that exhausted before verification and the RC5 24-call configuration that
 truthfully detected a timing miss but could not complete its correction cycle.
+
+For `powerpoint-editor`, final delivery is deliberately outside the child
+sandbox. The child may write only to its unique run staging directory and must
+return one terminal machine-readable manifest. The parent rejects missing,
+duplicate, malformed, or trailing-content manifests; outside-stage or symlinked
+sources; unverified or hash-mismatched bytes; existing destinations; and paths
+not authorized by the owner prompt. Exact destinations in the prompt are valid.
+The one PowerPoint-specific default also allows new files directly beside an
+absolute source `.pptx` explicitly named in that prompt—never a descendant or
+sibling directory. Multi-file sets are prevalidated before copying, copied with
+exclusive-create semantics, and destination hashes are verified before the
+result can say delivery completed.
 
 ## The residual gap (NOT closable by the plugin on 2026.9.4)
 

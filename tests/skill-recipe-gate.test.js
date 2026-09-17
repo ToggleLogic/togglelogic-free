@@ -174,7 +174,7 @@ test("RECIPE identity: fingerprint change reaches Intelligence and requires re-t
   const common = { recipes: [{ id: "slides", anyTerms: ["presentation"], skillIds: ["powerpoint-editor"] }], planFor: planner };
   const current = harness({ ...common, catalog: [{ id: "powerpoint-editor", version: "1.7.0", fingerprint: learnedFingerprint, execution_class: "artifact" }] });
   const selected = await current.coordinator.handleGate(reply("Update this presentation"), OWNER_CTX);
-  assert.equal(selected.reason, "skill_selected_executed");
+  assert.equal(selected.reason, "skill_selected_artifact_delivery_incomplete", "the learned route is selected; this fixture intentionally returns no artifact manifest");
 
   const changed = harness({ ...common, catalog: [{ id: "powerpoint-editor", version: "1.7.1", fingerprint: "fp-b991", execution_class: "artifact" }] });
   const reteach = await changed.coordinator.handleGate(reply("Update this presentation"), OWNER_CTX);

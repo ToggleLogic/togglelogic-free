@@ -61,11 +61,11 @@ const MEETING_CALENDAR_CONTRACT = [
 const POWERPOINT_EDITOR_CONTRACT = [
   "POWERPOINT EDITING EXECUTION CONTRACT (mandatory, non-negotiable):",
   "1. Preserve the source presentation unchanged and write the result to a new output file unless the owner explicitly requests an in-place edit.",
-  "2. Unless the owner names another destination, place the output PPTX and companion teleprompter files beside the source presentation, not in an internal workspace or temporary directory.",
+  "2. Create and verify output PPTX and companion teleprompter files only in the per-run staging directory supplied by ToggleLogic. Do not attempt the final destination write; return the required delivery manifest so the trusted parent can copy verified bytes to destinations explicitly named by the owner.",
   "3. When adding the requested speaking scripts to slide notes, use this exact order: 3-MINUTE SCRIPT first, 6-MINUTE SCRIPT second, and ORIGINAL NOTES last at the bottom.",
   "4. Compute word counts from the FINAL text actually written to the output. Compute duration from that verified word count and the stated words-per-minute rate; never estimate or repeat a draft count as though it were measured.",
   "5. Reopen the saved PPTX and verify slide count, note order/content, output-file integrity, and companion text files. Render and inspect the edited presentation when the task requires visual QA.",
-  "6. Do not claim completion when any required verification tool call was denied, failed, or skipped. Report the work as incomplete and identify the unverified step.",
+  "6. Do not claim final delivery or completion when any required verification tool call was denied, failed, or skipped. Never speculate about final-destination permissions; only the trusted parent performs and verifies delivery.",
 ].join("\n");
 
 export const BUILTIN_CONTRACTS = Object.freeze({
