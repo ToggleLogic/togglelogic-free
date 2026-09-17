@@ -62,6 +62,18 @@ test("resolver: exact installed id and alias resolve; unknown skill is ambiguous
   assert.deepEqual(amb.unknownSkills, ["nonexistent thing"]);
 });
 
+test("resolver distinguishes incidental skill-name mentions from explicit skill invocation cues", () => {
+  const r = createSkillResolver({ catalog: [
+    { id: "gamma", aliases: ["gamma"] },
+    { id: "powerpoint-editor", aliases: ["powerpoint"] },
+  ] });
+  const incidental = r.resolve("Keep the current PowerPoint pictures; Gamma is only context.");
+  assert.deepEqual(incidental.matchedIds.sort(), ["gamma", "powerpoint-editor"]);
+  assert.deepEqual(incidental.explicitlyInvokedIds, []);
+  const explicit = r.resolve("Run this using the gamma skill.");
+  assert.deepEqual(explicit.explicitlyInvokedIds, ["gamma"]);
+});
+
 test("resolver: off mode resolves nothing", () => {
   const r = createSkillResolver({ mode: "off", catalog: [{ id: "meeting-prep" }] });
   assert.equal(r.resolve("use the meeting-prep skill").status, "none");

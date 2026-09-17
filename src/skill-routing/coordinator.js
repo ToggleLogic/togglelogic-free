@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { resolveOpenClawPath } from "../path-utils.js";
 import { artifactDeliveryInstructions, deliverArtifactManifest } from "./artifact-delivery.js";
+import { classifyToolFreeWork } from "./intent-categories.js";
 
 const MAX_STATE_BYTES = 1024 * 1024;
 const MAX_PENDING_SESSIONS = 256;
@@ -1026,8 +1027,13 @@ export function createSkillRoutingCoordinator({
       recipeStatus = recipe.status === "resolved" || recipe.status === "ambiguous" ? recipe.status : (recipe.reason || recipe.status);
       if (recipe.status === "resolved") {
         const exactIds = new Set((resolved.skills || []).map((skill) => skill.id));
+        const explicitlyInvokedIds = new Set(resolved.resolution?.explicitlyInvokedIds || []);
         const recipeIds = new Set(recipe.skills || []);
-        const compatible = resolved.status !== "resolved" || [...exactIds].every((id) => recipeIds.has(id));
+        // Plain-language mentions such as "same images", "Gamma", or "canvas"
+        // are not necessarily instructions to invoke those installed skills.
+        // Only an explicit "use/run <name> skill" cue can conflict with a
+        // deterministic workflow recipe.
+        const compatible = resolved.status !== "resolved" || [...explicitlyInvokedIds].every((id) => recipeIds.has(id));
         if (!compatible) {
           return {
             handled: true,
@@ -1059,6 +1065,10 @@ export function createSkillRoutingCoordinator({
       const category = nonAction ? nonAction.match(text) : { matched: false };
       if (category.matched) {
         return { handled: false, audit: { mode: "non_action_category", category: category.category, kind: category.kind } };
+      }
+      const toolFree = classifyToolFreeWork(text);
+      if (toolFree.matched) {
+        return { handled: false, audit: { mode: "tool_free_work", category: toolFree.category } };
       }
       // A natural-language request that names no skill AND matched no recipe may
       // still map to an eligible skill via the BOUNDED resolution classifier (a
