@@ -83,12 +83,14 @@ const DEFAULT_SUBORDINATE_MEETING_SKILLS = Object.freeze(["zoom-meetings"]);
 
 // Artifact editing requires a complete inspect → edit → render → verify loop.
 // The 12-call presentation policy observed in RC3 exhausted during rendering and
-// denied four verification calls. Twenty-four is deliberately bounded below the
-// default global 32: 4 inspection + 4 edit/write + 8 render/visual QA + 4 reopen/
-// content verification + 4 recovery calls. The global ceiling always wins when
-// configured lower, so this floor never expands deployment-wide authority.
+// denied four verification calls. The RC5 canary then used all 24 calls to reach
+// a truthful timing failure and had its single corrective edit denied before it
+// could re-apply and re-verify. Thirty-two is still a hard bounded workflow: it
+// covers inspection, edit/write, render/visual QA, reopen/content verification,
+// and one correction/reverification cycle. The deployment-wide ceiling always
+// wins when configured lower, so this floor never expands global authority.
 export const BUILTIN_WORKFLOW_TOOL_CALL_FLOORS = Object.freeze({
-  "powerpoint-editor": 24,
+  "powerpoint-editor": 32,
 });
 
 // Deterministic calendar/meeting INTENT. High-precision, meeting/calendar

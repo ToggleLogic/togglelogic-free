@@ -2,6 +2,14 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.0-rc.6 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.6)
+
+- Raises only the `powerpoint-editor` workflow floor from 24 to a bounded 32
+  tool calls after the RC5 owner canary proved that 24 reached a truthful timing
+  failure but denied the corrective edit before re-apply/reverification.
+- Retains the deployment-wide hard ceiling, explicit-zero behavior, exact model
+  binding, and fail-closed rejection whenever a required call is denied.
+
 ## 1.7.0-rc.5 — 2026-09-16 (owner-scoped canary; pairs with Intelligence 1.5.0-rc.5)
 
 - Rehydrates intent-recipe and bounded-classifier skill matches from the

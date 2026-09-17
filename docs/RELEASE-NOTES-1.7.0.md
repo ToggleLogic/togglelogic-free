@@ -1,6 +1,8 @@
-# ToggleLogic Free 1.7.0-rc.5
+# ToggleLogic Free 1.7.0-rc.6
 
-RC5 closes the learned-profile identity gap found during the SAM-HQ PowerPoint
+RC6 gives the PowerPoint workflow one bounded correction/reverification cycle
+after the RC5 canary exhausted its 24 calls immediately after truthfully finding
+a timing miss. RC5 closed the learned-profile identity gap found during the SAM-HQ PowerPoint
 canary. Recipe and classifier matches now carry the verified installed skill's
 exact version and fingerprint through planning and owner teaching. Missing
 identity fails closed instead of creating a wildcard policy.
@@ -55,7 +57,7 @@ model mismatch fails closed, and a denied verification tool call marks the
 execution incomplete; none of those cases can produce a successful routing
 receipt.
 
-PowerPoint editing receives a bounded 24-call workflow floor under the global
+PowerPoint editing receives a bounded 32-call workflow floor under the global
 tool ceiling. Its contract requires scripts in the requested order (3-minute,
 6-minute, then original notes), measured counts and timing from the final saved
 text, and reopen/render/content verification before completion is claimed.

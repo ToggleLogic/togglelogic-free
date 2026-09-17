@@ -29,7 +29,7 @@ test("PowerPoint artifact work keeps its declared budget and composite work stay
   assert.deepEqual(contracts.toolPolicyFor([{ id: "powerpoint-editor" }]), {
     disableTools: false,
     allowedTools: ["read", "exec", "write"],
-    maxToolCalls: 24,
+    maxToolCalls: 32,
   });
   assert.deepEqual(contracts.toolPolicyFor([{ id: "microsoft-graph" }, { id: "powerpoint-editor" }]), {
     disableTools: false,
@@ -38,12 +38,12 @@ test("PowerPoint artifact work keeps its declared budget and composite work stay
   });
 });
 
-test("PowerPoint workflow upgrades the unsafe RC3 12-call policy to 24 while retaining the hard global cap", () => {
+test("PowerPoint workflow upgrades the exhausted RC5 24-call policy to 32 while retaining the hard global cap", () => {
   const normal = createSkillContracts({
     maxChildToolCalls: 32,
     skillTools: { "powerpoint-editor": { maxToolCalls: 12 } },
   });
-  assert.equal(normal.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 24);
+  assert.equal(normal.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 32);
 
   const tighterDeployment = createSkillContracts({
     maxChildToolCalls: 20,

@@ -38,11 +38,12 @@ returns prose claiming success, the coordinator records `tool_guard_denied` and
 rejects the result. This is essential for artifact workflows where calls after
 the edit perform reopen/render/content verification.
 
-`powerpoint-editor` has a 24-call workflow floor, still capped by the global
+`powerpoint-editor` has a 32-call workflow floor, still capped by the global
 ceiling. The allocation covers inspection, edit/write, rendering and visual QA,
-reopen/content verification, and bounded recovery. An explicit zero remains
-zero. This replaces the RC3 12-call configuration that exhausted before final
-verification.
+reopen/content verification, and one bounded correction/reverification cycle.
+An explicit zero remains zero. This replaces both the RC3 12-call configuration
+that exhausted before verification and the RC5 24-call configuration that
+truthfully detected a timing miss but could not complete its correction cycle.
 
 ## The residual gap (NOT closable by the plugin on 2026.9.4)
 
