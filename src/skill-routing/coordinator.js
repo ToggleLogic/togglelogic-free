@@ -43,6 +43,26 @@ function normalizeSkills(value) {
     }));
 }
 
+function skillChoiceLines(ids, resolver, skillIdentities = {}) {
+  const catalog = resolver && typeof resolver.classifierCatalog === "function"
+    ? resolver.classifierCatalog()
+    : [];
+  const descriptions = new Map(catalog.map((item) => [item.id, cleanString(item.description)]));
+  return [...new Set((ids || []).map(cleanString).filter(Boolean))].map((id) => {
+    const identity = skillIdentities && typeof skillIdentities === "object" ? skillIdentities[id] : null;
+    const mailbox = cleanString(identity?.mailbox);
+    const description = descriptions.get(id);
+    const details = [mailbox, description].filter(Boolean).join(" — ")
+      || "Purpose details are unavailable in the installed-skill catalog.";
+    return `- ${id}: ${details}`;
+  });
+}
+
+export function formatSkillClarification(ids, resolver, skillIdentities = {}, intro = "I found more than one applicable skill:") {
+  const lines = skillChoiceLines(ids, resolver, skillIdentities);
+  return [intro, ...lines, "Reply with the exact skill name shown above."].join("\n");
+}
+
 export function structuredPlannedSkills(event = {}, hookContext = {}) {
   const arrays = [
     hookContext.plannedSkills,
@@ -362,6 +382,9 @@ export function createSkillRoutingCoordinator({
   const maxChildTokens = Number.isFinite(config.maxChildTokens) ? config.maxChildTokens : 200000;
   const maxChildCostUsd = Number.isFinite(config.maxChildCostUsd) ? config.maxChildCostUsd : 5;
   const clarifyOnMultiSkill = config.clarifyOnMultiSkill === true;
+  const skillIdentities = config.skillIdentities && typeof config.skillIdentities === "object"
+    ? config.skillIdentities
+    : {};
   let state = { schema_version: 1, pending: {} };
 
   try {
@@ -1001,7 +1024,7 @@ export function createSkillRoutingCoordinator({
         const offered = suggestions.map((s) => s.id);
         return {
           handled: true,
-          reply: { text: `The ${namedStr} skill isn't installed here, so I can't route to it. I do have these installed skills that relate to what you're asking: ${offered.join(", ")}. Reply with the one you'd like me to use.` },
+          reply: { text: formatSkillClarification(offered, resolver, skillIdentities, `The ${namedStr} skill isn't installed here. These installed skills may relate to your request:`) },
           reason: "skill_named_unavailable_alternatives",
           audit: { mode: "skill_named_unavailable_alternatives", named, offered },
         };
@@ -1053,7 +1076,7 @@ export function createSkillRoutingCoordinator({
       } else if (recipe.status === "ambiguous") {
         const ids = [...new Set((recipe.candidates || []).flatMap((candidate) => candidate.skills))].slice(0, 8);
         const ruleIds = (recipe.candidates || []).map((candidate) => candidate.ruleId);
-        return { handled: true, reply: { text: `Your request matches more than one configured intent recipe (${ruleIds.join(", ")}), which resolve to different skills (${ids.join(", ")}). Which should I use? Reply with the skill name.` }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
+        return { handled: true, reply: { text: formatSkillClarification(ids, resolver, skillIdentities, "Your request matches more than one configured workflow. These are the available skill choices:") }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
       }
     }
 
@@ -1093,7 +1116,7 @@ export function createSkillRoutingCoordinator({
           resolved = { status: "resolved", skills: hydrated, source: "bounded_classifier", resolution: { reason: "classifier_resolved", confidence: decision.confidence } };
         } else if (decision.status === "ambiguous") {
           const ids = (decision.candidates || []).slice(0, 4);
-          return { handled: true, reply: { text: `Your request could map to more than one installed skill (${ids.join(", ")}). Which single skill should I use? Reply with the skill name.` }, reason: "skill_classifier_ambiguous", audit: { mode: "skill_classifier_ambiguous", candidates: ids, confidence: decision.confidence } };
+          return { handled: true, reply: { text: formatSkillClarification(ids, resolver, skillIdentities, "Your request could map to more than one installed skill. Here is what each choice does:") }, reason: "skill_classifier_ambiguous", audit: { mode: "skill_classifier_ambiguous", candidates: ids, confidence: decision.confidence } };
         } else if (decision.status === "conversation") {
           return { handled: false, audit: { mode: "conversation", classifier: "bounded_local", confidence: decision.confidence } };
         }
@@ -1131,8 +1154,8 @@ export function createSkillRoutingCoordinator({
     // permits "one or more" skills, so multi-skill tasks resolve by default; a
     // deployment can require a single-skill choice instead.
     if (clarifyOnMultiSkill && resolved.skills.length > 1) {
-      const names = resolved.skills.map((s) => s.id).join(", ");
-      return { handled: true, reply: { text: `Your request references more than one installed skill (${names}). Which single skill should I use? I'll run exactly one — reply with the skill name.` }, reason: "skill_ambiguous_multi", audit: { mode: "skill_ambiguous_multi", planned_skills: resolved.skills } };
+      const ids = resolved.skills.map((s) => s.id);
+      return { handled: true, reply: { text: formatSkillClarification(ids, resolver, skillIdentities, "Your request references more than one installed skill. I can run exactly one of these choices:") }, reason: "skill_ambiguous_multi", audit: { mode: "skill_ambiguous_multi", planned_skills: resolved.skills } };
     }
 
     // 3) Plan the route. The deterministic safety preflight above has already

@@ -311,7 +311,9 @@ test("RECIPE 5: conflicting recipes (different skill sets) fail closed with one 
   const gate = await h.coordinator.handleGate(reply("generate the report now"), OWNER_CTX);
   assert.equal(gate.handled, true);
   assert.equal(gate.reason, "skill_recipe_ambiguous");
-  assert.match(gate.reply.text, /more than one configured intent recipe/i);
+  assert.match(gate.reply.text, /more than one configured workflow/i);
+  assert.match(gate.reply.text, /microsoft-graph:/i);
+  assert.match(gate.reply.text, /code-review:/i);
   assert.deepEqual(gate.audit.rule_ids.sort(), ["r-graph", "r-review"]);
   assert.equal(h.invokeCalls.length, 0, "conflicting recipes fail closed before the classifier");
   assert.equal(h.planCalls.length, 0);

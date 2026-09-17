@@ -118,7 +118,7 @@ export const BUILTIN_WORKFLOW_TOOL_CALL_FLOORS = Object.freeze({
 // ("send an email", "look up a contact"), so the calendar contract never gates
 // non-calendar Graph tasks. Not a task→skill guess; only a topical gate applied
 // AFTER a calendar-capable skill has already resolved.
-const MEETING_INTENT_RE = /\b(?:meetings?|calendars?|appointments?|agenda|stand[-\s]?up|one[-\s]on[-\s]one|1:1|debriefs?|reschedul(?:e|ed|ing))\b/i;
+const MEETING_INTENT_RE = /\b(?:meetings?|calendars?|appointments?|schedules?|agenda|stand[-\s]?up|one[-\s]on[-\s]one|1:1|debriefs?|reschedul(?:e|ed|ing))\b/i;
 
 export function detectMeetingIntent(text) {
   return MEETING_INTENT_RE.test(String(text || ""));

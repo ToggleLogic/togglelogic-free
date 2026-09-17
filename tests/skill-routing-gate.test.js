@@ -15,7 +15,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { createSkillRoutingCoordinator, NO_SKILL_FAILSAFE } from "../src/skill-routing/coordinator.js";
+import { createSkillRoutingCoordinator, formatSkillClarification, NO_SKILL_FAILSAFE } from "../src/skill-routing/coordinator.js";
 import { createCanaryScope } from "../src/skill-routing/scope.js";
 import { createSkillResolver } from "../src/skill-routing/resolver.js";
 import { createSkillContracts } from "../src/skill-routing/skill-contracts.js";
@@ -29,6 +29,25 @@ const OWNER_CTX = Object.freeze({
   channel: "telegram", accountId: "codex", senderId: "7797183919",
   sessionKey: "agent:main:telegram:codex:7797183919", senderIsOwner: true,
   trigger: "user", inputProvenance: { kind: "external_user" },
+});
+
+test("skill clarification explains each internal skill id with its verified purpose and configured identity", () => {
+  const resolver = createSkillResolver({ catalog: [
+    { id: "microsoft-graph", description: "Microsoft 365 email, calendar, contacts, and OneDrive" },
+    { id: "gog", description: "Google Workspace Gmail, Calendar, Drive, Contacts, Sheets, and Docs" },
+  ] });
+  const text = formatSkillClarification(["gog", "microsoft-graph"], resolver, {
+    "microsoft-graph": { mailbox: "Al's Microsoft 365 / Outlook mailbox" },
+    gog: { mailbox: "SAM's own Google Workspace account" },
+  });
+  assert.match(text, /gog: SAM's own Google Workspace account.*Gmail, Calendar, Drive/s);
+  assert.match(text, /microsoft-graph: Al's Microsoft 365.*email, calendar, contacts/s);
+  assert.match(text, /Reply with the exact skill name/i);
+  assert.match(
+    formatSkillClarification(["unknown-skill"], createSkillResolver({ catalog: [{ id: "unknown-skill" }] })),
+    /Purpose details are unavailable/,
+    "even an incomplete catalog must explain that purpose metadata is unavailable instead of showing an opaque id alone",
+  );
 });
 
 function educationPlan(id, overrides = {}) {

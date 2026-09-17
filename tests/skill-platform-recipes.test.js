@@ -38,6 +38,9 @@ import { createIntentRecipes } from "../src/skill-routing/intent-recipes.js";
 // per-skill mailbox identity are covered in tests/skill-mailbox-identity.test.js.
 export const PLATFORM_RECIPES = [
   { id: "high-precision-meeting-prep", allTerms: ["meeting"], anyTerms: ["prepare", "preparation", "prep", "brief", "briefing", "get ready", "ready for", "prep me"], skillIds: ["microsoft-graph", "zoom-meetings"] },
+  { id: "high-precision-meetings-prep", allTerms: ["meetings"], anyTerms: ["prepare", "preparation", "prep", "brief", "briefing", "get ready", "ready for", "prep me"], skillIds: ["microsoft-graph", "zoom-meetings"] },
+  { id: "owner-calendar-appointments", anyTerms: ["appointment", "appointments"], skillIds: ["microsoft-graph"] },
+  { id: "owner-daily-schedule", allTerms: ["schedule"], anyTerms: ["today", "tomorrow", "day"], skillIds: ["microsoft-graph"] },
   { id: "outlook-mail", allTerms: ["outlook"], anyTerms: ["email", "emails", "mail", "inbox", "message", "messages"], skillIds: ["microsoft-graph"] },
   { id: "zoom-recording", allTerms: ["zoom"], anyTerms: ["transcript", "transcripts", "recording", "recordings", "recorded"], skillIds: ["zoom-meetings"] },
 ];
@@ -95,6 +98,15 @@ test("meeting-prep is preserved as a Graph+Zoom composition", () => {
   assert.equal(r.status, "resolved");
   assert.equal(r.ruleId, "high-precision-meeting-prep");
   assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
+});
+
+test("the exact owner appointments + full-day schedule + plural meetings request resolves Graph+Zoom deterministically", () => {
+  const prompt = "Sam, do I have any appointments tomorrow? And if I do, tell me what they are and give me the schedule for the entire day. If I have any meetings, prepare me for them.";
+  const r = createIntentRecipes(PLATFORM_RECIPES).resolve(prompt, { installedIds: INSTALLED });
+  assert.equal(r.status, "resolved");
+  assert.equal(r.ruleId, "high-precision-meetings-prep");
+  assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
+  assert.deepEqual(r.matchedRuleIds.sort(), ["high-precision-meetings-prep", "owner-calendar-appointments", "owner-daily-schedule"]);
 });
 
 test("meeting preparation noun form preserves the Graph+Zoom composition", () => {
@@ -209,6 +221,17 @@ test("GATE: explicit Zoom recording resolves zoom-meetings via recipe — classi
   assert.equal(h.planCalls.length, 1);
   assert.equal(h.planCalls[0].plannedSkills[0].id, "zoom-meetings");
   assert.equal(h.invokeCalls.length, 0, "recipe resolved deterministically; classifier not consulted");
+});
+
+test("GATE: exact appointments/schedule/meetings request bypasses the classifier and composes Graph + Zoom", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply(
+    "Sam, do I have any appointments tomorrow? And if I do. Then please tell me what they are and give me the schedule for the entire day. If I have any meetings, prepare me for them.",
+  ), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "skill_education_required");
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id).sort(), ["microsoft-graph", "zoom-meetings"]);
+  assert.equal(h.invokeCalls.length, 0, "deterministic calendar recipes must bypass the local classifier");
 });
 
 test("GATE: a meeting-prep recipe safely augments an exact Microsoft Graph match with Zoom", async () => {

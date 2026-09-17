@@ -59,6 +59,23 @@
                 "skillIds": ["microsoft-graph", "zoom-meetings"]
               },
               {
+                "id": "high-precision-meetings-prep",
+                "allTerms": ["meetings"],
+                "anyTerms": ["prepare", "preparation", "prep", "brief", "briefing", "get ready", "ready for", "prep me"],
+                "skillIds": ["microsoft-graph", "zoom-meetings"]
+              },
+              {
+                "id": "owner-calendar-appointments",
+                "anyTerms": ["appointment", "appointments"],
+                "skillIds": ["microsoft-graph"]
+              },
+              {
+                "id": "owner-daily-schedule",
+                "allTerms": ["schedule"],
+                "anyTerms": ["today", "tomorrow", "day"],
+                "skillIds": ["microsoft-graph"]
+              },
+              {
                 "id": "outlook-mail",
                 "allTerms": ["outlook"],
                 "anyTerms": ["email", "emails", "mail", "inbox", "message", "messages"],
