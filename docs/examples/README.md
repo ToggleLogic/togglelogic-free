@@ -32,7 +32,7 @@ names are resolved deterministically and never left to the model:
 | `high-precision-meeting-prep` | `meeting` + a prep verb | `microsoft-graph` + `zoom-meetings` |
 | `high-precision-meetings-prep` | `meetings` + a prep verb | `microsoft-graph` + `zoom-meetings` |
 | `owner-calendar-appointments` | `appointment` or `appointments` | `microsoft-graph` |
-| `owner-daily-schedule` | `schedule` + `today`/`tomorrow`/`day` | `microsoft-graph` |
+| `owner-daily-schedule` | `schedule` + `today`/`tomorrow`/`my schedule` | `microsoft-graph` |
 | `outlook-mail` | literal `outlook` + email/mail/inbox term | `microsoft-graph` |
 | `zoom-recording` | literal `zoom` + transcript/recording term | `zoom-meetings` |
 | `gmail-mail` | literal `gmail` + an email action/object term | `gog` |

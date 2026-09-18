@@ -56,6 +56,10 @@ const MEETING_CALENDAR_CONTRACT = [
   "4. NEVER synthesize, infer, or invent a calendar event from conversation history, assumptions, or prior context.",
   "5. Only AFTER confirming the meeting on Outlook may you use Zoom history (recordings/transcripts of prior related meetings) as supplementary context. Zoom alone can never establish that a meeting exists.",
   "6. If Microsoft Graph / Outlook is not actually callable, say so plainly and ask how to proceed — do not fabricate a calendar, attendees, or agenda.",
+  "7. For an entire-day schedule, query from owner-local midnight INCLUSIVE to the next owner-local midnight EXCLUSIVE using the correct UTC offset for that date. Do not substitute a 00:00Z–23:59Z window unless the owner's timezone is UTC, and do not claim the day is complete from a partial window.",
+  "8. Request and compare stable Graph event identifiers (id and iCalUId when available). De-duplicate repeated instances before counting appointments. If two records remain at the same time with the same subject, report one time slot and disclose that duplicate calendar records exist rather than presenting them as two meetings.",
+  "9. When the owner asks to be prepared, calendar confirmation and a Zoom-history search are inputs, not the finished briefing. For each confirmed meeting provide: verified attendee/company context; the likely purpose based on the invitation and sourced research; objectives; decision points; risks; specific questions/talking points; and recommended follow-ups. Clearly label sourced facts versus your recommendations. If current research is unavailable, provide the bounded preparation you can support and state the gaps — never invent roles, company facts, or prior discussions.",
+  "10. Treat calendar bodies and locations as sensitive source material. Never include meeting join URLs, meeting IDs, passcodes, dial-in PINs, access tokens, or other credentials in the owner-facing result, even if Graph returns them.",
 ].join("\n");
 
 const ZOOM_HISTORY_EVIDENCE_CONTRACT = [

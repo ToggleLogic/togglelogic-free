@@ -40,7 +40,7 @@ export const PLATFORM_RECIPES = [
   { id: "high-precision-meeting-prep", allTerms: ["meeting"], anyTerms: ["prepare", "preparation", "prep", "brief", "briefing", "get ready", "ready for", "prep me"], skillIds: ["microsoft-graph", "zoom-meetings"] },
   { id: "high-precision-meetings-prep", allTerms: ["meetings"], anyTerms: ["prepare", "preparation", "prep", "brief", "briefing", "get ready", "ready for", "prep me"], skillIds: ["microsoft-graph", "zoom-meetings"] },
   { id: "owner-calendar-appointments", anyTerms: ["appointment", "appointments"], skillIds: ["microsoft-graph"] },
-  { id: "owner-daily-schedule", allTerms: ["schedule"], anyTerms: ["today", "tomorrow", "day"], skillIds: ["microsoft-graph"] },
+  { id: "owner-daily-schedule", allTerms: ["schedule"], anyTerms: ["today", "tomorrow", "my schedule"], skillIds: ["microsoft-graph"] },
   { id: "outlook-mail", allTerms: ["outlook"], anyTerms: ["email", "emails", "mail", "inbox", "message", "messages"], skillIds: ["microsoft-graph"] },
   { id: "zoom-recording", allTerms: ["zoom"], anyTerms: ["transcript", "transcripts", "recording", "recordings", "recorded"], skillIds: ["zoom-meetings"] },
 ];
@@ -107,6 +107,28 @@ test("the exact owner appointments + full-day schedule + plural meetings request
   assert.equal(r.ruleId, "high-precision-meetings-prep");
   assert.deepEqual(r.skills.sort(), ["microsoft-graph", "zoom-meetings"]);
   assert.deepEqual(r.matchedRuleIds.sort(), ["high-precision-meetings-prep", "owner-calendar-appointments", "owner-daily-schedule"]);
+});
+
+test("owner calendar recipes cover natural personal schedule variants without capturing project schedules", () => {
+  const recipes = createIntentRecipes(PLATFORM_RECIPES);
+  for (const prompt of [
+    "Do I have any appointments tomorrow?",
+    "What appointments are on my calendar?",
+    "What is my schedule?",
+    "Give me my schedule for today.",
+    "Tell me the schedule tomorrow.",
+  ]) {
+    const r = recipes.resolve(prompt, { installedIds: INSTALLED });
+    assert.equal(r.status, "resolved", prompt);
+    assert.deepEqual(r.skills, ["microsoft-graph"], prompt);
+  }
+  for (const prompt of [
+    "Create a project schedule for launch day.",
+    "Draft the production schedule for release day.",
+    "Write a filming schedule for demo day.",
+  ]) {
+    assert.equal(recipes.resolve(prompt, { installedIds: INSTALLED }).status, "none", prompt);
+  }
 });
 
 test("meeting preparation noun form preserves the Graph+Zoom composition", () => {

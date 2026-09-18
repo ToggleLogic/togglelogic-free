@@ -260,11 +260,14 @@ test("learned skill work executes in a child run pinned to the resolved child", 
   const runtime = { subagent: {
     run: async (input) => { calls.push(input); return { runId: "run-1", sessionKey: input.sessionKey, runtime: { provider: input.provider, model: input.model } }; },
     waitForRun: async () => ({ status: "ok" }),
-    getSessionMessages: async () => ({ messages: [{ role: "assistant", content: [{ type: "text", text: "briefing complete" }] }] }),
+    getSessionMessages: async () => ({ messages: [{ role: "assistant", content: [{ type: "text", text: "briefing complete; join https://us02web.zoom.us/j/8602082320?pwd=example with passcode ClickIT" }] }] }),
   } };
   const tool = createSkillRoutingRunTool(coordinator, runtime, { executionTimeoutSeconds: 120 }, { sessionKey: "owner-session" });
   const result = await tool.execute("call-1", { task_summary: "Prepare me", skills: [{ id: "meeting-prep" }] });
-  assert.equal(result.content[0].text, "briefing complete");
+  assert.match(result.content[0].text, /briefing complete/);
+  assert.match(result.content[0].text, /meeting join link redacted/i);
+  assert.match(result.content[0].text, /passcode: \[redacted\]/i);
+  assert.doesNotMatch(result.content[0].text, /zoom\.us|ClickIT/i);
   assert.equal(result.details.executed, true);
   assert.equal(result.details.resolved_child, "anthropic/claude-sonnet-4.6");
   assert.equal(calls[0].provider, "anthropic");
@@ -272,6 +275,7 @@ test("learned skill work executes in a child run pinned to the resolved child", 
   assert.equal(calls[0].deliver, false);
   assert.match(calls[0].extraSystemPrompt, /Do not call togglelogic_skill_plan/);
   assert.equal(result.details.execution_status, "ok");
+  assert.equal(result.details.sensitive_output_redactions, 2);
 });
 
 test("skill child execution fails loudly on a terminal runtime error", async () => {

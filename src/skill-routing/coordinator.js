@@ -5,6 +5,7 @@ import path from "node:path";
 import { resolveOpenClawPath } from "../path-utils.js";
 import { artifactDeliveryInstructions, deliverArtifactManifest } from "./artifact-delivery.js";
 import { classifyToolFreeWork } from "./intent-categories.js";
+import { redactSensitiveMeetingAccess } from "./output-redaction.js";
 
 const MAX_STATE_BYTES = 1024 * 1024;
 const MAX_PENDING_SESSIONS = 256;
@@ -760,6 +761,7 @@ export function createSkillRoutingCoordinator({
     let modelMismatch = false;
     let toolGuardDenied = false;
     let artifactDelivery = null;
+    let sensitiveOutputRedactions = 0;
     try {
       run = await rt.subagent.run({
         sessionKey: childSessionKey,
@@ -810,6 +812,9 @@ export function createSkillRoutingCoordinator({
           text = `ARTIFACT DELIVERY INCOMPLETE. The child result below is staging-only and is not a final-delivery or completion claim.\n${failures}\n\n${text}`.trim();
         }
       }
+      const redacted = redactSensitiveMeetingAccess(text);
+      text = redacted.text;
+      sensitiveOutputRedactions = redacted.redactions;
     } finally {
       // POST-RUN ACTUAL USAGE AUDIT. The run/wait metadata is not execution proof.
       // A provider/model pair on the returned assistant event IS recorded as
@@ -857,6 +862,7 @@ export function createSkillRoutingCoordinator({
           runtime_token_ceiling_enforced: false,
           artifact_delivery_status: artifactDelivery?.status ?? null,
           artifact_delivery: artifactDelivery?.entries ?? [],
+          sensitive_output_redactions: sensitiveOutputRedactions,
         });
       } catch { /* audit is best-effort; never raise into the caller */ }
     }
@@ -895,6 +901,7 @@ export function createSkillRoutingCoordinator({
         denied_tool_calls: usage?.deniedToolCalls ?? null,
         artifact_delivery_status: artifactDelivery?.status ?? null,
         artifact_delivery: artifactDelivery?.entries ?? [],
+        sensitive_output_redactions: sensitiveOutputRedactions,
         // These are PRE-FLIGHT estimate ceilings, not live runtime enforcement.
         preflight_ceiling_tokens: maxChildTokens,
         preflight_ceiling_cost_usd: maxChildCostUsd,

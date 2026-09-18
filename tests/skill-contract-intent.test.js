@@ -176,6 +176,11 @@ test("Graph plus Zoom meeting prep requires an actual Zoom search before claimin
   assert.match(prompt, /Reading the zoom-meetings skill instructions is preparation, not a Zoom history search/i);
   assert.match(prompt, /no relevant Zoom history was found only after a successful Zoom search/i);
   assert.match(prompt, /Zoom history was not checked/i);
+  assert.match(prompt, /owner-local midnight INCLUSIVE.*next owner-local midnight EXCLUSIVE/i);
+  assert.match(prompt, /stable Graph event identifiers/i);
+  assert.match(prompt, /calendar confirmation and a Zoom-history search are inputs, not the finished briefing/i);
+  assert.match(prompt, /objectives; decision points; risks; specific questions\/talking points/i);
+  assert.match(prompt, /Never include meeting join URLs, meeting IDs, passcodes, dial-in PINs/i);
 });
 
 // ————————————————————————————————————————————————————————————————

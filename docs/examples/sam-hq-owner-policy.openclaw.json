@@ -72,7 +72,7 @@
               {
                 "id": "owner-daily-schedule",
                 "allTerms": ["schedule"],
-                "anyTerms": ["today", "tomorrow", "day"],
+                "anyTerms": ["today", "tomorrow", "my schedule"],
                 "skillIds": ["microsoft-graph"]
               },
               {
