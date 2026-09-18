@@ -57,7 +57,7 @@ function overrideForModelRef(modelRef) {
   return { modelOverride: modelRef };
 }
 
-export async function dispatchByMode({ mode, event, hookContext, config, seam, familyResolver, configuredProviders = [] }) {
+export async function dispatchByMode({ mode, event, hookContext, config, seam }) {
   switch (mode) {
     case "passthrough":
       return passthroughResult();
@@ -65,25 +65,7 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam, f
     case "configured": {
       const route = pickConfiguredRoute(config.configuredRoutes, event, hookContext);
       if (!route) return passthroughResult({ reason: "no configured match" });
-      if (route.modelId.startsWith("family:")) {
-        const alias = route.modelId.slice("family:".length);
-        const resolved = familyResolver?.resolve(alias, configuredProviders);
-        if (!resolved) {
-          return passthroughResult({ reason: "family route unresolved", matchedKey: route.key, familyAlias: alias });
-        }
-        return {
-          override: { modelOverride: resolved.modelId, providerOverride: resolved.provider },
-          selectedModel: `${resolved.provider}/${resolved.modelId}`,
-          selectedProvider: resolved.provider,
-          selectionReason: "configured_family",
-          selectionDetails: {
-            matchedKey: route.key,
-            familyAlias: alias,
-            strategy: config.familyResolution.aliases[alias]?.strategy ?? "lowest_cost",
-            priceSource: "deployment-cached-models.dev",
-          },
-        };
-      }
+      if (route.modelId.startsWith("family:")) return passthroughResult({ reason: "family aliases require ToggleLogic Intelligence", matchedKey: route.key });
       const override = overrideForModelRef(route.modelId);
       return {
         override,
@@ -114,9 +96,6 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam, f
       const choice = await seam.classify({
         prompt: event?.prompt,
         attachments: event?.attachments,
-        plannedSkills: event?.plannedSkills,
-        estimatedTokens: event?.estimatedTokens,
-        monthlyCloudSpendUsd: event?.monthlyCloudSpendUsd,
         hookContext,
       });
       if (choice && choice.shadow === true) {

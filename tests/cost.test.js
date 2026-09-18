@@ -185,24 +185,6 @@ test("config: costVisibility defaults + feature toggle normalize", () => {
   assert.equal(c2.costVisibility.pricing.refreshHours, 6);
 });
 
-test("config: family aliases normalize narrowly and remain disabled by default", () => {
-  assert.equal(normalizeConfig({}).familyResolution.enabled, false);
-  const config = normalizeConfig({ familyResolution: { enabled: true, aliases: {
-    grok: {
-      family: "Grok", providers: ["XAI", "xai", "bad provider"], strategy: "newest", maxInputPerM: 5,
-      acceptedModels: ["XAI/GROK-4.3", "invalid", "xai/grok-4.3"],
-    },
-    "bad alias!": { family: "gpt", providers: ["openai"] },
-  }, hostPlan: { primary: "grok", fallbacks: ["grok", "missing"] } } });
-  assert.deepEqual(config.familyResolution.aliases, {
-    grok: {
-      family: "grok", providers: ["xai"], strategy: "newest", maxInputPerM: 5,
-      acceptedModels: ["xai/grok-4.3"],
-    },
-  });
-  assert.deepEqual(config.familyResolution.hostPlan, { primary: "grok", fallbacks: [] });
-});
-
 test("fleet attribution accepts portable slugs and rejects sensitive-looking values", () => {
   const good = normalizeConfig({ costVisibility: { attribution: { deploymentId: "SAM-Andy", costCenter: "Customer_001" } } });
   assert.equal(good.costVisibility.attribution.deploymentId, "sam-andy");
