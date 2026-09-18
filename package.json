@@ -1,16 +1,13 @@
 {
   "name": "togglelogic",
-  "version": "1.7.3",
+  "version": "2.0.0",
   "private": false,
-  "description": "Owner-scoped skill-aware model routing for OpenClaw with learned policies, benchmark-capable Intelligence integration, bounded child execution, budget controls, audit records, and transparent cost estimates. Bring your own provider credentials. The separate ToggleLogic Intelligence package is privately distributed under its own license. Global and unattended enforcement require a future OpenClaw in-flight runtime safeguard.",
+  "description": "Generic model routing, approval, audit, and cost-visibility primitives for OpenClaw. ToggleLogic Free includes no assistant, memory, skills, or business workflow policy.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "quality": "bash scripts/quality_gate.sh",
-    "inventory:generate": "node scripts/generate-skill-inventory.mjs",
-    "spend:generate": "node scripts/generate-spend-snapshot.mjs",
-    "runtime:refresh": "node scripts/togglelogic-runtime-refresh.mjs"
+    "quality": "node --check src/index.js && node --check src/capabilities.js && node --test tests/*.test.js"
   },
   "license": "LicenseRef-ToggleLogic-Free-Startup-Commercial-2.0",
   "author": "Motherboard, Inc. (https://togglelogic.ai/)",
@@ -36,16 +33,14 @@
   ],
   "files": [
     "src/",
-    "scripts/generate-skill-inventory.mjs",
-    "scripts/generate-spend-snapshot.mjs",
-    "scripts/togglelogic-runtime-refresh.mjs",
     "openclaw.plugin.json",
     "LICENSE",
     "NOTICE.md",
     "TRADEMARKS.md",
     "README.md",
     "CHANGELOG.md",
-    "docs/"
+    "docs/INTEGRATION-RESPONSIBILITY-CONTRACT.md",
+    "docs/RELEASE-NOTES-2.0.0.md"
   ],
   "peerDependencies": {
     "openclaw": "*"

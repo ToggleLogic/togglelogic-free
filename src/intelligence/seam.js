@@ -16,7 +16,6 @@
  */
 
 import { detectIntelligenceLayer } from "./detector.js";
-import { resolveOpenClawPath } from "../path-utils.js";
 
 export function createIntelligenceSeam(
   intelligenceConfig,
@@ -55,8 +54,6 @@ export function createIntelligenceSeam(
             intelligencePath: result.resolvedPath,
             version: result.version,
             shadow: config.shadow === true,
-            skillProfilesPath: config.skillProfilesPath
-              ? resolveOpenClawPath(config.skillProfilesPath) : "",
             fallbackLogger,
             consumeNewSession,
           });
@@ -104,32 +101,6 @@ export function createIntelligenceSeam(
     return adapter.classify(request, hostRuntimeConfig);
   }
 
-  async function planSkillRoute(request) {
-    if (state === "detecting") {
-      try {
-        await detect();
-      } catch {
-        return null;
-      }
-    }
-    if (state !== "available" || !adapter || typeof adapter.planSkillRoute !== "function") return null;
-    return adapter.planSkillRoute(request, hostRuntimeConfig);
-  }
-
-  function recordSkillChoice(input) {
-    if (state !== "available" || !adapter || typeof adapter.recordSkillChoice !== "function") {
-      throw new Error("ToggleLogic Intelligence skill-profile learning is unavailable");
-    }
-    return adapter.recordSkillChoice(input, hostRuntimeConfig);
-  }
-
-  function updateMonthlyCloudBudget(monthlyBudgetUsd) {
-    if (state !== "available" || !adapter || typeof adapter.updateMonthlyCloudBudget !== "function") {
-      throw new Error("ToggleLogic Intelligence budget updates are unavailable");
-    }
-    return adapter.updateMonthlyCloudBudget(monthlyBudgetUsd, hostRuntimeConfig);
-  }
-
   function info() {
     return {
       state,
@@ -138,5 +109,5 @@ export function createIntelligenceSeam(
     };
   }
 
-  return { detect, status, classify, planSkillRoute, recordSkillChoice, updateMonthlyCloudBudget, info };
+  return { detect, status, classify, info };
 }
