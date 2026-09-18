@@ -2,6 +2,20 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.3 — 2026-09-18 (owner-scoped patch release; pairs with private Intelligence 1.5.3)
+
+- Adds an explicit, bounded per-skill exception for artifact workflows that
+  legitimately need more tool calls than the deployment default. The exception
+  is opt-in (`allowAboveGlobalMax`), applies only to the named skill, cannot
+  multiply through skill composition, and is absolutely capped at 128 calls.
+- Keeps `maxChildToolCalls` unchanged as the default and hard ceiling for every
+  skill that has not received the explicit exception.
+- Closes the observed PowerPoint failure where a valid, model-matched child hit
+  the 32-call ceiling during website-image retrieval and had its otherwise useful
+  result rejected after three verification calls were denied.
+- Adds regression coverage for elevated artifact budgets, ordinary-skill budget
+  isolation, composite-route bounding, and the absolute safety cap.
+
 ## 1.7.2 — 2026-09-17 (owner-scoped patch release; pairs with private Intelligence 1.5.2)
 
 - Prevents platform names embedded in pasted records or source labels from

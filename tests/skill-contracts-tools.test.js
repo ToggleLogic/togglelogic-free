@@ -58,6 +58,28 @@ test("PowerPoint workflow upgrades the exhausted RC5 24-call policy to 32 while 
   assert.equal(explicitlyZero.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 0);
 });
 
+test("an explicit elevated PowerPoint ceiling can finish artifact QA without raising every skill's default", () => {
+  const contracts = createSkillContracts({
+    maxChildToolCalls: 32,
+    skillTools: {
+      "powerpoint-editor": { maxToolCalls: 64, allowAboveGlobalMax: true },
+      ordinary: {},
+      graph: { maxToolCalls: 8 },
+    },
+  });
+  assert.equal(contracts.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 64);
+  assert.equal(contracts.toolPolicyFor([{ id: "ordinary" }]).maxToolCalls, 32);
+  assert.equal(contracts.toolPolicyFor([{ id: "powerpoint-editor" }, { id: "graph" }]).maxToolCalls, 64);
+});
+
+test("elevated per-skill ceilings retain an absolute 128-call safety bound", () => {
+  const contracts = createSkillContracts({
+    maxChildToolCalls: 32,
+    skillTools: { "powerpoint-editor": { maxToolCalls: 1000, allowAboveGlobalMax: true } },
+  });
+  assert.equal(contracts.toolPolicyFor([{ id: "powerpoint-editor" }]).maxToolCalls, 128);
+});
+
 test("PowerPoint contract requires staging, parent delivery, note order, measured timing, and completed verification", () => {
   const contracts = createSkillContracts({});
   const prompt = contracts.contractPrompt([{ id: "powerpoint-editor" }], "Edit this deck");

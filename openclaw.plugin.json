@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "description": "Owner-scoped skill-aware model routing for OpenClaw with learned policies, benchmark-capable Intelligence integration, bounded child execution, budget controls, audit records, and transparent cost estimates. Bring your own provider credentials. The separate ToggleLogic Intelligence package is privately distributed under its own license. Global and unattended enforcement require a future OpenClaw in-flight runtime safeguard.",
   "activation": {
     "onStartup": true
@@ -201,6 +201,7 @@
               "properties": {
                 "allowedTools": { "type": "array", "items": { "type": "string" }, "description": "If set, only these tool names are allowed for the child; others are denied. Omit to leave the surface unrestricted (count-only)." },
                 "maxToolCalls": { "type": "integer", "minimum": 0, "description": "Override the tool-call count ceiling for this skill's child." },
+                "allowAboveGlobalMax": { "type": "boolean", "description": "Explicitly permit this skill's declared maxToolCalls to exceed maxChildToolCalls, up to ToggleLogic's absolute 128-call safety bound. Intended only for known complex artifact workflows." },
                 "disableTools": { "type": "boolean", "description": "Run this skill's child with an exact empty tool surface (SubagentRunParams.disableTools)." }
               }
             }

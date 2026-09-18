@@ -119,7 +119,13 @@ test("skill routing is opt-in and normalizes bounded runtime settings", () => {
   const configured = normalizeConfig({
     features: { skillRouting: { enabled: true } },
     intelligence: { skillProfilesPath: "/profiles.json" },
-    skillRouting: { pendingTtlMinutes: 20, defaultEstimatedTokens: 9000, executionTimeoutSeconds: 120, monthlyCloudSpendUsd: 2.5 },
+    skillRouting: {
+      pendingTtlMinutes: 20,
+      defaultEstimatedTokens: 9000,
+      executionTimeoutSeconds: 120,
+      monthlyCloudSpendUsd: 2.5,
+      skillTools: { "powerpoint-editor": { maxToolCalls: 64, allowAboveGlobalMax: true } },
+    },
   });
   assert.equal(configured.features.skillRouting.enabled, true);
   assert.equal(configured.intelligence.skillProfilesPath, "/profiles.json");
@@ -127,6 +133,10 @@ test("skill routing is opt-in and normalizes bounded runtime settings", () => {
   assert.equal(configured.skillRouting.defaultEstimatedTokens, 9000);
   assert.equal(configured.skillRouting.executionTimeoutSeconds, 120);
   assert.equal(configured.skillRouting.monthlyCloudSpendUsd, 2.5);
+  assert.deepEqual(configured.skillRouting.skillTools["powerpoint-editor"], {
+    maxToolCalls: 64,
+    allowAboveGlobalMax: true,
+  });
 });
 
 test("educational plan persists restart-safe pending state", async () => {
