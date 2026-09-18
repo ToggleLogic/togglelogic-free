@@ -144,7 +144,10 @@ export const DEFAULTS = Object.freeze({
     // token/pass cap (the host exposes none — see docs/BOUNDED-CHILD-LIMITS.md).
     maxChildToolCalls: 32,
     // Per-skill bounded tool surface: { "<skillId>": { allowedTools:[...],
-    // maxToolCalls:int, disableTools:bool } }. disableTools → empty tool surface;
+    // maxToolCalls:int, allowAboveGlobalMax:bool, disableTools:bool } }.
+    // allowAboveGlobalMax is an explicit, bounded exception for a known complex
+    // workflow; absent it, maxChildToolCalls remains the hard route ceiling.
+    // disableTools → empty tool surface;
     // a non-null allowlist and count cap are enforced by the guard.
     skillTools: Object.freeze({}),
     // DEPLOYMENT-OWNED per-skill EXECUTION IDENTITY (authoritative mailbox/account
@@ -408,6 +411,7 @@ function normalizeSkillTools(raw) {
       entry.allowedTools = tools;
     }
     if (Number.isFinite(value.maxToolCalls) && value.maxToolCalls >= 0) entry.maxToolCalls = Math.floor(value.maxToolCalls);
+    if (value.allowAboveGlobalMax === true) entry.allowAboveGlobalMax = true;
     if (value.disableTools === true) entry.disableTools = true;
     if (Object.keys(entry).length > 0) out[id] = entry;
   }

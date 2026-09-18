@@ -116,6 +116,7 @@ const DEFAULT_SUBORDINATE_MEETING_SKILLS = Object.freeze(["zoom-meetings"]);
 export const BUILTIN_WORKFLOW_TOOL_CALL_FLOORS = Object.freeze({
   "powerpoint-editor": 32,
 });
+const ABSOLUTE_ELEVATED_TOOL_CALL_CEILING = 128;
 
 // Deterministic calendar/meeting INTENT. High-precision, meeting/calendar
 // vocabulary ONLY — it must NOT fire on generic Graph email/contact work
@@ -298,12 +299,14 @@ export function createSkillContracts(rawConfig = {}) {
     : null;
   const overrides = rawConfig.contracts && typeof rawConfig.contracts === "object" ? rawConfig.contracts : {};
   // Deployment-declared per-skill tool policy, enforced on the bounded child by the
-  // before_tool_call guard: { "<skillId>": { allowedTools:[...], maxToolCalls, disableTools } }.
+  // before_tool_call guard: { "<skillId>": { allowedTools:[...], maxToolCalls,
+  // allowAboveGlobalMax, disableTools } }.
   const skillTools = rawConfig.skillTools && typeof rawConfig.skillTools === "object" ? rawConfig.skillTools : {};
-  // The configured guard ceiling is also the hard cap for a composite route.
-  // Component ceilings may add together because a Graph+Zoom (or Graph+artifact)
-  // workflow legitimately needs both skills' tool budgets, but composition can
-  // never expand beyond this global bound.
+  // The configured guard ceiling is the hard cap unless a deployment explicitly
+  // opts one known skill into a higher declared ceiling. Elevated ceilings remain
+  // bounded by ABSOLUTE_ELEVATED_TOOL_CALL_CEILING and do not multiply when skills
+  // are composed. This lets complex artifact QA finish without raising the default
+  // budget for every otherwise-undeclared skill.
   const compositeToolCallCeiling = Number.isFinite(rawConfig.maxChildToolCalls) && rawConfig.maxChildToolCalls >= 0
     ? Math.floor(rawConfig.maxChildToolCalls) : 32;
   // Calendar-capable installed skills (deployment-overridable). Authoritative =
@@ -322,8 +325,9 @@ export function createSkillContracts(rawConfig = {}) {
    * The count ceiling is a BOUNDED COMPOSITE: each unique non-disabled skill
    * contributes its declared ceiling (or the global ceiling when undeclared),
    * the contributions are summed, and the result is capped by the configured
-   * global ceiling. This gives Graph+Zoom enough room for both workflows without
-   * letting composition multiply the deployment's hard safety limit.
+   * global ceiling unless one component explicitly declares allowAboveGlobalMax.
+   * In that case the route cap may rise only to that component's declared ceiling
+   * (never above 128), so composition cannot multiply elevated authority.
    */
   function toolPolicyFor(skills) {
     const list = Array.isArray(skills) ? skills : [];
@@ -332,6 +336,7 @@ export function createSkillContracts(rawConfig = {}) {
     let anyUnrestricted = false;
     const combinedAllow = new Set();
     let compositeCalls = 0;
+    let routeCeiling = compositeToolCallCeiling;
     const seenSkills = new Set();
     for (const skill of list) {
       const id = cleanString(typeof skill === "string" ? skill : skill?.id);
@@ -343,10 +348,15 @@ export function createSkillContracts(rawConfig = {}) {
         ? policy.allowedTools.map(cleanString).filter(Boolean) : null;
       const configuredMaxCalls = Number.isFinite(policy?.maxToolCalls) && policy.maxToolCalls >= 0 ? Math.floor(policy.maxToolCalls) : null;
       const workflowFloor = BUILTIN_WORKFLOW_TOOL_CALL_FLOORS[id] ?? 0;
+      const elevated = policy?.allowAboveGlobalMax === true && configuredMaxCalls !== null;
+      const skillCeiling = elevated
+        ? Math.min(ABSOLUTE_ELEVATED_TOOL_CALL_CEILING, configuredMaxCalls)
+        : compositeToolCallCeiling;
       const maxCalls = disable || configuredMaxCalls === 0 ? 0 : Math.min(
-        compositeToolCallCeiling,
+        skillCeiling,
         Math.max(configuredMaxCalls ?? compositeToolCallCeiling, workflowFloor),
       );
+      if (elevated) routeCeiling = Math.max(routeCeiling, skillCeiling);
       if (!disable) disableAll = false;
       if (!disable && !allow) anyUnrestricted = true;
       if (allow) for (const t of allow) combinedAllow.add(t);
@@ -356,7 +366,7 @@ export function createSkillContracts(rawConfig = {}) {
     const allowedTools = disableTools
       ? []
       : (anyUnrestricted || combinedAllow.size === 0 ? null : [...combinedAllow]);
-    const maxToolCalls = disableTools ? 0 : Math.min(compositeToolCallCeiling, compositeCalls);
+    const maxToolCalls = disableTools ? 0 : Math.min(routeCeiling, compositeCalls);
     return { disableTools, allowedTools, maxToolCalls };
   }
 
