@@ -82,3 +82,19 @@ export function createNonActionMatcher(rawCategories, onWarn) {
 
   return { match, size: categories.length, categoryIds: categories.map((c) => c.id) };
 }
+
+// Chief-of-staff writing that needs no external system is ordinary model work,
+// not a failed skill lookup. Keep this deliberately narrow: requests that also
+// direct SAM to send, publish, upload, or otherwise execute the content remain
+// governed and must resolve to a real skill.
+const TOOL_FREE_WRITING = /\b(?:write|draft|rewrite|rework|polish|rephrase|tighten|word|edit)\b[\s\S]{0,120}\b(?:email|message|post|caption|statement|script|copy|note|response|reply|announcement|text|wording|something)\b/i;
+const EXTERNAL_EXECUTION = /\b(?:send|publish|upload|schedule|deliver|submit|share|notify|fax|tweet)\b|\bpost\s+(?:it|this|that|the|a|an)\b|\b(?:email|dm|text|slack|message)\s+(?:it|this|that|them|him|her)\b|\b(?:email|dm|text|slack|message)\s+(?:the|a|an)\s+\w+/i;
+const DATA_DEPENDENT_WRITING = /\b(?:quickbooks|qbo|profit\s*(?:and|&)\s*loss|p\s*&\s*l|balance\s+sheet|cash\s+flow|financial\s+(?:figures?|results?|statements?)|outlook\s+(?:calendar|inbox|mail)|latest\s+(?:calendar|inbox|crm|recording|transcript)|zoom\s+(?:recording|transcript|summary)|crm\s+(?:record|data|pipeline)|open\s+invoices?)\b/i;
+
+export function classifyToolFreeWork(text) {
+  const raw = cleanString(text);
+  if (!raw || !TOOL_FREE_WRITING.test(raw) || EXTERNAL_EXECUTION.test(raw) || DATA_DEPENDENT_WRITING.test(raw)) {
+    return { matched: false };
+  }
+  return { matched: true, category: "tool_free_writing" };
+}

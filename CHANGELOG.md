@@ -2,6 +2,30 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.1 — 2026-09-17 (owner-scoped patch release; pairs with private Intelligence 1.5.1)
+
+- Distinguishes explicit skill invocations from incidental skill-name mentions,
+  so natural references to canvases, images, or presentation tools do not
+  conflict with a deterministic workflow recipe.
+- Allows safe draft-only writing to proceed without pretending an external send
+  or live-data tool is available; send/publish and source-dependent work remain
+  governed and fail closed.
+- Explains every genuine skill choice with verified purpose metadata and, when
+  configured, the mailbox/account identity instead of exposing unexplained IDs.
+- Adds deterministic owner-calendar recipes for appointments, personal daily
+  schedules, and plural-meeting preparation. The exact owner incident now
+  composes Microsoft Graph plus Zoom without consulting the local classifier.
+- Extends the calendar truth contract to schedule requests and avoids capturing
+  project/production/filming schedules that merely mention a generic day.
+- Uses owner-local, next-midnight-exclusive Graph windows for complete day
+  schedules, de-duplicates repeated calendar records, and requires substantive
+  meeting briefs rather than treating calendar/Zoom lookup as the finished prep.
+- Deterministically strips meeting join links, meeting IDs, passcodes, and
+  dial-in PINs from bounded-child results before delivery.
+- Adds permanent regressions for the observed owner messages, account identity,
+  ambiguity handling, classifier bypass, fail-closed behavior, and false-positive
+  schedule cases.
+
 ## 1.7.0 — 2026-09-17 (owner-scoped stable release; pairs with private Intelligence 1.5.0)
 
 - Promotes the owner-tested RC13 model marketplace, skill-aware routing,

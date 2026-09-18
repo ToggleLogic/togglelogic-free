@@ -136,6 +136,25 @@ test("RECIPE 1b: an explicit Microsoft Graph reference does not suppress the Gra
   assert.equal(h.invokeCalls.length, 0, "the deterministic recipe resolves the composition without a classifier");
 });
 
+test("RECIPE: incidental canvas, Gamma, and image mentions do not conflict with the existing-PowerPoint workflow", async () => {
+  const catalog = [
+    { id: "powerpoint-editor", version: "1.7.0", fingerprint: "fp-ppt", execution_class: "artifact", description: "Edit existing PowerPoint decks" },
+    { id: "canvas", version: "1.0.0", fingerprint: "fp-canvas", execution_class: "tool", description: "Canvas panels" },
+    { id: "gamma", version: "1.0.0", fingerprint: "fp-gamma", execution_class: "tool", description: "Generate new Gamma presentations" },
+    { id: "image", version: "1.0.0", fingerprint: "fp-image", execution_class: "artifact", description: "Create images" },
+  ];
+  const h = harness({
+    catalog,
+    recipes: [{ id: "existing-powerpoint-edit", allTerms: ["powerpoint"], anyTerms: ["rewrite", "script", "slides"], skillIds: ["powerpoint-editor"] }],
+  });
+  const gate = await h.coordinator.handleGate(reply(
+    "Rewrite my script so it follows the current PowerPoint slides and keeps the same images. Use your pitch-deck judgment; I mentioned Gamma and canvas as context.",
+  ), OWNER_CTX);
+  assert.equal(gate.reason, "skill_education_required");
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id), ["powerpoint-editor"]);
+  assert.equal(h.invokeCalls.length, 0);
+});
+
 test("RECIPE 2: a generic Outlook email (no recipe match) routes through the bounded classifier to microsoft-graph", async () => {
   const h = harness();
   const gate = await h.coordinator.handleGate(reply("Send an Outlook email to the finance team about the invoice"), OWNER_CTX);
@@ -226,6 +245,53 @@ test("RECIPE 3: an unrelated poem reaches the exact no-skill fail-safe (universa
   assert.equal(h.runCalls.length, 0);
 });
 
+test("CHIEF OF STAFF: a draft-only WhatsApp post passes through as tool-free writing", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply(
+    "Can you write me something I could post in WhatsApp that is nice, straightforward, and encouraging?",
+  ), OWNER_CTX);
+  assert.equal(gate.handled, false);
+  assert.equal(gate.audit.mode, "tool_free_work");
+  assert.equal(gate.audit.category, "tool_free_writing");
+  assert.equal(h.invokeCalls.length, 0);
+  assert.equal(h.planCalls.length, 0);
+});
+
+test("CHIEF OF STAFF: an instruction to publish the post does not bypass the skill gate", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply("Write and post a message in WhatsApp announcing the event."), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "no_skill_failsafe");
+});
+
+test("CHIEF OF STAFF: external delivery phrasing never uses the tool-free writing exemption", async () => {
+  for (const prompt of [
+    "Polish this reply and email it to al@example.test",
+    "Draft a message and email it to the finance team",
+    "Rewrite the caption and DM it to the client",
+    "Draft a note and text the client",
+  ]) {
+    const h = harness();
+    const gate = await h.coordinator.handleGate(reply(prompt), OWNER_CTX);
+    assert.equal(gate.handled, true, prompt);
+    assert.notEqual(gate.audit?.mode, "tool_free_work", prompt);
+  }
+});
+
+test("CHIEF OF STAFF: source-dependent drafting falls through to governed resolution", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply("Draft a note summarizing the latest QuickBooks P&L."), OWNER_CTX);
+  assert.equal(gate.handled, true);
+  assert.equal(gate.reason, "no_skill_failsafe");
+});
+
+test("CHIEF OF STAFF: drafting an email without sending remains tool-free writing", async () => {
+  const h = harness();
+  const gate = await h.coordinator.handleGate(reply("Draft an email message to the finance team about the quarterly update."), OWNER_CTX);
+  assert.equal(gate.handled, false);
+  assert.equal(gate.audit.mode, "tool_free_work");
+});
+
 test("RECIPE 4: a recipe whose required skill is NOT installed fails safe to the no-skill fail-safe", async () => {
   const h = harness({ recipes: [{ id: "payroll", anyTerms: ["payroll"], skillIds: ["workday"] }] });
   const gate = await h.coordinator.handleGate(reply("run payroll for this cycle"), OWNER_CTX);
@@ -245,7 +311,9 @@ test("RECIPE 5: conflicting recipes (different skill sets) fail closed with one 
   const gate = await h.coordinator.handleGate(reply("generate the report now"), OWNER_CTX);
   assert.equal(gate.handled, true);
   assert.equal(gate.reason, "skill_recipe_ambiguous");
-  assert.match(gate.reply.text, /more than one configured intent recipe/i);
+  assert.match(gate.reply.text, /more than one configured workflow/i);
+  assert.match(gate.reply.text, /microsoft-graph:/i);
+  assert.match(gate.reply.text, /code-review:/i);
   assert.deepEqual(gate.audit.rule_ids.sort(), ["r-graph", "r-review"]);
   assert.equal(h.invokeCalls.length, 0, "conflicting recipes fail closed before the classifier");
   assert.equal(h.planCalls.length, 0);

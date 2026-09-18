@@ -178,17 +178,34 @@ export function createSkillResolver(rawConfig = {}) {
     // Detect explicit "…<name> skill" invocation cues to catch requests for
     // skills that are NOT installed/known — those must not be silently ignored.
     const unknownSkills = [];
+    const explicitlyInvokedIds = [];
+
+    // A direct action cue immediately followed by an installed id/alias is also
+    // an explicit invocation even when the owner naturally omits the word
+    // "skill" (for example, "Use Microsoft Graph ..."). Incidental mentions
+    // elsewhere in the sentence remain ordinary exact matches only.
+    for (const entry of catalog) {
+      for (const term of entry.terms) {
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const cue = new RegExp(`(?:^| )(?:use|using|run|running|invoke|invoking|via|with|through|apply|applying)(?: the)? ${escaped}(?: |$)`);
+        if (cue.test(normalized) && !explicitlyInvokedIds.includes(entry.id)) {
+          explicitlyInvokedIds.push(entry.id);
+        }
+      }
+    }
     let cueMatch;
     INTENT_CUE_RE.lastIndex = 0;
     while ((cueMatch = INTENT_CUE_RE.exec(raw)) !== null) {
       const named = normalizeTerms(cueMatch[1]);
       if (!named) continue;
-      const isKnown = catalog.some((entry) => entry.terms.includes(named) || entry.terms.some((term) => containsTerm(named, term)));
-      if (!isKnown && !unknownSkills.includes(named)) unknownSkills.push(named);
+      const known = catalog.find((entry) => entry.terms.includes(named) || entry.terms.some((term) => containsTerm(named, term)));
+      if (known) {
+        if (!explicitlyInvokedIds.includes(known.id)) explicitlyInvokedIds.push(known.id);
+      } else if (!unknownSkills.includes(named)) unknownSkills.push(named);
     }
 
     if (matched.length > 0) {
-      return { status: "resolved", skills: matched, matchedIds: [...matchedIds], unknownSkills, reason: "exact_installed_skill_reference" };
+      return { status: "resolved", skills: matched, matchedIds: [...matchedIds], explicitlyInvokedIds, unknownSkills, reason: "exact_installed_skill_reference" };
     }
     if (unknownSkills.length > 0) {
       return { status: "ambiguous", skills: [], matchedIds: [], unknownSkills, reason: "skill_invocation_names_unknown_skill", ambiguityPolicy };

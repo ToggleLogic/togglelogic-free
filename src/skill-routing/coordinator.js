@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { resolveOpenClawPath } from "../path-utils.js";
 import { artifactDeliveryInstructions, deliverArtifactManifest } from "./artifact-delivery.js";
+import { classifyToolFreeWork } from "./intent-categories.js";
+import { redactSensitiveMeetingAccess } from "./output-redaction.js";
 
 const MAX_STATE_BYTES = 1024 * 1024;
 const MAX_PENDING_SESSIONS = 256;
@@ -40,6 +42,26 @@ function normalizeSkills(value) {
       ...(cleanString(item.fingerprint || item.skill_fingerprint) ? { fingerprint: cleanString(item.fingerprint || item.skill_fingerprint) } : {}),
       execution_class: cleanString(item.execution_class) || "default",
     }));
+}
+
+function skillChoiceLines(ids, resolver, skillIdentities = {}) {
+  const catalog = resolver && typeof resolver.classifierCatalog === "function"
+    ? resolver.classifierCatalog()
+    : [];
+  const descriptions = new Map(catalog.map((item) => [item.id, cleanString(item.description)]));
+  return [...new Set((ids || []).map(cleanString).filter(Boolean))].map((id) => {
+    const identity = skillIdentities && typeof skillIdentities === "object" ? skillIdentities[id] : null;
+    const mailbox = cleanString(identity?.mailbox);
+    const description = descriptions.get(id);
+    const details = [mailbox, description].filter(Boolean).join(" — ")
+      || "Purpose details are unavailable in the installed-skill catalog.";
+    return `- ${id}: ${details}`;
+  });
+}
+
+export function formatSkillClarification(ids, resolver, skillIdentities = {}, intro = "I found more than one applicable skill:") {
+  const lines = skillChoiceLines(ids, resolver, skillIdentities);
+  return [intro, ...lines, "Reply with the exact skill name shown above."].join("\n");
 }
 
 export function structuredPlannedSkills(event = {}, hookContext = {}) {
@@ -361,6 +383,9 @@ export function createSkillRoutingCoordinator({
   const maxChildTokens = Number.isFinite(config.maxChildTokens) ? config.maxChildTokens : 200000;
   const maxChildCostUsd = Number.isFinite(config.maxChildCostUsd) ? config.maxChildCostUsd : 5;
   const clarifyOnMultiSkill = config.clarifyOnMultiSkill === true;
+  const skillIdentities = config.skillIdentities && typeof config.skillIdentities === "object"
+    ? config.skillIdentities
+    : {};
   let state = { schema_version: 1, pending: {} };
 
   try {
@@ -736,6 +761,7 @@ export function createSkillRoutingCoordinator({
     let modelMismatch = false;
     let toolGuardDenied = false;
     let artifactDelivery = null;
+    let sensitiveOutputRedactions = 0;
     try {
       run = await rt.subagent.run({
         sessionKey: childSessionKey,
@@ -786,6 +812,9 @@ export function createSkillRoutingCoordinator({
           text = `ARTIFACT DELIVERY INCOMPLETE. The child result below is staging-only and is not a final-delivery or completion claim.\n${failures}\n\n${text}`.trim();
         }
       }
+      const redacted = redactSensitiveMeetingAccess(text);
+      text = redacted.text;
+      sensitiveOutputRedactions = redacted.redactions;
     } finally {
       // POST-RUN ACTUAL USAGE AUDIT. The run/wait metadata is not execution proof.
       // A provider/model pair on the returned assistant event IS recorded as
@@ -833,6 +862,7 @@ export function createSkillRoutingCoordinator({
           runtime_token_ceiling_enforced: false,
           artifact_delivery_status: artifactDelivery?.status ?? null,
           artifact_delivery: artifactDelivery?.entries ?? [],
+          sensitive_output_redactions: sensitiveOutputRedactions,
         });
       } catch { /* audit is best-effort; never raise into the caller */ }
     }
@@ -871,6 +901,7 @@ export function createSkillRoutingCoordinator({
         denied_tool_calls: usage?.deniedToolCalls ?? null,
         artifact_delivery_status: artifactDelivery?.status ?? null,
         artifact_delivery: artifactDelivery?.entries ?? [],
+        sensitive_output_redactions: sensitiveOutputRedactions,
         // These are PRE-FLIGHT estimate ceilings, not live runtime enforcement.
         preflight_ceiling_tokens: maxChildTokens,
         preflight_ceiling_cost_usd: maxChildCostUsd,
@@ -1000,7 +1031,7 @@ export function createSkillRoutingCoordinator({
         const offered = suggestions.map((s) => s.id);
         return {
           handled: true,
-          reply: { text: `The ${namedStr} skill isn't installed here, so I can't route to it. I do have these installed skills that relate to what you're asking: ${offered.join(", ")}. Reply with the one you'd like me to use.` },
+          reply: { text: formatSkillClarification(offered, resolver, skillIdentities, `The ${namedStr} skill isn't installed here. These installed skills may relate to your request:`) },
           reason: "skill_named_unavailable_alternatives",
           audit: { mode: "skill_named_unavailable_alternatives", named, offered },
         };
@@ -1026,8 +1057,13 @@ export function createSkillRoutingCoordinator({
       recipeStatus = recipe.status === "resolved" || recipe.status === "ambiguous" ? recipe.status : (recipe.reason || recipe.status);
       if (recipe.status === "resolved") {
         const exactIds = new Set((resolved.skills || []).map((skill) => skill.id));
+        const explicitlyInvokedIds = new Set(resolved.resolution?.explicitlyInvokedIds || []);
         const recipeIds = new Set(recipe.skills || []);
-        const compatible = resolved.status !== "resolved" || [...exactIds].every((id) => recipeIds.has(id));
+        // Plain-language mentions such as "same images", "Gamma", or "canvas"
+        // are not necessarily instructions to invoke those installed skills.
+        // Only an explicit "use/run <name> skill" cue can conflict with a
+        // deterministic workflow recipe.
+        const compatible = resolved.status !== "resolved" || [...explicitlyInvokedIds].every((id) => recipeIds.has(id));
         if (!compatible) {
           return {
             handled: true,
@@ -1047,7 +1083,7 @@ export function createSkillRoutingCoordinator({
       } else if (recipe.status === "ambiguous") {
         const ids = [...new Set((recipe.candidates || []).flatMap((candidate) => candidate.skills))].slice(0, 8);
         const ruleIds = (recipe.candidates || []).map((candidate) => candidate.ruleId);
-        return { handled: true, reply: { text: `Your request matches more than one configured intent recipe (${ruleIds.join(", ")}), which resolve to different skills (${ids.join(", ")}). Which should I use? Reply with the skill name.` }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
+        return { handled: true, reply: { text: formatSkillClarification(ids, resolver, skillIdentities, "Your request matches more than one configured workflow. These are the available skill choices:") }, reason: "skill_recipe_ambiguous", audit: { mode: "skill_recipe_ambiguous", rule_ids: ruleIds, candidates: ids } };
       }
     }
 
@@ -1059,6 +1095,10 @@ export function createSkillRoutingCoordinator({
       const category = nonAction ? nonAction.match(text) : { matched: false };
       if (category.matched) {
         return { handled: false, audit: { mode: "non_action_category", category: category.category, kind: category.kind } };
+      }
+      const toolFree = classifyToolFreeWork(text);
+      if (toolFree.matched) {
+        return { handled: false, audit: { mode: "tool_free_work", category: toolFree.category } };
       }
       // A natural-language request that names no skill AND matched no recipe may
       // still map to an eligible skill via the BOUNDED resolution classifier (a
@@ -1083,7 +1123,7 @@ export function createSkillRoutingCoordinator({
           resolved = { status: "resolved", skills: hydrated, source: "bounded_classifier", resolution: { reason: "classifier_resolved", confidence: decision.confidence } };
         } else if (decision.status === "ambiguous") {
           const ids = (decision.candidates || []).slice(0, 4);
-          return { handled: true, reply: { text: `Your request could map to more than one installed skill (${ids.join(", ")}). Which single skill should I use? Reply with the skill name.` }, reason: "skill_classifier_ambiguous", audit: { mode: "skill_classifier_ambiguous", candidates: ids, confidence: decision.confidence } };
+          return { handled: true, reply: { text: formatSkillClarification(ids, resolver, skillIdentities, "Your request could map to more than one installed skill. Here is what each choice does:") }, reason: "skill_classifier_ambiguous", audit: { mode: "skill_classifier_ambiguous", candidates: ids, confidence: decision.confidence } };
         } else if (decision.status === "conversation") {
           return { handled: false, audit: { mode: "conversation", classifier: "bounded_local", confidence: decision.confidence } };
         }
@@ -1121,8 +1161,8 @@ export function createSkillRoutingCoordinator({
     // permits "one or more" skills, so multi-skill tasks resolve by default; a
     // deployment can require a single-skill choice instead.
     if (clarifyOnMultiSkill && resolved.skills.length > 1) {
-      const names = resolved.skills.map((s) => s.id).join(", ");
-      return { handled: true, reply: { text: `Your request references more than one installed skill (${names}). Which single skill should I use? I'll run exactly one — reply with the skill name.` }, reason: "skill_ambiguous_multi", audit: { mode: "skill_ambiguous_multi", planned_skills: resolved.skills } };
+      const ids = resolved.skills.map((s) => s.id);
+      return { handled: true, reply: { text: formatSkillClarification(ids, resolver, skillIdentities, "Your request references more than one installed skill. I can run exactly one of these choices:") }, reason: "skill_ambiguous_multi", audit: { mode: "skill_ambiguous_multi", planned_skills: resolved.skills } };
     }
 
     // 3) Plan the route. The deterministic safety preflight above has already
