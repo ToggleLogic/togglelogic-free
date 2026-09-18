@@ -2,6 +2,21 @@
 
 All notable changes to ToggleLogic (Free Tier) are documented here.
 
+## 1.7.2 — 2026-09-17 (owner-scoped patch release; pairs with private Intelligence 1.5.2)
+
+- Prevents platform names embedded in pasted records or source labels from
+  being treated as instructions to run those skills. The requested action,
+  deterministic recipe, or bounded local classifier remains authoritative.
+- Preserves explicit skill invocations, including coordinated phrases that name
+  multiple skills, without promoting generic prose such as “found in LinkedIn.”
+- Removes the meaningless first-use “Reply 1” gate when exactly one eligible,
+  within-budget model lineage exists; that lineage is selected for the current
+  turn without writing a permanent owner preference.
+- Keeps real choices, over-budget routes, stale profiles, capability conflicts,
+  and multiple eligible lineages behind the existing owner education gate.
+- Adds regressions from the observed ClickITCRM investor-import incident and
+  independent second-developer review findings.
+
 ## 1.7.1 — 2026-09-17 (owner-scoped patch release; pairs with private Intelligence 1.5.1)
 
 - Distinguishes explicit skill invocations from incidental skill-name mentions,

@@ -188,7 +188,13 @@ export function createSkillResolver(rawConfig = {}) {
       for (const term of entry.terms) {
         const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const cue = new RegExp(`(?:^| )(?:use|using|run|running|invoke|invoking|via|with|through|apply|applying)(?: the)? ${escaped}(?: |$)`);
-        if (cue.test(normalized) && !explicitlyInvokedIds.includes(entry.id)) {
+        // A coordinated phrase may carry the action verb only once:
+        // "run the code-review skill and the meeting-prep skill". Naming an
+        // installed term immediately as a "skill" is therefore also explicit,
+        // while a bare platform label in pasted data (for example "LinkedIn")
+        // remains incidental.
+        const skillNounCue = new RegExp(`(?:^| )${escaped} skill(?: |$)`);
+        if ((cue.test(normalized) || skillNounCue.test(normalized)) && !explicitlyInvokedIds.includes(entry.id)) {
           explicitlyInvokedIds.push(entry.id);
         }
       }

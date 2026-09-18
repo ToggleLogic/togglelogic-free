@@ -333,6 +333,91 @@ test("ACCEPTANCE 9d: multi-skill ambiguity asks ONE bounded clarification when c
   assert.equal(h.runCalls.length, 0, "executes nothing while ambiguous");
 });
 
+test("ACCEPTANCE 9e: skill names inside pasted contact data are context, not requested skills", async () => {
+  const h = harness({
+    catalog: [
+      { id: "clickitcrm", version: "1", fingerprint: "crm-fp", description: "CRM contacts and sub-account operations" },
+      { id: "linkedin", version: "1", fingerprint: "li-fp", description: "LinkedIn profile research and outreach" },
+    ],
+    classifier: {
+      enabled: true,
+      classify: async () => ({ status: "resolved", skillId: "clickitcrm", confidence: 0.99 }),
+    },
+    planFor: (req) => ({
+      status: "selected",
+      planned_skills: req.plannedSkills,
+      strategy: "lowest_cost",
+      selected_lineage: "google/gemini-flash",
+      selected_model_ref: "google/gemini-3.5-flash",
+      estimated_tokens: 4000,
+      choices: [{ kind: "lowest_cost", estimated_cost_usd: 0.002 }],
+    }),
+  });
+  const prompt = [
+    "Sam, add this list to the ClickITCRM Group sub-account.",
+    "Investor: VC Fund / Ada Example — ada@example.com — LinkedIn",
+    "Investor: Angel / Grace Example — grace@example.com — LinkedIn",
+  ].join("\n");
+  const gate = await h.coordinator.handleGate(reply(prompt), OWNER_CTX);
+  assert.equal(gate.reason, "skill_selected_executed");
+  assert.equal(h.planCalls.length, 1);
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id), ["clickitcrm"]);
+  assert.equal(h.runCalls.length, 1);
+});
+
+test("ACCEPTANCE 9f: an explicit skill invocation still bypasses incidental name suppression", async () => {
+  const h = harness({
+    catalog: [
+      { id: "clickitcrm", version: "1", fingerprint: "crm-fp", description: "CRM contacts" },
+      { id: "linkedin", version: "1", fingerprint: "li-fp", description: "LinkedIn research" },
+    ],
+    classifier: { enabled: true, classify: async () => { throw new Error("classifier must not run"); } },
+    planFor: (req) => ({
+      status: "selected",
+      planned_skills: req.plannedSkills,
+      strategy: "lowest_cost",
+      selected_lineage: "google/gemini-flash",
+      selected_model_ref: "google/gemini-3.5-flash",
+      estimated_tokens: 4000,
+      choices: [{ kind: "lowest_cost", estimated_cost_usd: 0.002 }],
+    }),
+  });
+  const gate = await h.coordinator.handleGate(
+    reply("Use the linkedin skill to research these ClickITCRM contacts."),
+    OWNER_CTX,
+  );
+  assert.equal(gate.reason, "skill_selected_executed");
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id), ["linkedin"]);
+});
+
+test("ACCEPTANCE 9g: a skill name after generic 'in' remains context, not an invocation", async () => {
+  const h = harness({
+    catalog: [
+      { id: "clickitcrm", version: "1", fingerprint: "crm-fp", description: "CRM contacts" },
+      { id: "linkedin", version: "1", fingerprint: "li-fp", description: "LinkedIn research" },
+    ],
+    classifier: {
+      enabled: true,
+      classify: async () => ({ status: "resolved", skillId: "clickitcrm", confidence: 0.99 }),
+    },
+    planFor: (req) => ({
+      status: "selected",
+      planned_skills: req.plannedSkills,
+      strategy: "lowest_cost",
+      selected_lineage: "google/gemini-flash",
+      selected_model_ref: "google/gemini-3.5-flash",
+      estimated_tokens: 4000,
+      choices: [{ kind: "lowest_cost", estimated_cost_usd: 0.002 }],
+    }),
+  });
+  const gate = await h.coordinator.handleGate(
+    reply("Add these people to ClickITCRM; I originally found them in LinkedIn."),
+    OWNER_CTX,
+  );
+  assert.equal(gate.reason, "skill_selected_executed");
+  assert.deepEqual(h.planCalls[0].plannedSkills.map((skill) => skill.id), ["clickitcrm"]);
+});
+
 test("ACCEPTANCE 10: a resolved skill whose route can't be planned FAILS LOUD, never runs inline", async () => {
   // A SAFE skill (no meeting contract to gate it) so the turn reaches the planner
   // and exercises the plan-failure path.

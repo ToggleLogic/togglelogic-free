@@ -1087,6 +1087,45 @@ export function createSkillRoutingCoordinator({
       }
     }
 
+    // Exact installed-skill names are useful evidence, but a name appearing in
+    // pasted source data is not by itself an instruction to run that skill.
+    // Example: a CRM import may contain "LinkedIn" in every source row while
+    // the requested action is only to add contacts to ClickITCRM. Recipes get
+    // first refusal above because they are deployment-owned deterministic
+    // workflows. Without a matching recipe, retain only skills named through a
+    // real invocation cue ("use/run ..."); otherwise let the bounded local
+    // classifier resolve the task from its action and verified catalog. This
+    // closes the gap where the resolver identified incidental mentions but the
+    // coordinator still executed them as requested skills.
+    if (
+      resolved.status === "resolved" &&
+      resolved.source === "deterministic_resolver" &&
+      resolved.resolution?.reason === "exact_installed_skill_reference"
+    ) {
+      const explicitIds = resolved.resolution.explicitlyInvokedIds || [];
+      if (explicitIds.length > 0) {
+        const explicitSet = new Set(explicitIds);
+        const explicitSkills = resolved.skills.filter((skill) => explicitSet.has(skill.id));
+        resolved = {
+          status: "resolved",
+          skills: explicitSkills,
+          source: "explicit_skill_invocation",
+          resolution: { ...resolved.resolution, reason: "explicit_skill_invocation" },
+        };
+      } else {
+        resolved = {
+          status: "none",
+          skills: [],
+          source: "deterministic_resolver",
+          resolution: {
+            ...resolved.resolution,
+            reason: "incidental_installed_skill_mentions",
+            incidentalIds: resolved.resolution.matchedIds || [],
+          },
+        };
+      }
+    }
+
     if (resolved.status !== "resolved" || resolved.skills.length === 0) {
       // No active installed skill relates to this request (deterministically).
       if (!active) return null; // out-of-scope/shadow: prior safe passthrough behavior
