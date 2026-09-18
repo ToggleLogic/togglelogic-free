@@ -249,7 +249,7 @@ function reply(text) { return { prompt: text, cleanedBody: text }; }
 
 test("GATE: past 2 PM meeting on microsoft-graph CLARIFIES before the planner or any model", async () => {
   const h = harness({ now: PAST_NOW, planFor: () => selectedPlan("microsoft-graph") });
-  const gate = await h.coordinator.handleGate(reply("Prep me for my 2 pm meeting in Outlook."), OWNER_CTX);
+  const gate = await h.coordinator.handleGate(reply("Using microsoft-graph, prep me for my 2 pm meeting in Outlook."), OWNER_CTX);
   assert.equal(gate.handled, true);
   assert.equal(gate.reason, "skill_contract_clarify");
   assert.match(gate.reply.text, /past|Outlook|upcoming|debrief/i);
@@ -259,7 +259,7 @@ test("GATE: past 2 PM meeting on microsoft-graph CLARIFIES before the planner or
 
 test("GATE: future 2 PM meeting with NO Outlook event CLARIFIES (never fabricates)", async () => {
   const h = harness({ now: FUTURE_NOW, calendarPort: { findEvent: async () => null }, planFor: () => selectedPlan("microsoft-graph") });
-  const gate = await h.coordinator.handleGate(reply("Prep me for my 2 pm meeting in Outlook."), OWNER_CTX);
+  const gate = await h.coordinator.handleGate(reply("Using microsoft-graph, prep me for my 2 pm meeting in Outlook."), OWNER_CTX);
   assert.equal(gate.handled, true);
   assert.equal(gate.reason, "skill_contract_clarify");
   assert.match(gate.reply.text, /can't find|Outlook/i);
@@ -273,7 +273,7 @@ test("GATE: future 2 PM meeting with a UNIQUE Outlook event PROCEEDS to the boun
     calendarPort: { findEvent: async () => ({ id: "evt-1", subject: "Board sync" }) },
     planFor: () => selectedPlan("microsoft-graph"),
   });
-  const gate = await h.coordinator.handleGate(reply("Prep me for my 2 pm meeting in Outlook."), OWNER_CTX);
+  const gate = await h.coordinator.handleGate(reply("Using microsoft-graph, prep me for my 2 pm meeting in Outlook."), OWNER_CTX);
   assert.equal(gate.handled, true);
   assert.equal(gate.reason, "skill_selected_executed");
   assert.match(gate.reply.text, /BOUNDED CHILD RESULT/);
@@ -338,7 +338,7 @@ test("GATE canary A: ordinary prep of a PAST 2 PM meeting still CLARIFIES before
     calendarPort: { findEvent: async () => ({ id: "evt-1" }) }, // the 2 PM event existed
     planFor: () => selectedPlan("microsoft-graph"),
   });
-  const gate = await h.coordinator.handleGate(reply("Prep me for my 2 pm meeting in Outlook."), OWNER_CTX);
+  const gate = await h.coordinator.handleGate(reply("Using microsoft-graph, prep me for my 2 pm meeting in Outlook."), OWNER_CTX);
   assert.equal(gate.handled, true);
   assert.equal(gate.reason, "skill_contract_clarify");
   assert.equal(gate.audit.contract_reason, "past_meeting_reference");

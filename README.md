@@ -32,7 +32,7 @@ you configure in OpenClaw.
 - **Optional model-family aliases.** Name a family for a configured route and
   resolve it only within providers you have approved. Resolution safely passes
   through when freshness, provider, or price requirements are not satisfied.
-- **Skill-aware routing (1.7.1).** A guaranteed pre-execution gate
+- **Skill-aware routing (1.7.2).** A guaranteed pre-execution gate
   (`before_agent_reply`, host-enforced user turns only) resolves the skills a
   message references DETERMINISTICALLY from the deployment's installed-skill
   catalog, then — for an in-scope owner turn — presents distinct Economy,
@@ -134,7 +134,7 @@ Enable routing (opt-in) in `~/.openclaw/openclaw.json`:
 Bring your own provider credentials. Set your routing policy. The evidence stays
 local.
 
-### Skill-aware routing (1.7.1)
+### Skill-aware routing (1.7.2)
 
 This capability is opt-in and requires a compatible ToggleLogic Intelligence
 1.7 marketplace planner.
@@ -407,7 +407,8 @@ family name.
 
 ### Ordered fallback families
 
-Version 1.5.1 extends the durable-family rule to the host's ordered model chain.
+Version 1.5.2 preserves the durable-family rule across skill routing and the
+host's ordered model chain.
 A deployment may add `acceptedModels` to each alias and declare
 `familyResolution.hostPlan` with one primary alias plus ordered fallback
 aliases. ToggleLogic resolves the complete plan and audits whether it matches
