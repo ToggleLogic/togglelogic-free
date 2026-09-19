@@ -114,6 +114,14 @@ function formatApprovalConfirmation(item, presentation = {}) {
   );
 }
 
+function formatExpiredApproval() {
+  return (
+    "That approval window expired before confirmation was completed. " +
+    "I did not run the task or reinterpret your reply as a new request. " +
+    "Please resend the original request when you are ready."
+  );
+}
+
 function isLocalProvider(provider, ref) {
   return provider === "ollama" || (typeof ref === "string" && ref.startsWith("ollama/"));
 }
@@ -146,10 +154,12 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
   const cfg = config || {};
   const pending = new Map();
   const receipts = new Map();
-  const ttlMs = Math.max(60_000, Number(cfg.ttlMinutes || 10) * 60_000);
+  const ttlMs = Math.max(60_000, Number(cfg.ttlMinutes || 30) * 60_000);
+  const expiredNoticeTtlMs = Math.max(ttlMs, 60 * 60_000);
   const receiptLimit = 512;
   const statePath = resolveOpenClawPath(cfg.statePath || "~/.openclaw/togglelogic/governed-escalation.json");
   const localRef = cfg.localModel || "";
+  const receiptMode = cfg.receiptMode === "always" ? "always" : "escalations-only";
   const localTiers = new Set(Array.isArray(cfg.localTiers) ? cfg.localTiers : ["general_purpose"]);
   const approvalTiers = new Set(Array.isArray(cfg.approvalTiers) ? cfg.approvalTiers : ["flagship_reasoning"]);
   const affirmativePhrases = phraseSet(cfg.approvalLanguage?.affirmative, DEFAULT_AFFIRMATIVE_PHRASES);
@@ -186,10 +196,17 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
   }
 
   function prune() {
-    const cutoff = now() - ttlMs;
+    const current = now();
+    const cutoff = current - ttlMs;
+    const expiredCutoff = current - expiredNoticeTtlMs;
     let changed = false;
     for (const [key, value] of pending) {
-      if (value.createdAt < cutoff) {
+      const activityAt = Number.isFinite(value.lastActivityAt) ? value.lastActivityAt : value.createdAt;
+      if (["awaiting", "confirming"].includes(value.status) && activityAt < cutoff) {
+        value.status = "expired";
+        value.expiredAt = current;
+        changed = true;
+      } else if (value.status === "expired" && value.expiredAt < expiredCutoff) {
         pending.delete(key);
         changed = true;
       }
@@ -215,12 +232,20 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     const key = keyOf(ctx);
     const item = key ? pending.get(key) : null;
     if (!item) return null;
+    const decisionPhrase = normalizeDecisionPhrase(prompt);
+    if (item.status === "expired") {
+      if (affirmativePhrases.has(decisionPhrase) || negativePhrases.has(decisionPhrase)) {
+        return { action: "expired", shortCircuit: true, override: splitRef(localRef), item };
+      }
+      pending.delete(key);
+      save();
+      return null;
+    }
     if (item.status === "consumed") {
       pending.delete(key);
       save();
       return null;
     }
-    const decisionPhrase = normalizeDecisionPhrase(prompt);
     if (item.status === "approved") {
       const currentRun = ctx?.runId || ctx?.turnId || null;
       const sameRun = Boolean(item.approvalRunId && currentRun && item.approvalRunId === currentRun);
@@ -248,6 +273,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     if (item.status === "confirming" && isYes) {
       item.status = "approved";
       item.approvedAt = now();
+      item.lastActivityAt = item.approvedAt;
       item.approvalDecision = decisionPhrase;
       item.approvalRunId = ctx?.runId || ctx?.turnId || null;
       save();
@@ -261,6 +287,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
 
     item.status = "confirming";
     item.confirmationRequestedAt ||= now();
+    item.lastActivityAt = now();
     item.interpretation = isYes ? "affirmative" : "uncertain";
     save();
     return { action: "confirmation_required", shortCircuit: true, override: splitRef(localRef), item };
@@ -389,6 +416,10 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     const key = keyOf(ctx);
     const receipt = key ? receipts.get(key) : null;
     if (!receipt || !receipt.ref || typeof event?.content !== "string") return;
+    if (receiptMode === "escalations-only" && receipt.approved !== true) {
+      clearReceipt(receipt);
+      return;
+    }
     if (hasReceipt(event.content)) {
       clearReceipt(receipt);
       return;
@@ -474,6 +505,12 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
 
     const key = event?.sessionKey || keyOf(ctx);
     const executionPendingItem = key ? pending.get(key) : null;
+    const governedExecution = executionPendingItem?.status === "approved" || executionPendingItem?.status === "consumed";
+    if (receiptMode === "escalations-only" && !governedExecution) {
+      const observed = correlationKeys(event, ctx).map((candidate) => receipts.get(candidate)).find(Boolean);
+      clearReceipt(observed);
+      return;
+    }
     const receipt = {
       ref,
       provider: usageState.provider || null,
@@ -481,7 +518,7 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
       input: Number.isFinite(usage.input) ? usage.input : null,
       output: Number.isFinite(usage.output) ? usage.output : null,
       local,
-      approved: executionPendingItem?.status === "approved" || executionPendingItem?.status === "consumed",
+      approved: governedExecution,
       actualCostUsd,
       priceSource,
     };
@@ -502,6 +539,11 @@ export function createApprovalGate({ config, pricing, now = () => Date.now() } =
     const item = pending.get(key);
     if (item?.status === "awaiting") return formatApprovalInvitation(item, presentation);
     if (item?.status === "confirming") return formatApprovalConfirmation(item, presentation);
+    if (item?.status === "expired") {
+      pending.delete(key);
+      save();
+      return formatExpiredApproval();
+    }
     if (item?.status === "denied") {
       pending.delete(key);
       save();
@@ -530,6 +572,7 @@ export const _internals = {
   formatReceipt,
   formatApprovalInvitation,
   formatApprovalConfirmation,
+  formatExpiredApproval,
   modelLabel,
   hasReceipt,
   correlationKeys,
