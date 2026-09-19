@@ -15,7 +15,7 @@ export const DEFAULTS = Object.freeze({
     summaryEveryCalls: 20,
   }),
   governedEscalation: Object.freeze({
-    localModel: "", localTiers: Object.freeze(["general_purpose"]), approvalTiers: Object.freeze(["flagship_reasoning"]), ttlMinutes: 10,
+    localModel: "", localTiers: Object.freeze(["general_purpose"]), approvalTiers: Object.freeze(["flagship_reasoning"]), ttlMinutes: 30, receiptMode: "escalations-only",
     statePath: "~/.openclaw/togglelogic/governed-escalation.json", externalDataNotice: "this request and active conversation context will be sent to the selected external provider",
     approvalLanguage: Object.freeze({ affirmative: Object.freeze(["yes"]), negative: Object.freeze(["no"]) }),
     displayNames: Object.freeze({ providers: Object.freeze({}), models: Object.freeze({}) }),
@@ -66,8 +66,9 @@ export function normalizeConfig(raw) {
     },
     governedEscalation: {
       localModel: str(escalation.localModel), localTiers: Array.isArray(escalation.localTiers) ? escalation.localTiers : [...DEFAULTS.governedEscalation.localTiers],
-      approvalTiers: Array.isArray(escalation.approvalTiers) ? escalation.approvalTiers : [...DEFAULTS.governedEscalation.approvalTiers], ttlMinutes: num(escalation.ttlMinutes, 10, 1),
+      approvalTiers: Array.isArray(escalation.approvalTiers) ? escalation.approvalTiers : [...DEFAULTS.governedEscalation.approvalTiers], ttlMinutes: num(escalation.ttlMinutes, 30, 1),
       statePath: str(escalation.statePath, DEFAULTS.governedEscalation.statePath), externalDataNotice: str(escalation.externalDataNotice, DEFAULTS.governedEscalation.externalDataNotice),
+      receiptMode: escalation.receiptMode === "always" ? "always" : "escalations-only",
       approvalLanguage: { affirmative: phrases(language.affirmative, ["yes"]), negative: phrases(language.negative, ["no"]) },
       displayNames: { providers: labels(names.providers), models: labels(names.models) },
     },

@@ -5,7 +5,7 @@ import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 import { registerCapabilities } from "./capabilities.js";
 import { shouldSkipRuntimeRegistration } from "./registration-mode.js";
 
-const PLUGIN_VERSION = "2.0.0";
+const PLUGIN_VERSION = "2.0.1";
 
 export default definePluginEntry({
   id: "togglelogic",

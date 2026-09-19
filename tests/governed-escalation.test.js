@@ -7,7 +7,7 @@ import path from "node:path";
 import { createApprovalGate, _internals } from "../src/governance/approval-gate.js";
 import { normalizeConfig } from "../src/config/normalize.js";
 
-function fixture(overrides = {}) {
+function fixture(overrides = {}, runtime = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "togglelogic-gate-"));
   const statePath = path.join(dir, "state.json");
   const pricing = {
@@ -41,7 +41,7 @@ function fixture(overrides = {}) {
     },
     ...overrides,
   };
-  return { dir, statePath, pricing, config, gate: createApprovalGate({ config, pricing }) };
+  return { dir, statePath, pricing, config, gate: createApprovalGate({ config, pricing, ...runtime }) };
 }
 
 test("ordinary work is routed to the configured local model without approval", async (t) => {
@@ -63,6 +63,24 @@ test("an Intelligence no-decision preserves the host model instead of forcing lo
   });
   assert.equal(result, null);
   assert.equal(f.gate.beforeAgentRun({}, { sessionKey: "no-decision" }).outcome, "pass");
+});
+
+test("ordinary conversation does not receive a governed-escalation receipt", async (t) => {
+  const f = fixture();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  const result = await f.gate.prepareReplyPayload({
+    kind: "final",
+    sessionKey: "conversation",
+    payload: { text: "A normal conversational answer." },
+    usageState: {
+      provider: "google",
+      model: "gemini-3.5-flash",
+      resolvedRef: "google/gemini-3.5-flash",
+      usage: { input: 100, output: 20 },
+      turnUsd: 0.001,
+    },
+  }, { sessionKey: "conversation" });
+  assert.equal(result, undefined);
 });
 
 test("external flagship work is blocked with an estimate, then resumes once after approval", async (t) => {
@@ -95,6 +113,38 @@ test("external flagship work is blocked with an estimate, then resumes once afte
   assert.match(f.gate.prepareTurn({}, { sessionKey: "s2" }).appendContext, /Synthesize multiple reports/);
   assert.equal(f.gate.beforeAgentRun({}, { sessionKey: "s2" }).outcome, "pass");
   assert.equal(f.gate.beforeRouting("Yes, proceed", { sessionKey: "s2" }), null, "one-time approval is consumed");
+});
+
+test("a delayed confirmation still resumes the original task inside the configured owner window", async (t) => {
+  let clock = 1_000_000;
+  const f = fixture({ ttlMinutes: 30 }, { now: () => clock });
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  await f.gate.afterRouting("Original strategic review", { sessionKey: "delayed" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  assert.equal(f.gate.beforeRouting("Approved", { sessionKey: "delayed" }).action, "confirmation_required");
+  clock += 14.5 * 60_000;
+  assert.equal(f.gate.beforeRouting("Yes", { sessionKey: "delayed" }).action, "approved");
+  assert.match(f.gate.prepareTurn({}, { sessionKey: "delayed" }).appendContext, /Original strategic review/);
+});
+
+test("an expired approval reply is intercepted and never becomes a new model request", async (t) => {
+  let clock = 1_000_000;
+  const f = fixture({ ttlMinutes: 10 }, { now: () => clock });
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  await f.gate.afterRouting("Original hard task", { sessionKey: "expired" }, {
+    selectedProvider: "anthropic",
+    selectedModel: "claude-sonnet-4-6",
+    selectionDetails: { required_tier: "flagship_reasoning" },
+  });
+  clock += 11 * 60_000;
+  const result = f.gate.beforeRouting("Approved", { sessionKey: "expired" });
+  assert.equal(result.action, "expired");
+  assert.equal(result.shortCircuit, true);
+  assert.match(f.gate.pendingInvitation({ sessionKey: "expired" }), /approval window expired/i);
+  assert.equal(f.gate._pending.has("expired"), false);
 });
 
 test("an interrupted approval cannot attach itself to a later unrelated turn", async (t) => {
@@ -264,6 +314,12 @@ test("governed presentation policy normalizes from deployment configuration", ()
   assert.deepEqual(config.displayNames.models, { "vendor/model": "Capable Model" });
 });
 
+test("governed escalation defaults to a practical approval window and quiet conversation receipts", () => {
+  const config = normalizeConfig({}).governedEscalation;
+  assert.equal(config.ttlMinutes, 30);
+  assert.equal(config.receiptMode, "escalations-only");
+});
+
 test("a phrase configured in both decision lists fails closed as denial", async (t) => {
   const f = fixture({
     approvalLanguage: { affirmative: ["continue"], negative: ["continue"] },
@@ -354,7 +410,7 @@ test("denial blocks the run and prevents external submission", async (t) => {
 });
 
 test("execution receipt reports actual runtime model, location, usage, and cost", async (t) => {
-  const f = fixture();
+  const f = fixture({ receiptMode: "always" });
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
   await f.gate.observeOutput({
     runId: "r5",
@@ -401,7 +457,7 @@ test("real and uncertain fallback notices are preserved", async (t) => {
 });
 
 test("delivery-time runtime evidence adds one local execution receipt", async (t) => {
-  const f = fixture();
+  const f = fixture({ receiptMode: "always" });
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
   const event = {
     kind: "final",
@@ -464,7 +520,7 @@ test("delivery receipt records one-time approval and runtime external cost", asy
 });
 
 test("OpenClaw 2026.9.4 dual-hook delivery emits one receipt and drains correlation state", async (t) => {
-  const f = fixture();
+  const f = fixture({ receiptMode: "always" });
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
   const ctx = { sessionKey: "s10", runId: "r10" };
   await f.gate.observeOutput({
@@ -496,7 +552,7 @@ test("OpenClaw 2026.9.4 dual-hook delivery emits one receipt and drains correlat
 });
 
 test("public catalog pricing is labeled as an estimate, never actual provider billing", async (t) => {
-  const f = fixture();
+  const f = fixture({ receiptMode: "always" });
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
   const result = await f.gate.prepareReplyPayload({
     kind: "final",
@@ -515,7 +571,7 @@ test("public catalog pricing is labeled as an estimate, never actual provider bi
 });
 
 test("external runtime zero with positive usage falls back to a labeled estimate", async (t) => {
-  const f = fixture();
+  const f = fixture({ receiptMode: "always" });
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
   const result = await f.gate.prepareReplyPayload({
     kind: "final",
@@ -541,7 +597,7 @@ test("tiny positive external costs never render as zero", () => {
 });
 
 test("unavailable external pricing is explicit and never represented as zero", async (t) => {
-  const f = fixture();
+  const f = fixture({ receiptMode: "always" });
   t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
   const gate = createApprovalGate({
     config: f.config,

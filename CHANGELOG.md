@@ -28,3 +28,8 @@ The 1.7.x changelog described application workflow improvements as ToggleLogic
 Free capabilities. That description blurred the product boundary. Those changes
 belonged to the consuming assistant layer. They are not capabilities of the Free
 product and are not included in the 2.0.0 package.
+# 2.0.1 (2026-09-19)
+
+- Keep governed model approvals bound to their original request for a practical 30-minute default window.
+- Fail closed when a late approval arrives after expiry, instead of allowing the bare approval to become a new model request.
+- Default cost receipts to governed escalations only; ordinary conversation remains conversational. Deployments may restore the former behavior with `governedEscalation.receiptMode: "always"`.
