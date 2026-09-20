@@ -105,7 +105,7 @@ export async function createAdapter({
       // classifier can resolve each lane's runtime/surface. Optional: the engine
       // falls back to documented defaults when no context is supplied.
       const routeGeneralPurposeOnMiss = typeof consumeNewSession === "function"
-        ? consumeNewSession(request?.hookContext)
+        ? await consumeNewSession(request?.hookContext)
         : false;
       const context = {
         ...(runtimeConfig ? { runtimeConfig } : {}),

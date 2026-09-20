@@ -1,7 +1,7 @@
 {
   "id": "togglelogic",
   "name": "ToggleLogic",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Generic model routing, approvals, audit records, and cost visibility for OpenClaw. ToggleLogic Free includes no assistant, memory, skills, or business workflow policy.",
   "activation": { "onStartup": true },
   "enabledByDefault": true,

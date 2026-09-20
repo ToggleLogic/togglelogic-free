@@ -11,6 +11,8 @@ import path from "node:path";
 
 const DEFAULT_MAX_PENDING = 512;
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_SETTLE_MS = 250;
+const DEFAULT_POLL_MS = 10;
 
 function normalize(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -38,15 +40,24 @@ function defaultStateDir() {
 export function createNewSessionTracker({
   maxPending = DEFAULT_MAX_PENDING,
   ttlMs = DEFAULT_TTL_MS,
+  settleMs = DEFAULT_SETTLE_MS,
+  pollMs = DEFAULT_POLL_MS,
   stateDir = defaultStateDir(),
 } = {}) {
   const pending = new Map();
+  const observed = new Set();
   const boundedMax = Number.isFinite(maxPending) && maxPending > 0
     ? Math.floor(maxPending)
     : DEFAULT_MAX_PENDING;
   const boundedTtl = Number.isFinite(ttlMs) && ttlMs > 0
     ? Math.floor(ttlMs)
     : DEFAULT_TTL_MS;
+  const boundedSettle = Number.isFinite(settleMs) && settleMs >= 0
+    ? Math.floor(settleMs)
+    : DEFAULT_SETTLE_MS;
+  const boundedPoll = Number.isFinite(pollMs) && pollMs > 0
+    ? Math.floor(pollMs)
+    : DEFAULT_POLL_MS;
 
   function markerPath(hash) {
     return path.join(stateDir, `${hash}.json`);
@@ -124,8 +135,7 @@ export function createNewSessionTracker({
     prune();
   }
 
-  function consume(value) {
-    const ids = identifiers(value);
+  function consumeAvailable(ids) {
     const matched = ids.map((id) => pending.get(id)).find(Boolean);
     if (matched) {
       for (const [id, entry] of pending) {
@@ -134,6 +144,46 @@ export function createNewSessionTracker({
     }
     const diskMatched = consumeDisk(ids);
     return Boolean(diskMatched || (matched && !matched.durable));
+  }
+
+  function remember(ids) {
+    for (const id of ids) observed.add(id);
+    while (observed.size > boundedMax * 2) {
+      observed.delete(observed.values().next().value);
+    }
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function consume(value) {
+    const ids = identifiers(value);
+    if (!ids.length) return false;
+
+    // OpenClaw emits session_start on an independent continuation. On a new
+    // session its marker can therefore land just after before_model_resolve.
+    // Wait only for an identifier this plugin process has never routed before;
+    // established sessions remain synchronous in practice.
+    const alreadyObserved = ids.some((id) => observed.has(id));
+    if (alreadyObserved) {
+      consumeAvailable(ids); // discard a late marker; it no longer means first turn
+      remember(ids);
+      return false;
+    }
+
+    const deadline = Date.now() + boundedSettle;
+    do {
+      if (consumeAvailable(ids)) {
+        remember(ids);
+        return true;
+      }
+      if (Date.now() >= deadline) break;
+      await delay(Math.min(boundedPoll, Math.max(1, deadline - Date.now())));
+    } while (true);
+
+    remember(ids);
+    return false;
   }
 
   return { mark, consume };
