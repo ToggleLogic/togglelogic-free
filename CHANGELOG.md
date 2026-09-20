@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.2 — 2026-09-20
+
+- Eliminate an OpenClaw lifecycle race that could let a brand-new session reach
+  model resolution before its `session_start` signal was visible to routing.
+- Apply a bounded settling window only on the first routing observation of a
+  session; established sessions continue without the delay.
+- Discard late lifecycle markers after a session has already been observed so a
+  later turn cannot be mistaken for the first turn.
+
 ## 2.0.0 — 2026-09-18
 
 This release restores the canonical ToggleLogic Free product boundary.
