@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.3 — 2026-09-26
+
+- Honor an explicit model choice. When the host resolves a request to a model
+  other than the agent's configured default — a one-off `--model`, a `/model`
+  selection held in the host's session state, or a host fallback attempt —
+  ToggleLogic Free now passes it through (`selectionReason: "request_selection"`)
+  instead of silently replacing it with its routing default.
+- Fixes user `/model` selections being overridden on OpenClaw releases that store
+  sessions in SQLite, where the legacy `sessions/sessions.json` no longer exists.
+- Owner overrides still take precedence. Requests on the host default route as before.
+
 ## 2.0.2 — 2026-09-20
 
 - Eliminate an OpenClaw lifecycle race that could let a brand-new session reach
