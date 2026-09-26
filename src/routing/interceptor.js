@@ -16,6 +16,31 @@ function selection(provider, model) {
   return { provider: p, model: m, ref: p ? `${p}/${m}` : m };
 }
 
+
+// 2.0.3: the model the host resolved for this request, compared against the
+// host's configured default for the agent. A difference means the model was
+// chosen for this request or session (a one-off --model, a /model selection now
+// held in the host's SQLite session state, or a host fallback attempt). That
+// choice is honored rather than silently replaced by a routing default.
+function modelRef(value) {
+  if (typeof value === "string") return clean(value);
+  if (value && typeof value === "object") return clean(value.primary);
+  return null;
+}
+export function hostDefaultModelRef(hostConfig, agentId) {
+  const agents = hostConfig?.agents;
+  const id = clean(agentId) || "main";
+  const entry = Array.isArray(agents?.list) ? agents.list.find((a) => clean(a?.id) === id) : null;
+  return modelRef(entry?.model) || modelRef(agents?.defaults?.model);
+}
+export function isRequestSelection(current, defaultRef) {
+  if (!current?.model || !defaultRef) return false;
+  const def = selection(null, defaultRef);
+  if (!def?.model) return false;
+  if (current.model.toLowerCase() !== def.model.toLowerCase()) return true;
+  return Boolean(current.provider && def.provider && current.provider.toLowerCase() !== def.provider.toLowerCase());
+}
+
 export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null }) {
   const recent = new Map();
   const preflight = new Map();
@@ -51,6 +76,15 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     if (current && sessionLookup?.status === "found" && isProtectedUserSessionSelection(sessionLookup.entry)) {
       decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "user_selection"; decision.selectionDetails = { matched_rule: "user_selection_precedence" };
       finalizeDecision(decision); logger.write(decision).catch(() => {}); return PASSTHROUGH;
+    }
+
+    const hostDefault = hostDefaultModelRef(hostConfig, context?.agentId);
+    if (isRequestSelection(current, hostDefault)) {
+      decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "request_selection";
+      decision.selectionDetails = { matched_rule: "request_selection_precedence", host_default: hostDefault };
+      finalizeDecision(decision); logger.write(decision).catch(() => {});
+      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, subject: { hook: "before_model_resolve" }, details: { mode: "request_selection", selectedModel: current.ref }, correlationId: decision.requestId });
+      return PASSTHROUGH;
     }
 
     const key = fingerprint(event, context);
