@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.4 — 2026-09-26
+
+- Correct the runtime version label: 2.0.3 reported itself as 2.0.2 in routing
+  and audit records. No behavior change from 2.0.3.
+- Add a release guard test so the runtime version must match package.json.
+
 ## 2.0.3 — 2026-09-26
 
 - Honor an explicit model choice. When the host resolves a request to a model
