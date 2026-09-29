@@ -1,3 +1,10 @@
+/*
+ * ToggleLogic (Free Tier) — routing request correlation.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
+
 // Per-registration, bounded correlation state. Never guess from a session alone:
 // overlapping or later turns in the same session must not inherit another ID.
 const clean = (value) => typeof value === "string" && value.trim() ? value.trim() : null;
