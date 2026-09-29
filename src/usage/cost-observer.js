@@ -19,7 +19,7 @@ import { hostname } from "node:os";
 function num(x) { const n = Number(x); return Number.isFinite(n) ? n : 0; }
 function round6(n) { return Math.round((Number(n) || 0) * 1e6) / 1e6; }
 
-export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
+export function createCostObserver({ config, fallbackLogger, requestCorrelation = null, deps = {} } = {}) {
   const cv = config.costVisibility;
   const now = deps.now ?? (() => Date.now());
   const pricing = deps.pricing ?? createPricing(cv.pricing, fallbackLogger, deps);
@@ -57,6 +57,8 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
       costLog.write({
         schema: "togglelogic.fleet-usage.v1",
         kind: "summary",
+        requestId: null,
+        requestIdReason: "aggregate-summary",
         ts: new Date(now()).toISOString(),
         deploymentId,
         costCenter,
@@ -71,8 +73,12 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
    * void-typed; nothing it returns can affect the call). Never throws into the
    * gateway; a pricing/logging failure is swallowed.
    */
-  async function handler(event) {
+  async function handler(event, context) {
     try {
+      // Capture before pricing awaits: another routing hook may run meanwhile.
+      const correlation = requestCorrelation?.lookup(event, context) ?? {
+        requestId: null, requestIdReason: "routing-correlation-unavailable",
+      };
       const ref = refOf(event);
       const usage = (event && event.usage) || {};
       const inTok = num(usage.input);
@@ -111,6 +117,7 @@ export function createCostObserver({ config, fallbackLogger, deps = {} } = {}) {
       const row = {
         schema: "togglelogic.fleet-usage.v1",
         kind: "call",
+        ...correlation,
         ts: new Date(now()).toISOString(),
         deploymentId,
         costCenter,

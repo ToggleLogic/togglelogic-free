@@ -41,22 +41,30 @@ export function isRequestSelection(current, defaultRef) {
   return Boolean(current.provider && def.provider && current.provider.toLowerCase() !== def.provider.toLowerCase());
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null }) {
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null }) {
   const recent = new Map();
   const preflight = new Map();
   const windowMs = 60_000;
   const fingerprint = (event, context) => clean(event?.prompt) && clean(context?.sessionKey)
     ? crypto.createHash("sha256").update(`${context.sessionKey}\0${event.prompt}`).digest("hex") : null;
 
-  const beforeModelResolve = async function beforeModelResolve(event = {}, context = {}) {
+  const beforeModelResolve = async function beforeModelResolve(event = {}, context = {}, preflightResult = null) {
     const preflightKey = fingerprint(event, context);
     const cached = preflightKey ? preflight.get(preflightKey) : null;
     if (cached && Date.now() - cached.at <= windowMs) {
       preflight.delete(preflightKey);
+      requestCorrelation?.remember(cached.decision, event, context);
+      if (preflightResult) preflightResult.decision = cached.decision;
       return cached.override;
     }
     if (preflightKey) preflight.delete(preflightKey);
     const decision = newDecision({ event, hookContext: context, mode: config.mode, version });
+    const recordDecision = () => {
+      finalizeDecision(decision);
+      requestCorrelation?.remember(decision, event, context);
+      if (preflightResult) preflightResult.decision = decision;
+      logger.write(decision).catch(() => {});
+    };
     emit(audit, EVENTS.ROUTING_HOOK_FIRE, { outcome: OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: config.mode }, correlationId: decision.requestId });
 
     const governedPrior = governedEscalation?.beforeRouting(event?.prompt, context);
@@ -66,7 +74,7 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     if (owner.applied) {
       const override = { modelOverride: owner.modelOverride, ...(owner.providerOverride ? { providerOverride: owner.providerOverride } : {}) };
       decision.selectedModel = owner.modelRef; decision.selectedProvider = owner.providerOverride || null; decision.selectionReason = "owner_override"; decision.selectionDetails = { matched_rule: "owner_override" };
-      finalizeDecision(decision); logger.write(decision).catch(() => {});
+      recordDecision();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.SUCCESS, principal: { source: "owner" }, subject: { hook: "before_model_resolve" }, details: { mode: "owner_override", selectedModel: owner.modelRef }, correlationId: decision.requestId });
       return override;
     }
@@ -75,14 +83,14 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     const current = selection(context?.modelProviderId, context?.modelId);
     if (current && sessionLookup?.status === "found" && isProtectedUserSessionSelection(sessionLookup.entry)) {
       decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "user_selection"; decision.selectionDetails = { matched_rule: "user_selection_precedence" };
-      finalizeDecision(decision); logger.write(decision).catch(() => {}); return PASSTHROUGH;
+      recordDecision(); return PASSTHROUGH;
     }
 
     const hostDefault = hostDefaultModelRef(hostConfig, context?.agentId);
     if (isRequestSelection(current, hostDefault)) {
       decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "request_selection";
       decision.selectionDetails = { matched_rule: "request_selection_precedence", host_default: hostDefault };
-      finalizeDecision(decision); logger.write(decision).catch(() => {});
+      recordDecision();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, subject: { hook: "before_model_resolve" }, details: { mode: "request_selection", selectedModel: current.ref }, correlationId: decision.requestId });
       return PASSTHROUGH;
     }
@@ -105,20 +113,21 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       decision.selectionReason = "fallback"; decision.selectionDetails = { error: String(error?.message || error), fallbackOnError: config.intelligence.fallbackOnError };
       if (!config.intelligence.fallbackOnError) throw error;
     }
-    finalizeDecision(decision); logger.write(decision).catch(() => {});
+    recordDecision();
     emit(audit, EVENTS.ROUTING_DECISION, { outcome: override === PASSTHROUGH ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
     return override;
   };
 
   beforeModelResolve.preflight = async (event = {}, context = {}) => {
     const key = fingerprint(event, context);
-    const override = await beforeModelResolve(event, context);
+    const result = {};
+    const override = await beforeModelResolve(event, context, result);
     const invitation = governedEscalation?.pendingInvitation(context);
     if (invitation) {
       if (key) recent.delete(key);
       return { handled: true, reply: { text: invitation }, reason: "togglelogic_owner_approval_required" };
     }
-    if (key) preflight.set(key, { override, at: Date.now() });
+    if (key) preflight.set(key, { override, decision: result.decision, at: Date.now() });
     return { handled: false };
   };
 
