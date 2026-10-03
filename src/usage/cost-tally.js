@@ -6,16 +6,12 @@
  *
  * Accumulates per-model dollar cost and a per-day total from observed usage.
  * The load-bearing invariant: unpriced calls are tracked SEPARATELY and shown
- * LOUDLY (model + token count) — they are never rolled into the dollar total as
+ * LOUDLY (model + call count) — they are never rolled into the dollar total as
  * $0.00, and a day that is entirely unpriced never reads as "no spend."
  */
 
 function dayOf(ts) {
-  const d = new Date(ts);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+  return new Date(ts).toISOString().slice(0, 10);
 }
 
 function round(n, dp = 6) {
@@ -30,7 +26,7 @@ export function createTally(deps = {}) {
   function dayBucket(day) {
     let b = days.get(day);
     if (!b) {
-      b = { pricedUsd: 0, callsPriced: 0, perModel: new Map(), unpriced: { calls: 0, tokens: 0, models: new Map() } };
+      b = { pricedUsd: 0, callsPriced: 0, perModel: new Map(), unpriced: { calls: 0, tokens: 0, models: new Map() }, usageMissing: { calls: 0, models: new Map() } };
       days.set(day, b);
     }
     return b;
@@ -57,6 +53,11 @@ export function createTally(deps = {}) {
       pm.inputTok += entry.inputTok || 0;
       pm.outputTok += entry.outputTok || 0;
       b.perModel.set(ref, pm);
+    } else if (entry.usageMissing) {
+      b.usageMissing.calls += 1;
+      const model = b.usageMissing.models.get(ref) || { ref, provider: entry.provider, calls: 0 };
+      model.calls += 1;
+      b.usageMissing.models.set(ref, model);
     } else {
       b.unpriced.calls += 1;
       b.unpriced.tokens += tokens;
@@ -68,7 +69,7 @@ export function createTally(deps = {}) {
   }
 
   function summarize(day = dayOf(now())) {
-    const b = days.get(day) || { pricedUsd: 0, callsPriced: 0, perModel: new Map(), unpriced: { calls: 0, tokens: 0, models: new Map() } };
+    const b = days.get(day) || { pricedUsd: 0, callsPriced: 0, perModel: new Map(), unpriced: { calls: 0, tokens: 0, models: new Map() }, usageMissing: { calls: 0, models: new Map() } };
     return {
       day,
       pricedUsd: round(b.pricedUsd),
@@ -76,6 +77,7 @@ export function createTally(deps = {}) {
       perModel: [...b.perModel.values()]
         .map((m) => ({ ...m, costUsd: round(m.costUsd) }))
         .sort((a, z) => z.costUsd - a.costUsd),
+      usageMissing: { calls: b.usageMissing.calls, models: [...b.usageMissing.models.values()] },
       unpriced: {
         calls: b.unpriced.calls,
         tokens: b.unpriced.tokens,
@@ -93,9 +95,14 @@ export function createTally(deps = {}) {
     let line = `ToggleLogic cost — ${sum.day}: $${sum.pricedUsd.toFixed(4)} across ${sum.callsPriced} priced call(s)`;
     if (top) line += ` (top: ${top})`;
     if (sum.unpriced.calls > 0) {
-      const models = sum.unpriced.models.map((m) => `${m.ref}(${m.tokens}t)`).join(", ");
-      line += `  ·  ⚠️ UNPRICED: ${sum.unpriced.calls} call(s) / ${sum.unpriced.tokens} tokens from ${models} — not in the curated free-tier price set, so NOT counted in the $ total (upgrade for all-model coverage).`;
-    } else {
+      const models = sum.unpriced.models.map((m) => `${m.ref}(${m.calls} calls)`).join(", ");
+      line += `  ·  ⚠️ UNPRICED: ${sum.unpriced.calls} call(s) from ${models} — no price available; NOT counted in the $ total.`;
+    }
+    if (sum.usageMissing.calls > 0) {
+      const models = sum.usageMissing.models.map((m) => `${m.ref}(${m.calls} calls)`).join(", ");
+      line += `  ·  ⚠️ USAGE MISSING: ${sum.usageMissing.calls} call(s) from ${models} — priced model, no usage reported; NOT counted in the $ total.`;
+    }
+    if (sum.unpriced.calls === 0 && sum.usageMissing.calls === 0) {
       line += "  ·  all calls priced.";
     }
     return line;

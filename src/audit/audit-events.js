@@ -37,6 +37,10 @@ export const EVENTS = Object.freeze({
   FEATURE_GATE: "feature.gate",
   FALLBACK_PLAN_CHECK: "fallback.plan.check",
 
+  // --- Cost visibility ---
+  MODEL_UNPRICED: "model_unpriced",
+  USAGE_MISSING: "usage_missing",
+
   // --- Dispatch capability ---
   DISPATCH_HOOK_FIRE: "dispatch.hook.fire",
   // dispatch.tier1.ack records the Tier-1 acknowledgement decision and
@@ -99,6 +103,8 @@ export function controlsFor(event) {
     case EVENTS.FEATURE_GATE:
     case EVENTS.FALLBACK_PLAN_CHECK:
       return ["AU-2", "AU-3", "CM-2", "CM-6"];
+    case EVENTS.MODEL_UNPRICED:
+    case EVENTS.USAGE_MISSING:
     case EVENTS.DISPATCH_ESTIMATE:
       return ["AU-2", "AU-3", "AU-12"];
     case EVENTS.DISPATCH_HOOK_FIRE:
