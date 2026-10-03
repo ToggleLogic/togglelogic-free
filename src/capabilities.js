@@ -57,7 +57,7 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
   } else mark("ownerOverrideAsk", false, "disabled");
 
   if (config.features.costVisibility.enabled) {
-    api.on("llm_output", createCostObserver({ config, fallbackLogger, requestCorrelation }).handler, { priority: 50 });
+    api.on("llm_output", createCostObserver({ config, hostConfig: api?.config, audit, fallbackLogger, requestCorrelation }).handler, { priority: 50 });
     registered.push("costVisibility"); mark("costVisibility", true, "configured");
   } else mark("costVisibility", false, "disabled");
 
