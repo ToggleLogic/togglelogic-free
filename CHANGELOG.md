@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0 (unreleased)
+
+- TL-2: correlate cost-ledger calls with the routing requestId (also used as
+  audit correlationId) through host run/turn identity. Missing correlations
+  and aggregate summaries explicitly record requestId: null and requestIdReason.
+
 ## 2.0.4 — 2026-09-26
 
 - Correct the runtime version label: 2.0.3 reported itself as 2.0.2 in routing

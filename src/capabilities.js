@@ -1,3 +1,4 @@
+import { createRequestCorrelation } from "./routing/request-correlation.js";
 import { createInterceptor } from "./routing/interceptor.js";
 import { createIntelligenceSeam } from "./intelligence/seam.js";
 import { createLogger as createRoutingLogger } from "./observability/logger.js";
@@ -20,6 +21,7 @@ export function buildRuntimeConfigFromApiConfig(cfg) {
 }
 
 export function registerCapabilities({ api, audit, fallbackLogger, version, config }) {
+  const requestCorrelation = createRequestCorrelation();
   const registered = [];
   const gates = [];
   const mark = (id, enabled, reason) => gates.push({ id, enabled, reason });
@@ -30,7 +32,7 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
     const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, buildRuntimeConfigFromApiConfig(api?.config), version, newSessions.consume);
     const governed = config.features.governedEscalation.enabled
       ? createApprovalGate({ config: config.governedEscalation, pricing: createPricing(config.costVisibility.pricing, fallbackLogger) }) : null;
-    const interceptor = createInterceptor({ config, hostConfig: api?.config, logger: routingLogger, seam, version, audit, governedEscalation: governed });
+    const interceptor = createInterceptor({ config, hostConfig: api?.config, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation });
     api.on("session_start", (event, context) => newSessions.mark({ sessionId: event?.sessionId || context?.sessionId, sessionKey: event?.sessionKey || context?.sessionKey }));
     api.on("before_model_resolve", interceptor, { priority: 100 });
     if (governed) {
@@ -55,7 +57,7 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
   } else mark("ownerOverrideAsk", false, "disabled");
 
   if (config.features.costVisibility.enabled) {
-    api.on("llm_output", createCostObserver({ config, fallbackLogger }).handler, { priority: 50 });
+    api.on("llm_output", createCostObserver({ config, fallbackLogger, requestCorrelation }).handler, { priority: 50 });
     registered.push("costVisibility"); mark("costVisibility", true, "configured");
   } else mark("costVisibility", false, "disabled");
 
