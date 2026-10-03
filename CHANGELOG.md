@@ -2,6 +2,10 @@
 
 ## 2.1.0 (unreleased)
 
+- TL-7: Complete attributed call rows with lineage and price provenance, explicit
+  billable/invoice eligibility, offline monthly CSV/JSON exports and dollar
+  rollups, and restart-aware monthly budget threshold events with missing-cost counts.
+
 - TL-9: Emit deduplicated call-time cost events and matching audit records; distinguish priced, unpriced, and usage-missing summaries without coverage upsells. Daily summaries now use UTC day boundaries
   instead of host-local time; rename the unpriced reason `not-in-curated-free-set`
   to `outside-price-coverage`; take the ledger `provider` field from the host event.

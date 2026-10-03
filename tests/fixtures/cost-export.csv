@@ -1,0 +1,23 @@
+# ToggleLogic (Free Tier) — cost ledger export.
+# (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+# License (see LICENSE); all rights reserved.
+# PATENT PENDING.
+# month=2026-09; timezone=UTC; startInclusive=2026-09-01T00:00:00.000Z; endExclusive=2026-10-01T00:00:00.000Z
+# public-rate-estimates; priced spend excludes unpriced and usage-missing calls
+# retained ledger files only; older rotations may have expired
+# incomplete=true; filesRead=2; malformedRows=0; invalidTimestampRows=0
+# rows
+ts,kind,deploymentId,costCenter,provider,model,resolvedRef,lineage,lineageReason,inputTok,outputTok,cacheTok,cacheReadTok,cacheWriteTok,costUsd,priceSource,priceVersion,unpriced,usageMissing,requestId,billable,invoiceEligible,invoiceEligibleReason
+2026-09-01T00:00:00.000Z,call,deployment-a,team,example,model-v1,example/model-v1,example/model,,10,5,2,2,0,0.25,models.dev,12345,false,false,request-a,true,false,public-rate-estimate
+2026-09-02T00:00:00.000Z,call,deployment-a,team,example,model-v1,example/model-v1,example/model,,10,5,2,2,0,,models.dev,12345,false,true,request-b,false,false,usage-missing
+2026-09-03T00:00:00.000Z,call,deployment-b,team,remote,model,remote/model,remote/model,,10,5,2,2,0,,,,true,false,,false,false,unpriced
+2026-09-04T00:00:00.000Z,call,deployment-a,team-west,example,model-v1,example/model-v1,example/model,,10,5,2,2,0,0.5,models.dev,12345,false,false,request-c,false,false,not-billable-deployment
+2026-09-05T00:00:00.000Z,call,deployment-a,team,example,model-v1,example/model-v1,example/model,,10,5,2,2,0,0.1,models.dev,12345,false,false,request-d,true,true,
+2026-09-30T23:30:00.000Z,call,deployment-a,team,example,model-v2,example/model-v2,example/model,,10,5,2,2,0,0.2,models.dev,12345,false,false,request-e,true,false,public-rate-estimate
+# rollup (dollars)
+deploymentId,provider,lineage,calls,pricedUsd,unpricedCalls,usageMissingCalls,billableUsd
+deployment-a,example,example/model,5,1.05,0,1,0.55
+deployment-b,remote,remote/model,1,0,1,0,0
+# totals (dollars)
+calls,pricedUsd,unpricedCalls,usageMissingCalls,billableUsd
+6,1.05,1,1,0.55

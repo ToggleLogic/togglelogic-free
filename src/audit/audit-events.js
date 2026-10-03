@@ -40,6 +40,7 @@ export const EVENTS = Object.freeze({
   // --- Cost visibility ---
   MODEL_UNPRICED: "model_unpriced",
   USAGE_MISSING: "usage_missing",
+  BUDGET_THRESHOLD_CROSSED: "budget_threshold_crossed",
 
   // --- Dispatch capability ---
   DISPATCH_HOOK_FIRE: "dispatch.hook.fire",
@@ -105,6 +106,7 @@ export function controlsFor(event) {
       return ["AU-2", "AU-3", "CM-2", "CM-6"];
     case EVENTS.MODEL_UNPRICED:
     case EVENTS.USAGE_MISSING:
+    case EVENTS.BUDGET_THRESHOLD_CROSSED:
     case EVENTS.DISPATCH_ESTIMATE:
       return ["AU-2", "AU-3", "AU-12"];
     case EVENTS.DISPATCH_HOOK_FIRE:
