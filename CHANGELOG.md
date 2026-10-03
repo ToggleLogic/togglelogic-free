@@ -2,7 +2,9 @@
 
 ## 2.1.0 (unreleased)
 
-- TL-9: Emit deduplicated call-time cost events and matching audit records; distinguish priced, unpriced, and usage-missing summaries without coverage upsells.
+- TL-9: Emit deduplicated call-time cost events and matching audit records; distinguish priced, unpriced, and usage-missing summaries without coverage upsells. Daily summaries now use UTC day boundaries
+  instead of host-local time; rename the unpriced reason `not-in-curated-free-set`
+  to `outside-price-coverage`; take the ledger `provider` field from the host event.
 
 - TL-2: correlate cost-ledger calls with the routing requestId (also used as
   audit correlationId) through host run/turn identity. Missing correlations

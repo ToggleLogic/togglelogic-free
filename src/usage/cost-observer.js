@@ -181,10 +181,10 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
       tally.record({ ts, ref, provider, inputTok: inTok, outputTok: outTok, cacheTok,
         priced: costed, usageMissing: priced && !usageValid, costUsd: cost });
       if (row.unpriced && !isLocalProvider(provider, cv.localProviders, hostConfig)) {
-        await events.emit("model_unpriced", { ts, provider, model: event?.model, resolvedRef: ref,
+        void events.emit("model_unpriced", { ts, provider, model: event?.model, resolvedRef: ref,
           reason: row.reason, requestId: correlation.requestId });
       } else if (row.usageMissing) {
-        await events.emit("usage_missing", { ts, provider, model: event?.model, resolvedRef: ref,
+        void events.emit("usage_missing", { ts, provider, model: event?.model, resolvedRef: ref,
           calls: 1, requestId: correlation.requestId });
       }
 

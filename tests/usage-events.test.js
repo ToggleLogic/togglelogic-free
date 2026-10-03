@@ -29,12 +29,14 @@ function fixture({ priced = true, config = {}, hostConfig = {} } = {}) {
       eventLogger: { write: async (row) => events.push(row) },
       pricing: { resolve: async () => ({ priced, provider: "vendor" }), costUsd: () => 0.01 } },
   });
-  return { observer, rows, events, audit, time: (value) => { time = Date.parse(value); } };
+  return { observer, rows, events, audit, observe: async (...args) => {
+    await observer.handler(...args); await observer.events.flush();
+  }, time: (value) => { time = Date.parse(value); } };
 }
 
 test("model_unpriced: first remote call per ref per UTC day, including concurrent calls", async () => {
   const f = fixture({ priced: false });
-  await Promise.all(Array.from({ length: 20 }, () => f.observer.handler(call)));
+  await Promise.all(Array.from({ length: 20 }, () => f.observe(call)));
   assert.equal(f.events.length, 1);
   assert.deepEqual(f.events[0], { schema: "togglelogic.event.v1", ts: "2026-09-28T12:10:00.000Z",
     event: "model_unpriced", deploymentId: "test", costCenter: "team", requestId: "request-1",
@@ -42,10 +44,10 @@ test("model_unpriced: first remote call per ref per UTC day, including concurren
   assert.equal(f.audit[0].event, "model_unpriced");
   assert.deepEqual(f.audit[0].details, f.events[0]);
   assert.equal(f.audit[0].correlationId, "request-1");
-  f.time("2026-09-28T23:59:59Z"); await f.observer.handler(call);
+  f.time("2026-09-28T23:59:59Z"); await f.observe(call);
   assert.equal(f.events.length, 1);
-  f.time("2026-09-29T00:00:00Z"); await f.observer.handler(call);
-  await f.observer.handler({ ...call, model: "other" });
+  f.time("2026-09-29T00:00:00Z"); await f.observe(call);
+  await f.observe({ ...call, model: "other" });
   assert.equal(f.events.length, 3);
   assert.equal(f.rows.filter((row) => row.kind === "call").length, 23);
 });
@@ -53,7 +55,7 @@ test("model_unpriced: first remote call per ref per UTC day, including concurren
 test("usage_missing: repeated priced zero-usage refusals emit once per UTC hour, never unpriced", async () => {
   const f = fixture();
   // Regression fixture: 50 priced, zero-usage outputs in a single hour.
-  await Promise.all(Array.from({ length: 50 }, () => f.observer.handler(call)));
+  await Promise.all(Array.from({ length: 50 }, () => f.observe(call)));
   assert.equal(f.events.length, 1);
   assert.equal(f.events[0].event, "usage_missing");
   assert.equal(f.events[0].calls, 1); // count at first emission, not a later burst total
@@ -66,9 +68,9 @@ test("usage_missing: repeated priced zero-usage refusals emit once per UTC hour,
   const line = f.observer.tally.loudLine(sum);
   assert.match(line, /USAGE MISSING: 50 call\(s\).*priced model, no usage reported/);
   assert.doesNotMatch(line, /UNPRICED|upgrade|curated|tokens|all calls priced/i);
-  f.time("2026-09-28T12:59:59Z"); await f.observer.handler(call);
+  f.time("2026-09-28T12:59:59Z"); await f.observe(call);
   assert.equal(f.events.length, 1);
-  f.time("2026-09-28T13:25:00Z"); await f.observer.handler(call);
+  f.time("2026-09-28T13:25:00Z"); await f.observe(call);
   assert.equal(f.events.length, 2, "a burst spanning two UTC hours has two first-hour events");
   assert.equal(f.observer.tally.summarize().usageMissing.calls, 52);
 });
@@ -76,16 +78,16 @@ test("usage_missing: repeated priced zero-usage refusals emit once per UTC hour,
 test("local unpriced calls stay in ledger; configured provider IDs and loopback endpoints suppress events", async () => {
   for (const provider of ["ollama", "lmstudio", "llamacpp", "vllm-local"]) {
     const f = fixture({ priced: false });
-    await f.observer.handler({ ...call, provider });
+    await f.observe({ ...call, provider });
     assert.equal(f.events.length, 0);
     assert.equal(f.rows[0].unpriced, true);
   }
   const custom = fixture({ priced: false, config: { localProviders: ["CUSTOM"] } });
-  await custom.observer.handler({ ...call, provider: "custom" });
+  await custom.observe({ ...call, provider: "custom" });
   assert.equal(custom.events.length, 0);
   for (const baseUrl of ["http://localhost:1234/v1", "http://127.0.0.1/v1", "http://[::1]:8000/v1"]) {
     const f = fixture({ priced: false, hostConfig: { models: { providers: { proxy: { baseUrl } } } } });
-    await f.observer.handler({ ...call, provider: "proxy" });
+    await f.observe({ ...call, provider: "proxy" });
     assert.equal(f.events.length, 0, baseUrl);
     assert.equal(f.rows[0].provider, "proxy", "use serving provider, not price vendor");
     assert.equal(f.rows[0].unpriced, true);
@@ -94,7 +96,7 @@ test("local unpriced calls stay in ledger; configured provider IDs and loopback 
     assert.equal(isLocalProvider("proxy", [], { models: { providers: { proxy: { baseUrl } } } }), false);
   }
   const remote = fixture({ priced: false, config: { localProviders: [] } });
-  await remote.observer.handler({ ...call, provider: "ollama" });
+  await remote.observe({ ...call, provider: "ollama" });
   assert.equal(remote.events.length, 1, "explicit empty list replaces defaults");
 });
 
@@ -120,11 +122,11 @@ test("missing, null and all-zero usage are missing; cache-only and nonzero usage
   const f = fixture();
   for (const usage of [undefined, {}, { input: null, output: null }, { input: 0, output: 0 },
     { input: "", output: "" }, { input: true, output: 1 }, { input: " ", output: 1 }, { input: NaN, output: 0 }, { input: -1, output: 1 }]) {
-    await f.observer.handler({ ...call, usage });
+    await f.observe({ ...call, usage });
     assert.equal(f.rows.at(-1).usageMissing, true);
   }
   for (const usage of [{ input: 1, output: 0 }, { input: 0, output: 0, cacheRead: 20 }]) {
-    await f.observer.handler({ ...call, usage });
+    await f.observe({ ...call, usage });
     assert.equal(f.rows.at(-1).costUsd, 0.01);
   }
 });
@@ -168,13 +170,16 @@ test("registration passes host provider config and audit sink to observer", asyn
   const config = normalizeConfig({ features: { costVisibility: { enabled: true } },
     costVisibility: { events: { path: path.join(dir, "events.jsonl") }, log: { path: path.join(dir, "cost.jsonl") } } });
   const hooks = {}, audits = [];
-  registerCapabilities({ config, version: "test", audit: { emit: async (row) => audits.push(row) },
+  let delivered;
+  const delivery = new Promise((resolve) => { delivered = resolve; });
+  registerCapabilities({ config, version: "test", audit: { emit: async (row) => { audits.push(row); delivered(); } },
     api: { config: { models: { providers: { proxy: { baseUrl: "http://[::1]:8000" } } } },
       on: (name, handler) => { hooks[name] = handler; } } });
   // Non-curated refs never fetch pricing; this integration test stays offline.
   await hooks.llm_output({ provider: "proxy", model: "test" });
   assert.equal(audits.length, 0);
   await hooks.llm_output({ provider: "remote-example", model: "test" });
+  await delivery;
   assert.equal(audits.length, 1);
   assert.equal(audits[0].event, "model_unpriced");
 });
@@ -192,10 +197,33 @@ test("event configuration defaults and explicit overrides normalize", () => {
 
 test("valid priced calls emit no alert and remote unpriced coverage reason remains factual", async () => {
   const f = fixture();
-  await f.observer.handler({ ...call, usage: { input: 1, output: 1 } });
+  await f.observe({ ...call, usage: { input: 1, output: 1 } });
   assert.equal(f.events.length, 0);
   const records = [];
   const stream = createUsageEvents({ logger: { write: async (row) => records.push(row) } });
   await stream.emit("model_unpriced", { ...identity, reason: "outside-price-coverage" });
   assert.equal(records[0].reason, "outside-price-coverage");
+});
+
+
+test("cost observation does not wait for slow event writes; flush still delivers both event types", async () => {
+  for (const priced of [true, false]) {
+    const events = [];
+    const observer = createCostObserver({
+      config: normalizeConfig({ costVisibility: { attribution: { deploymentId: "test" } } }),
+      deps: {
+        logger: { write: async () => {} },
+        pricing: { resolve: async () => ({ priced }) },
+        eventLogger: { write: async (row) => {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          events.push(row);
+        } },
+      },
+    });
+    await observer.handler(call);
+    assert.equal(events.length, 0, "handler must resolve before the slow write completes");
+    await observer.events.flush();
+    assert.equal(events.length, 1);
+    assert.equal(events[0].event, priced ? "usage_missing" : "model_unpriced");
+  }
 });
