@@ -12,6 +12,8 @@
  */
 
 import { createUsageEvents, isLocalProvider } from "./events.js";
+import { deriveLineage, billingFields } from "./ledger-row.js";
+import { createBudgetTracker } from "./budgets.js";
 import { createPricing } from "./pricing.js";
 import { createTally } from "./cost-tally.js";
 import { createLogger } from "../observability/logger.js";
@@ -42,6 +44,9 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
     logger: deps.eventLogger, now,
   });
 
+  const budgets = createBudgetTracker({ config: cv.budgets, ledgerPath: costLog.path,
+    enabled: cv.log.enabled, costLog, events, deploymentId, now, fallbackLogger });
+
   function safeHostname(hostnameFn = hostname) {
     try {
       const value = String(hostnameFn() || "").trim().toLowerCase();
@@ -60,7 +65,7 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
   function emitSummary() {
     try {
       const sum = tally.summarize();
-      costLog.write({
+      budgets.write({
         schema: "togglelogic.fleet-usage.v1",
         kind: "summary",
         requestId: null,
@@ -96,7 +101,7 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
       const cacheTok = cacheReadTok + cacheWriteTok;
 
       const price = await pricing.resolve(ref);
-      const priced = !!(price && price.priced);
+      let priced = !!(price && price.priced);
       // USAGE VALIDITY GATE (2026-08-02): a numeric dollar cost is trustworthy only when
       // the call actually reported finite input AND output token counts. Absent or
       // non-finite usage on a PRICED model is a false $0.00 waiting to happen — the old
@@ -109,7 +114,7 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
           (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) &&
           Number.isFinite(Number(value)) && Number(value) >= 0) &&
         inTok + outTok + cacheReadTok + cacheWriteTok > 0;
-      const costed = priced && usageValid;
+      let costed = priced && usageValid;
       // Single reconciled cost math (cache-token aware) shared with the receipt.
       // Fall back to costUsd for minimal pricing deps that predate costBreakdown.
       let breakdown = null;
@@ -124,6 +129,8 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
         }
       }
       const cost = breakdown ? breakdown.total : null;
+      if (costed && (!Number.isFinite(cost) || cost < 0)) { priced = false; costed = false; }
+      const usageMissing = priced && !usageValid;
 
       const row = {
         schema: "togglelogic.fleet-usage.v1",
@@ -133,8 +140,14 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
         deploymentId,
         costCenter,
         provider,
-        model: event && event.model,
+        model: event?.model ?? null,
         resolvedRef: ref,
+        ...deriveLineage(ref),
+        costUsd: null,
+        priceSource: price?.source ?? null,
+        priceVersion: price?.priceVersion ?? null,
+        priced, unpriced: !priced, usageMissing,
+        ...billingFields({ priced, usageMissing, billableDeployment: cv.attribution?.billable !== false }),
         inputTok: inTok,
         outputTok: outTok,
         cacheTok,
@@ -150,7 +163,6 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
         row.invoiceEligible = false;
         row.inputPerM = price.inputPerM;
         row.outputPerM = price.outputPerM;
-        row.priceSource = price.source;
         // Cache-token basis is stated LOUDLY so the log and the owner receipt
         // (both derived from pricing.costBreakdown) reconcile on one number and
         // never silently diverge. "input-rate-proxy" flags a source without an
@@ -174,10 +186,10 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
         // token count — NEVER as costUsd: 0.
         row.priced = false;
         row.unpriced = true;
-        row.reason = price.curated === false ? "outside-price-coverage" : "no-price-in-source";
+        row.reason = price?.curated === false ? "outside-price-coverage" : "no-price-in-source";
         row.invoiceEligible = false;
       }
-      costLog.write(row).catch(() => {});
+      void budgets.write(row);
       tally.record({ ts, ref, provider, inputTok: inTok, outputTok: outTok, cacheTok,
         priced: costed, usageMissing: priced && !usageValid, costUsd: cost });
       if (row.unpriced && !isLocalProvider(provider, cv.localProviders, hostConfig)) {
@@ -199,5 +211,5 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
   // per-call fetch never happens — cached + refreshed on a slow cadence).
   function warm() { try { return pricing.ensureIndex().catch(() => {}); } catch { return Promise.resolve(); } }
 
-  return { handler, emitSummary, warm, tally, pricing, costLog, events, logPath: costLog.path, deploymentId, costCenter };
+  return { handler, emitSummary, warm, tally, pricing, costLog, events, budgets, logPath: costLog.path, deploymentId, costCenter };
 }

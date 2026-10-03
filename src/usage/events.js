@@ -9,7 +9,7 @@ import { createInterface } from "node:readline";
 import { createLogger } from "../observability/logger.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
 
-const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING]);
+const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED]);
 
 export function isLocalProvider(provider, localProviders = ["ollama", "lmstudio", "llamacpp", "vllm-local"], hostConfig = {}) {
   if (localProviders.includes(String(provider).toLowerCase())) return true;
@@ -43,9 +43,10 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
   let loaded = false;
 
   function key(row) {
+    if (row.event === EVENTS.BUDGET_THRESHOLD_CROSSED) return JSON.stringify([row.event, row.deploymentId, row.month, row.thresholdPct]);
     return JSON.stringify([row.event, row.deploymentId, row.costCenter, row.resolvedRef, period(row.event, row.ts)]);
   }
-  function remember(row) { seen.set(key(row), row.ts.slice(0, 10)); }
+  function remember(row) { seen.set(key(row), { day: row.ts.slice(0, 10), month: row.month ?? null }); }
 
   // Recover first-only suppression across restarts from retained event files.
   // Retention beyond the current file and five rotations belongs to the host.
@@ -62,7 +63,8 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
           try {
             const row = JSON.parse(line);
             if (row.schema === "togglelogic.event.v1" && TYPES.has(row.event) &&
-              typeof row.ts === "string" && row.ts.slice(0, 10) === today) remember(row);
+              typeof row.ts === "string" && (row.event === EVENTS.BUDGET_THRESHOLD_CROSSED
+                ? typeof row.month === "string" : row.ts.slice(0, 10) === today)) remember(row);
           } catch { /* An interrupted tail must not hide later valid records. */ }
         }
       } catch (error) {
@@ -73,17 +75,25 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
 
   function emit(event, input = {}) {
     if (!TYPES.has(event)) return Promise.resolve();
+    const budget = event === EVENTS.BUDGET_THRESHOLD_CROSSED;
+    if (budget && (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month) ||
+        ![input.thresholdPct, input.monthlyUsd, input.spentUsd].every(Number.isFinite))) return Promise.resolve();
     const row = {
       schema: "togglelogic.event.v1", ts: new Date(input.ts ?? now()).toISOString(), event,
       deploymentId: identifier(deploymentId), costCenter: identifier(costCenter),
-      requestId: identifier(input.requestId), provider: identifier(input.provider),
-      model: identifier(input.model), resolvedRef: identifier(input.resolvedRef),
-      ...(event === EVENTS.MODEL_UNPRICED ? { reason: input.reason === "outside-price-coverage" ? "outside-price-coverage" : "no-price-in-source" } : { calls: 1 }),
+      requestId: identifier(input.requestId),
+      ...(budget ? { month: input.month, thresholdPct: input.thresholdPct, monthlyUsd: input.monthlyUsd,
+        spentUsd: input.spentUsd, unpricedCalls: input.unpricedCalls ?? 0,
+        usageMissingCalls: input.usageMissingCalls ?? 0, historyIncomplete: input.historyIncomplete === true } : {
+        provider: identifier(input.provider), model: identifier(input.model), resolvedRef: identifier(input.resolvedRef),
+      ...(event === EVENTS.MODEL_UNPRICED ? { reason: input.reason === "outside-price-coverage" ? "outside-price-coverage" : "no-price-in-source" } : { calls: 1 }) }),
     };
     queue = queue.then(async () => {
       await load();
       const today = new Date(now()).toISOString().slice(0, 10);
-      for (const [id, day] of seen) if (day < today) seen.delete(id);
+      for (const [id, value] of seen) {
+        if (!value.month && value.day < today) seen.delete(id);
+      }
       if (seen.has(key(row))) return;
       remember(row);
       // Independent sinks: an audit failure must not prevent the host event.
