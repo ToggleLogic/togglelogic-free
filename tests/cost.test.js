@@ -282,14 +282,14 @@ test("guarantee: priced + missing/non-finite usage is LOUD (never a false $0.00)
   // 2) priced + usage MISSING (no usage object) -> LOUD, NO numeric costUsd
   await pricedObs().handler({ ...base });
   let row = events.at(-1);
-  assert.equal(row.costUsd, undefined, "priced+missing-usage must NOT record a numeric cost (was 0.00)");
+  assert.equal(row.costUsd, null, "priced+missing-usage must NOT record a numeric cost (was 0.00)");
   assert.equal(row.usageMissing, true);
   assert.equal(row.reason, "priced-but-usage-missing");
 
   // 3) priced + usage NON-FINITE -> LOUD, NO numeric costUsd
   await pricedObs().handler({ ...base, usage: { input: "x", output: NaN } });
   row = events.at(-1);
-  assert.equal(row.costUsd, undefined, "priced+non-finite-usage must NOT record a numeric cost");
+  assert.equal(row.costUsd, null, "priced+non-finite-usage must NOT record a numeric cost");
   assert.equal(row.reason, "priced-but-usage-missing");
 
   // 4) UNPRICED -> LOUD (existing half of the guarantee), NO numeric costUsd
@@ -305,6 +305,6 @@ test("guarantee: priced + missing/non-finite usage is LOUD (never a false $0.00)
   });
   await unpricedObs.handler({ provider: "mistral", model: "mistral-large", resolvedRef: "mistral/mistral-large", usage: { input: 1000, output: 500 } });
   row = events.at(-1);
-  assert.equal(row.costUsd, undefined, "unpriced must NOT record a numeric cost");
+  assert.equal(row.costUsd, null, "unpriced must NOT record a numeric cost");
   assert.equal(row.unpriced, true);
 });

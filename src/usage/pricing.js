@@ -18,6 +18,7 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolveOpenClawPath } from "../path-utils.js";
 
@@ -40,7 +41,7 @@ const FIRST_PARTY = ["anthropic", "openai", "google", "xai", "togetherai", "toge
  * Build a resolution index: Map<canonKey, {inputPerM, outputPerM, source}>.
  * Priority (first-write-wins): user override > Models.dev > bundled fallback.
  */
-export function buildIndex({ modelsDev, fallback, userOverride } = {}) {
+export function buildIndex({ modelsDev, fallback, userOverride, versions = {} } = {}) {
   const idx = new Map();
   const insert = (keys, val) => {
     // A usable price requires both directions and at least one non-zero rate.
@@ -55,6 +56,7 @@ export function buildIndex({ modelsDev, fallback, userOverride } = {}) {
       inputPerM: val.inputPerM,
       outputPerM: val.outputPerM,
       source: val.source,
+      priceVersion: versions[val.source] ?? null,
       ...(Number.isFinite(val.cacheReadPerM) && val.cacheReadPerM > 0 ? { cacheReadPerM: val.cacheReadPerM } : {}),
       ...(Number.isFinite(val.cacheWritePerM) && val.cacheWritePerM > 0 ? { cacheWritePerM: val.cacheWritePerM } : {}),
     };
@@ -159,26 +161,23 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
     try { fallbackLogger?.warn?.(`togglelogic cost: ${msg}`); } catch { /* ignore */ }
   }
 
-  async function loadBundled() {
-    try { return JSON.parse(await fs.readFile(BUNDLED_FALLBACK, "utf8")); }
-    catch { return { models: [] }; }
+  async function loadVersioned(file) {
+    try {
+      const bytes = await fs.readFile(file);
+      return { data: JSON.parse(bytes.toString("utf8")), version: `sha256:${createHash("sha256").update(bytes).digest("hex")}` };
+    } catch { return { data: null, version: null }; }
   }
   async function loadCache() {
     try { return JSON.parse(await fs.readFile(cachePath, "utf8")); } catch { return null; }
   }
-  async function saveCache(data) {
+  async function saveCache(data, fetchedAt) {
     try {
       await fs.mkdir(path.dirname(cachePath), { recursive: true });
       const tmp = cachePath + ".tmp";
-      await fs.writeFile(tmp, JSON.stringify({ fetchedAt: now(), source: sourceUrl, data }));
+      await fs.writeFile(tmp, JSON.stringify({ fetchedAt, source: sourceUrl, data }));
       await fs.rename(tmp, cachePath);
     } catch (e) { warnOnce(`could not write price cache (${e?.message ?? e})`); }
   }
-  async function loadOverride() {
-    if (!overridePath) return null;
-    try { return JSON.parse(await fs.readFile(overridePath, "utf8")); } catch { return null; }
-  }
-
   async function fetchModelsDev() {
     if (typeof fetchImpl !== "function") return null;
     const ctrl = new AbortController();
@@ -197,17 +196,19 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
   }
 
   async function rebuild() {
-    const [fallback, override, cache] = await Promise.all([loadBundled(), loadOverride(), loadCache()]);
+    const [fallback, override, cache] = await Promise.all([loadVersioned(BUNDLED_FALLBACK), loadVersioned(overridePath), loadCache()]);
     let modelsDev = null;
+    let fetchedAt = cache?.fetchedAt ?? null;
     const cacheFresh = cache && Number.isFinite(cache.fetchedAt) && now() - cache.fetchedAt < refreshMs;
     if (cacheFresh) {
       modelsDev = cache.data;
     } else {
       modelsDev = await fetchModelsDev();
-      if (modelsDev) await saveCache(modelsDev);
+      if (modelsDev) { fetchedAt = now(); await saveCache(modelsDev, fetchedAt); }
       else if (cache && cache.data) modelsDev = cache.data; // stale cache beats nothing
     }
-    index = buildIndex({ modelsDev, fallback, userOverride: override });
+    index = buildIndex({ modelsDev, fallback: fallback.data, userOverride: override.data,
+      versions: { "models.dev": fetchedAt, override: override.version, bundled: fallback.version } });
     builtAt = now();
     return index;
   }
@@ -237,7 +238,7 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
           inputPerM: v.inputPerM, outputPerM: v.outputPerM,
           ...(Number.isFinite(v.cacheReadPerM) ? { cacheReadPerM: v.cacheReadPerM } : {}),
           ...(Number.isFinite(v.cacheWritePerM) ? { cacheWritePerM: v.cacheWritePerM } : {}),
-          source: v.source, matched: k,
+          source: v.source, priceVersion: v.priceVersion, matched: k,
         };
       }
     }
