@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.1.0 (unreleased)
+## 2.1.0-rc.1 — 2026-10-03 (release candidate: TL-2, TL-9, TL-7; canary only)
 
 - TL-7: Complete attributed call rows with lineage and price provenance, explicit
   billable/invoice eligibility, offline monthly CSV/JSON exports and dollar
