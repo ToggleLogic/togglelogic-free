@@ -6,7 +6,7 @@ License (see LICENSE); all rights reserved. PATENT PENDING.
 # TL-6 review handoff
 
 Repository: ToggleLogic/togglelogic-free. Branch: codex/free-2.1.0-tl6.
-Base: codex/free-2.1.0-tl5 at 1a8fae9 (PR #24). Version remains 2.1.0-rc.1.
+Base: codex/free-2.1.0-tl5 at 63f7bb1 (PR #24). Version remains 2.1.0-rc.1.
 Source proposed only; no deployment, install, release, tag, or merge.
 
 Goal: give owners an honest prepaid balance estimate and persistent low-balance
@@ -26,9 +26,9 @@ writing the call before checking a balance threshold.
 
 `npm run quality` tail:
 ```
-tests 149
+tests 151
 suites 0
-pass 149
+pass 151
 fail 0
 cancelled 0
 skipped 0
