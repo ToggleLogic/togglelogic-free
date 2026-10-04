@@ -16,7 +16,7 @@ new-top-up reset, actual CLI execution, and observer-to-ledger integration.
 
 Changed files: src/usage/balances.js; src/usage/cost-observer.js;
 src/usage/events.js; src/config/normalize.js; bin/togglelogic-cost.js;
-tests/balances.test.js; CHANGELOG.md; docs/PREPAID-BALANCES.md; this handoff.
+tests/balances.test.js; tests/request-correlation.test.js (drain background writers before fixture cleanup); CHANGELOG.md; docs/PREPAID-BALANCES.md; this handoff.
 
 Tests added: priced spend/date/provider filtering and missing-cost counts;
 restart persistence; concurrent threshold deduplication; new-top-up reset;
