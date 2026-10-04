@@ -15,6 +15,8 @@ import { normalizeConfig } from '../src/config/normalize.js';
 
 for (const [message, reason] of [
   ['402 RESOURCE_EXHAUSTED: prepayment required', 'payment_required'],
+  ['402 prepaid credits exhausted', 'payment_required'],
+  ['402 pre-paid credits exhausted', 'payment_required'],
   ['402 insufficient_quota', 'credits_depleted'],
   ['payment_required: Your credit balance is too low', 'credits_depleted'],
   ['HTTP 402 credits depleted', 'credits_depleted'],

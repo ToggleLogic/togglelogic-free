@@ -11,7 +11,7 @@ export function classifyProviderRefusal(error) {
   if (!/\b402\b|\bpayment[ _-]required\b/.test(text)) return null;
   if (/\bbilling[ _-]disabled\b|\baccount suspended for billing\b/.test(text)) return "billing_disabled";
   if (/\bcredits? depleted\b|\binsufficient_quota\b|\bcredit balance (?:is )?too low\b|\binsufficient credits?\b/.test(text)) return "credits_depleted";
-  if (/\bprepay(?:ment|paid)?\b|\bprepayment\b/.test(text)) return "payment_required";
+  if (/\bprepay(?:ment)?\b|\bpre[ -]?paid\b/.test(text)) return "payment_required";
   return null;
 }
 

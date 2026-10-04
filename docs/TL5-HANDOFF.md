@@ -34,9 +34,9 @@ next-turn fallback, owner precedence/conflict, and exhausted fallbacks.
 
 `npm run quality` tail:
 ```
-tests 143
+tests 145
 suites 0
-pass 143
+pass 145
 fail 0
 cancelled 0
 skipped 0
