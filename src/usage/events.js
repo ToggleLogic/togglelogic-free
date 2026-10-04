@@ -9,7 +9,7 @@ import { createInterface } from "node:readline";
 import { createLogger } from "../observability/logger.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
 
-const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED, "provider_unavailable", "provider_available"]);
+const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED, "provider_unavailable", "provider_available", "provider_balance_low"]);
 
 export function isLocalProvider(provider, localProviders = ["ollama", "lmstudio", "llamacpp", "vllm-local"], hostConfig = {}) {
   if (localProviders.includes(String(provider).toLowerCase())) return true;
@@ -81,6 +81,17 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
 
   function emit(event, input = {}) {
     if (!TYPES.has(event)) return Promise.resolve();
+    if (event === "provider_balance_low") {
+      if (!identifier(input.provider) || !identifier(input.period) || !Number.isFinite(input.estimatedRemainingUsd) ||
+          !["usd", "pct"].includes(input.threshold?.kind) || !Number.isFinite(input.threshold?.value)) return Promise.resolve();
+      const row = { schema: "togglelogic.event.v1", ts: new Date(now()).toISOString(), event,
+        provider: identifier(input.provider), period: identifier(input.period), basis: "estimate",
+        estimatedRemainingUsd: input.estimatedRemainingUsd, threshold: { kind: input.threshold.kind, value: input.threshold.value } };
+      queue = queue.then(async () => {
+        await Promise.allSettled([log.write(row), Promise.resolve().then(() => audit?.emit?.({ event, outcome: "success", principal: { source: "cost-visibility" }, details: row }))]);
+      }).catch(() => {});
+      return queue;
+    }
     if (event === "provider_unavailable" || event === "provider_available") {
       if (!identifier(input.provider)) return Promise.resolve();
       if (event === "provider_unavailable" && (!["credits_depleted", "billing_disabled", "payment_required"].includes(input.reason) ||

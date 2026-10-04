@@ -15,6 +15,7 @@ export const DEFAULTS = Object.freeze({
     events: Object.freeze({ path: "~/.openclaw/logs/togglelogic-events.jsonl", rotateSizeMb: 50 }),
     localProviders: Object.freeze(["ollama", "lmstudio", "llamacpp", "vllm-local"]),
     budgets: Object.freeze({ monthlyUsd: null, thresholdsPct: Object.freeze([50, 80, 100]) }),
+    balances: Object.freeze({ path: "~/.openclaw/togglelogic/balances.jsonl", lowBalanceUsd: 10, lowBalancePct: 20 }),
     providerCooldownMinutes: 30,
     summaryEveryCalls: 20,
   }),
@@ -50,6 +51,7 @@ export function normalizeConfig(raw) {
   const pricing = obj(cost.pricing);
   const attribution = obj(cost.attribution);
   const budgets = obj(cost.budgets);
+  const balances = obj(cost.balances);
   const escalation = obj(r.governedEscalation);
   const language = obj(escalation.approvalLanguage);
   const names = obj(escalation.displayNames);
@@ -73,6 +75,7 @@ export function normalizeConfig(raw) {
       budgets: { monthlyUsd: Number.isFinite(budgets.monthlyUsd) && budgets.monthlyUsd > 0 ? budgets.monthlyUsd : null,
         thresholdsPct: [...new Set((Array.isArray(budgets.thresholdsPct) ? budgets.thresholdsPct : [50, 80, 100])
           .filter((value) => Number.isFinite(value) && value > 0))].sort((a, b) => a - b) },
+      balances: { path: str(balances.path, DEFAULTS.costVisibility.balances.path), lowBalanceUsd: num(balances.lowBalanceUsd, 10), lowBalancePct: Math.min(100, num(balances.lowBalancePct, 20)) },
       providerCooldownMinutes: num(cost.providerCooldownMinutes, 30, 1),
       summaryEveryCalls: num(cost.summaryEveryCalls, 20, 1),
     },
