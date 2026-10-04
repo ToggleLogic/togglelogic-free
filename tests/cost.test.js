@@ -141,7 +141,7 @@ test("tally loud line: priced $ and unpriced warning always appear together", ()
   const line = t.loudLine();
   assert.match(line, /\$0\.0175/);
   assert.match(line, /⚠️ UNPRICED/);
-  assert.match(line, /mistral\/mistral-large\(3000t\)/);
+  assert.match(line, /mistral\/mistral-large\(1 calls\)/);
 });
 
 test("observe-only: handler returns undefined and never throws (even if pricing throws)", async () => {
@@ -150,6 +150,7 @@ test("observe-only: handler returns undefined and never throws (even if pricing 
     config: normalizeConfig({ costVisibility: { log: { enabled: false } } }),
     fallbackLogger: { warn() {} },
     deps: {
+      eventLogger: { write: async () => {} },
       logger: { write: async (r) => events.push(r), path: "(none)" },
       pricing: { resolve: async () => ({ provider: "anthropic", curated: true, priced: true, inputPerM: 5, outputPerM: 25, source: "test" }), costUsd: () => 0.01, ensureIndex: async () => {} },
       now: () => 1_800_000_000_000,
@@ -164,6 +165,7 @@ test("observe-only: handler returns undefined and never throws (even if pricing 
     config: normalizeConfig({ costVisibility: { log: { enabled: false } } }),
     fallbackLogger: { warn() {} },
     deps: {
+      eventLogger: { write: async () => {} },
       logger: { write: async () => {}, path: "(none)" },
       pricing: { resolve: async () => { throw new Error("boom"); }, costUsd: () => null, ensureIndex: async () => {} },
       now: () => 1_800_000_000_000,
@@ -186,8 +188,8 @@ test("config: costVisibility defaults + feature toggle normalize", () => {
 });
 
 test("fleet attribution accepts portable slugs and rejects sensitive-looking values", () => {
-  const good = normalizeConfig({ costVisibility: { attribution: { deploymentId: "SAM-Andy", costCenter: "Customer_001" } } });
-  assert.equal(good.costVisibility.attribution.deploymentId, "sam-andy");
+  const good = normalizeConfig({ costVisibility: { attribution: { deploymentId: "Deployment-A", costCenter: "Customer_001" } } });
+  assert.equal(good.costVisibility.attribution.deploymentId, "deployment-a");
   assert.equal(good.costVisibility.attribution.costCenter, "customer_001");
 
   const bad = normalizeConfig({ costVisibility: { attribution: { deploymentId: "person@example.com", costCenter: "../../secret" } } });
@@ -198,9 +200,10 @@ test("fleet attribution accepts portable slugs and rejects sensitive-looking val
 test("fleet ledger stamps deployment attribution and never marks estimates invoice-ready", async () => {
   const events = [];
   const observer = createCostObserver({
-    config: normalizeConfig({ costVisibility: { attribution: { deploymentId: "sam-andy", costCenter: "andy" }, log: { enabled: false } } }),
+    config: normalizeConfig({ costVisibility: { attribution: { deploymentId: "deployment-a", costCenter: "team" }, log: { enabled: false } } }),
     fallbackLogger: { warn() {} },
     deps: {
+      eventLogger: { write: async () => {} },
       logger: { write: async (r) => events.push(r), path: "(none)" },
       pricing: {
         resolve: async () => ({ provider: "openai", curated: true, priced: true, inputPerM: 1, outputPerM: 4, source: "test" }),
@@ -218,14 +221,14 @@ test("fleet ledger stamps deployment attribution and never marks estimates invoi
   const call = events.find((r) => r.kind === "call");
   const summary = events.find((r) => r.kind === "summary");
   assert.equal(call.schema, "togglelogic.fleet-usage.v1");
-  assert.equal(call.deploymentId, "sam-andy");
-  assert.equal(call.costCenter, "andy");
+  assert.equal(call.deploymentId, "deployment-a");
+  assert.equal(call.costCenter, "team");
   assert.equal(call.costBasis, "public-rate-estimate");
   assert.equal(call.invoiceEligible, false);
   assert.equal("prompt" in call, false);
   assert.equal("sessionId" in call, false);
-  assert.equal(summary.deploymentId, "sam-andy");
-  assert.equal(summary.costCenter, "andy");
+  assert.equal(summary.deploymentId, "deployment-a");
+  assert.equal(summary.costCenter, "team");
 });
 
 test("fleet ledger falls back to a local hostname when deployment id is omitted", () => {
@@ -233,12 +236,13 @@ test("fleet ledger falls back to a local hostname when deployment id is omitted"
     config: normalizeConfig({ costVisibility: { log: { enabled: false } } }),
     fallbackLogger: { warn() {} },
     deps: {
-      hostname: () => "SAM-CF.local",
+      eventLogger: { write: async () => {} },
+      hostname: () => "Deployment-B.local",
       logger: { write: async () => {}, path: "(none)" },
       pricing: { ensureIndex: async () => {} },
     },
   });
-  assert.equal(observer.deploymentId, "sam-cf.local");
+  assert.equal(observer.deploymentId, "deployment-b.local");
   assert.equal(observer.costCenter, null);
 });
 
@@ -260,6 +264,7 @@ test("guarantee: priced + missing/non-finite usage is LOUD (never a false $0.00)
     config: normalizeConfig({ costVisibility: { log: { enabled: false } } }),
     fallbackLogger: { warn() {} },
     deps: {
+      eventLogger: { write: async () => {} },
       logger: { write: async (r) => events.push(r), path: "(none)" },
       pricing: {
         resolve: async () => ({ provider: "anthropic", curated: true, priced: true, inputPerM: 5, outputPerM: 25, source: "test" }),
@@ -292,6 +297,7 @@ test("guarantee: priced + missing/non-finite usage is LOUD (never a false $0.00)
     config: normalizeConfig({ costVisibility: { log: { enabled: false } } }),
     fallbackLogger: { warn() {} },
     deps: {
+      eventLogger: { write: async () => {} },
       logger: { write: async (r) => events.push(r), path: "(none)" },
       pricing: { resolve: async () => ({ provider: "mistral", curated: false, priced: false }), costUsd: () => null, ensureIndex: async () => {} },
       now: () => 1_800_000_000_000,

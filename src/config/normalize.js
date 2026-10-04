@@ -12,6 +12,8 @@ export const DEFAULTS = Object.freeze({
     attribution: Object.freeze({ deploymentId: "", costCenter: "" }),
     log: Object.freeze({ enabled: true, path: "~/.openclaw/logs/togglelogic-cost.jsonl", rotateSizeMb: 50 }),
     pricing: Object.freeze({ sourceUrl: "https://models.dev/api.json", cachePath: "~/.openclaw/togglelogic/pricing-cache.json", refreshHours: 24, timeoutMs: 15000, userPriceOverridePath: "", cacheReadMultiplier: 0.25, cacheWriteMultiplier: 1 }),
+    events: Object.freeze({ path: "~/.openclaw/logs/togglelogic-events.jsonl", rotateSizeMb: 50 }),
+    localProviders: Object.freeze(["ollama", "lmstudio", "llamacpp", "vllm-local"]),
     summaryEveryCalls: 20,
   }),
   governedEscalation: Object.freeze({
@@ -42,6 +44,7 @@ export function normalizeConfig(raw) {
   const logging = obj(r.logging);
   const cost = obj(r.costVisibility);
   const costLog = obj(cost.log);
+  const events = obj(cost.events);
   const pricing = obj(cost.pricing);
   const attribution = obj(cost.attribution);
   const escalation = obj(r.governedEscalation);
@@ -62,6 +65,8 @@ export function normalizeConfig(raw) {
       attribution: { deploymentId: slug(attribution.deploymentId), costCenter: slug(attribution.costCenter) },
       log: { enabled: costLog.enabled !== false, path: str(costLog.path, DEFAULTS.costVisibility.log.path), rotateSizeMb: num(costLog.rotateSizeMb, 50, 1) },
       pricing: { sourceUrl: str(pricing.sourceUrl, DEFAULTS.costVisibility.pricing.sourceUrl), cachePath: str(pricing.cachePath, DEFAULTS.costVisibility.pricing.cachePath), refreshHours: num(pricing.refreshHours, 24, 1), timeoutMs: num(pricing.timeoutMs, 15000, 1), userPriceOverridePath: str(pricing.userPriceOverridePath), cacheReadMultiplier: num(pricing.cacheReadMultiplier, 0.25, 0), cacheWriteMultiplier: num(pricing.cacheWriteMultiplier, 1, 0) },
+      events: { path: str(events.path, DEFAULTS.costVisibility.events.path), rotateSizeMb: num(events.rotateSizeMb, 50, 1) },
+      localProviders: phrases(cost.localProviders, DEFAULTS.costVisibility.localProviders).map((value) => value.toLowerCase()),
       summaryEveryCalls: num(cost.summaryEveryCalls, 20, 1),
     },
     governedEscalation: {

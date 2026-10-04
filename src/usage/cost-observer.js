@@ -11,6 +11,7 @@
  * (llm_output is void-typed): reporting only. Enforcement is a paid capability.
  */
 
+import { createUsageEvents, isLocalProvider } from "./events.js";
 import { createPricing } from "./pricing.js";
 import { createTally } from "./cost-tally.js";
 import { createLogger } from "../observability/logger.js";
@@ -19,7 +20,7 @@ import { hostname } from "node:os";
 function num(x) { const n = Number(x); return Number.isFinite(n) ? n : 0; }
 function round6(n) { return Math.round((Number(n) || 0) * 1e6) / 1e6; }
 
-export function createCostObserver({ config, fallbackLogger, requestCorrelation = null, deps = {} } = {}) {
+export function createCostObserver({ config, hostConfig, audit, fallbackLogger, requestCorrelation = null, deps = {} } = {}) {
   const cv = config.costVisibility;
   const now = deps.now ?? (() => Date.now());
   const pricing = deps.pricing ?? createPricing(cv.pricing, fallbackLogger, deps);
@@ -35,6 +36,11 @@ export function createCostObserver({ config, fallbackLogger, requestCorrelation 
   const configuredDeploymentId = cv.attribution && cv.attribution.deploymentId;
   const deploymentId = configuredDeploymentId || safeHostname(deps.hostname);
   const costCenter = (cv.attribution && cv.attribution.costCenter) || null;
+
+  const events = createUsageEvents({
+    config: cv.events, audit, fallbackLogger, deploymentId, costCenter,
+    logger: deps.eventLogger, now,
+  });
 
   function safeHostname(hostnameFn = hostname) {
     try {
@@ -79,7 +85,9 @@ export function createCostObserver({ config, fallbackLogger, requestCorrelation 
       const correlation = requestCorrelation?.lookup(event, context) ?? {
         requestId: null, requestIdReason: "routing-correlation-unavailable",
       };
+      const ts = now();
       const ref = refOf(event);
+      const provider = event?.provider || (ref.includes("/") ? ref.split("/")[0] : "unknown");
       const usage = (event && event.usage) || {};
       const inTok = num(usage.input);
       const outTok = num(usage.output);
@@ -97,7 +105,10 @@ export function createCostObserver({ config, fallbackLogger, requestCorrelation 
       // a missing price. Three outcomes, not two. (cacheRead/cacheWrite stay optional —
       // absent cache is normal and never gates the cost.)
       const usageValid =
-        Number.isFinite(Number(usage.input)) && Number.isFinite(Number(usage.output));
+        [usage.input, usage.output].every((value) =>
+          (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) &&
+          Number.isFinite(Number(value)) && Number(value) >= 0) &&
+        inTok + outTok + cacheReadTok + cacheWriteTok > 0;
       const costed = priced && usageValid;
       // Single reconciled cost math (cache-token aware) shared with the receipt.
       // Fall back to costUsd for minimal pricing deps that predate costBreakdown.
@@ -118,10 +129,10 @@ export function createCostObserver({ config, fallbackLogger, requestCorrelation 
         schema: "togglelogic.fleet-usage.v1",
         kind: "call",
         ...correlation,
-        ts: new Date(now()).toISOString(),
+        ts: new Date(ts).toISOString(),
         deploymentId,
         costCenter,
-        provider: price.provider,
+        provider,
         model: event && event.model,
         resolvedRef: ref,
         inputTok: inTok,
@@ -133,7 +144,7 @@ export function createCostObserver({ config, fallbackLogger, requestCorrelation 
       if (costed) {
         row.costUsd = round6(cost);
         // Public price-card math is useful attribution evidence, but it is not
-        // an authoritative provider invoice. HQ reconciliation promotes it to
+        // an authoritative provider invoice. Later reconciliation promotes it to
         // invoice-ready only after the fleet total agrees with provider truth.
         row.costBasis = "public-rate-estimate";
         row.invoiceEligible = false;
@@ -163,14 +174,19 @@ export function createCostObserver({ config, fallbackLogger, requestCorrelation 
         // token count — NEVER as costUsd: 0.
         row.priced = false;
         row.unpriced = true;
-        row.reason = price.curated ? "no-price-in-source" : "not-in-curated-free-set";
+        row.reason = price.curated === false ? "outside-price-coverage" : "no-price-in-source";
         row.invoiceEligible = false;
       }
       costLog.write(row).catch(() => {});
-      // Aggregate: only a call with a trustworthy dollar cost lands in the priced bucket;
-      // usage-missing joins unpriced in the LOUD bucket, so a day of missing-usage calls
-      // can never read as "$0.00 spend".
-      tally.record({ ts: now(), ref, provider: price.provider, inputTok: inTok, outputTok: outTok, cacheTok, priced: costed, costUsd: cost });
+      tally.record({ ts, ref, provider, inputTok: inTok, outputTok: outTok, cacheTok,
+        priced: costed, usageMissing: priced && !usageValid, costUsd: cost });
+      if (row.unpriced && !isLocalProvider(provider, cv.localProviders, hostConfig)) {
+        void events.emit("model_unpriced", { ts, provider, model: event?.model, resolvedRef: ref,
+          reason: row.reason, requestId: correlation.requestId });
+      } else if (row.usageMissing) {
+        void events.emit("usage_missing", { ts, provider, model: event?.model, resolvedRef: ref,
+          calls: 1, requestId: correlation.requestId });
+      }
 
       if (++calls % summaryEvery === 0) emitSummary();
     } catch (e) {
@@ -183,5 +199,5 @@ export function createCostObserver({ config, fallbackLogger, requestCorrelation 
   // per-call fetch never happens — cached + refreshed on a slow cadence).
   function warm() { try { return pricing.ensureIndex().catch(() => {}); } catch { return Promise.resolve(); } }
 
-  return { handler, emitSummary, warm, tally, pricing, costLog, logPath: costLog.path, deploymentId, costCenter };
+  return { handler, emitSummary, warm, tally, pricing, costLog, events, logPath: costLog.path, deploymentId, costCenter };
 }
