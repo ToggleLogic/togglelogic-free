@@ -62,7 +62,7 @@ test('next-turn reroute and owner override conflict are recorded', async (t) => 
   const rows = [];
   const route = createInterceptor({ config: normalizeConfig({ mode: 'passthrough', ownerOverride: { enabled: true, statePath } }),
     hostConfig: { agents: { defaults: { model: { primary: 'google/gemini-flash', fallbacks: ['google/gemini-pro', 'anthropic/claude-haiku'] } } } },
-    availability, logger: { async write(row) { rows.push(row); } }, seam: { status: () => 'unavailable' } });
+    availability, lineageResolver: async () => ({ lineage: 'anthropic/claude-haiku', child: 'anthropic/claude-haiku', reason: 'newest-configured-release' }), logger: { async write(row) { rows.push(row); } }, seam: { status: () => 'unavailable' } });
   assert.deepEqual(await route({}, {}), { providerOverride: 'anthropic', modelOverride: 'claude-haiku' });
   assert.equal(rows[0].selectionReason, 'provider_unavailable');
   await fs.writeFile(statePath, JSON.stringify({ active: true, model_ref: 'google/gemini-flash' }));

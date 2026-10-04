@@ -2,6 +2,8 @@
 
 ## 2.1.0 (unreleased)
 
+- Resolve fallback lineages to the newest host-configured child using public release dates, skip provider cooldowns, audit unresolved plans, and share mid-name version derivation with the cost ledger.
+
 - TL-6: Record prepaid top-ups, report honest remaining-balance estimates with missing-cost counts, and persist once-per-top-up low-balance alerts.
 
 - TL-5: Detect billing refusals from provider error evidence, emit provider availability events, and reroute subsequent turns during cooldown while preserving owner overrides.
