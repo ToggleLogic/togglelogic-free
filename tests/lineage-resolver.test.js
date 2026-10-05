@@ -61,14 +61,14 @@ test('public catalog refresh picks a newly appeared allowed child without changi
   assert.equal((await createLineageResolver({ lineages: ['google/gemini-flash'], hostConfig, pricing: restarted })()).child, 'google/gemini-4-flash');
 });
 
-test('cooldown skips a lineage, exhaustion is explicit, missing dates never silently pin', async () => {
+test('cooldown skips a lineage and missing dates use explicit configured order', async () => {
   const resolve = createLineageResolver({ lineages: ['google/gemini-flash', 'anthropic/claude-haiku'], hostConfig,
     pricing: { catalog: async () => catalog }, availability: { unavailable: (p) => p === 'google' } });
   const result = await resolve(); assert.equal(result.child, 'anthropic/claude-haiku-4-5');
   assert.equal(result.skipped[0].reason, 'provider-unavailable');
   for (const value of [[], [{ ref: 'google/gemini-4-flash', releaseDate: null }], [{ ref: 'google/gemini-4-flash', releaseDate: '2026-02-30' }]]) {
     const fail = createLineageResolver({ lineages: ['google/gemini-flash'], hostConfig, pricing: { catalog: async () => value } });
-    await assert.rejects(fail(), { code: 'FALLBACK_LINEAGE_UNRESOLVED' });
+    assert.equal((await fail()).reason, 'configured-order-no-release-date');
   }
   assert.equal(validLineage('google/gemini-3.5-flash'), false);
   assert.equal(validLineage('anthropic/claude-haiku'), true);
@@ -85,7 +85,7 @@ test('startup audit warns only for numbered host fallbacks lacking matching line
   assert.deepEqual(auditFallbackPlan({ ...options, lineages: ['anthropic/*'] }).missing, []);
 });
 
-test('next-turn cooldown failover audits lineage and resolved child; exhaustion rejects and audits', async () => {
+test('next-turn cooldown failover audits lineage and resolved child; empty plan uses host fallbacks', async () => {
   const availability = createProviderAvailability();
   availability.observe({ provider: 'google', model: 'gemini-3.5-flash', lastAssistant: { role: 'assistant', provider: 'google', model: 'gemini-3.5-flash', stopReason: 'error', errorMessage: '402 prepayment required' } });
   const config = normalizeConfig({ routing: { fallbackLineages: ['google/gemini-flash', 'anthropic/claude-haiku'] } });
@@ -96,8 +96,8 @@ test('next-turn cooldown failover audits lineage and resolved child; exhaustion 
   assert.equal(rows[0].selectionDetails.lineage, 'anthropic/claude-haiku');
   assert.equal(events.find((row) => row.details?.resolvedChild)?.details.resolvedChild, 'anthropic/claude-haiku-4-5');
   const fail = createInterceptor({ ...options, lineageResolver: createLineageResolver({ lineages: [], hostConfig, availability, pricing: { catalog: async () => [] } }) });
-  await assert.rejects(fail({}, {}), /no available configured fallback lineage/);
-  assert.ok(events.some((row) => row.outcome === 'failure' && row.details.failure === 'no_available_fallback_lineage'));
+  assert.deepEqual(await fail({}, {}), { providerOverride: 'anthropic', modelOverride: 'claude-haiku-4-5' });
+  assert.ok(events.some((row) => row.details?.resolutionReason === 'host-configured-fallback'));
 });
 
 test('registered llm_output refusal feeds registered routing using cached public release dates', async (t) => {
@@ -143,4 +143,53 @@ test('a cached passthrough decision is invalidated by a new provider cooldown', 
   } });
   assert.deepEqual(await route(event, context), { providerOverride: 'anthropic', modelOverride: 'claude-haiku-4-5' });
   assert.equal(rows.at(-1).selectionReason, 'provider_unavailable');
+});
+
+test('undated wildcard and local lineage resolve in host order without inventing dates', () => {
+  const models = ['ollama/qwen2.5:7b', 'ollama/qwen2.5:14b'];
+  assert.deepEqual(resolveLineage({ lineage: 'ollama/*', allowedModels: models, catalog: [] }),
+    { lineage: 'ollama/*', child: models[0], reason: 'configured-order-no-release-date' });
+  assert.deepEqual(resolveLineage({ lineage: 'ollama/qwen2.5:7b', allowedModels: models, catalog: [] }),
+    { lineage: 'ollama/qwen2.5:7b', child: models[0], reason: 'configured-order-no-release-date' });
+  assert.equal(resolveLineage({ lineage: 'ollama/*', allowedModels: [...models].reverse(), catalog: [] }).child, models[1]);
+  assert.equal(resolveLineage({ lineage: 'ollama/*', allowedModels: models, catalog: [], unavailable: () => true }).child, null);
+});
+
+test('exhausted and throwing lineage plans pass through with event, warning and FAILURE audit', async () => {
+  const { createUsageEvents } = await import('../src/usage/events.js');
+  for (const lineageResolver of [async () => ({ child: null }), async () => { throw new Error('source unavailable'); }]) {
+    const audit = [], rows = [], warnings = [], events = [];
+    const usageEvents = createUsageEvents({ deploymentId: 'test', costCenter: 'team', logger: { async write(row) { events.push(row); } } });
+    const route = createInterceptor({ config: normalizeConfig({ mode: 'passthrough' }),
+      hostConfig: { agents: { defaults: { model: { primary: 'google/gemini-flash', fallbacks: ['google/gemini-pro'] } } } },
+      availability: { unavailable: () => true }, lineageResolver, usageEvents,
+      fallbackLogger: { warn: (text) => warnings.push(text) }, audit: { emit: (row) => audit.push(row) },
+      logger: { async write(row) { rows.push(row); } }, seam: { status: () => 'unavailable' } });
+    assert.deepEqual(await route({}, {}), {}); await usageEvents.flush();
+    assert.equal(rows[0].selectionReason, 'fallback_unresolved');
+    assert.equal(rows[0].selectedModel, 'google/gemini-flash');
+    assert.ok(audit.some((row) => row.outcome === 'failure' && row.details.reason === 'no_available_fallback'));
+    assert.match(warnings[0], /fallback_unresolved/);
+    assert.equal(events[0].event, 'fallback_unresolved'); assert.equal(events[0].deploymentId, 'test');
+    assert.equal(events[0].requestId, rows[0].requestId);
+  }
+});
+
+test('empty lineage plan uses the first available permitted host fallback without fetching metadata', async () => {
+  const localHost = { agents: { defaults: { model: { primary: 'google/gemini-flash',
+    fallbacks: ['google/gemini-pro', 'ollama/local-small', 'ollama/local-large'] } } } };
+  const availability = { unavailable: (provider) => provider === 'google' };
+  const lineageResolver = createLineageResolver({ lineages: [], hostConfig: localHost, availability,
+    pricing: { catalog() { assert.fail('empty plan must not fetch metadata'); } } });
+  const route = createInterceptor({ config: normalizeConfig({}), hostConfig: localHost, availability, lineageResolver,
+    logger: { async write() {} }, seam: { status: () => 'unavailable' } });
+  assert.deepEqual(await route({}, {}), { providerOverride: 'ollama', modelOverride: 'local-small' });
+});
+
+test('unresolved plugin-selected model keeps its override unchanged', async () => {
+  const config = normalizeConfig({ mode: 'configured', configuredRoutes: { default: 'google/gemini-flash' } });
+  const route = createInterceptor({ config, availability: { unavailable: (provider) => provider === 'google' },
+    hostConfig: { agents: { defaults: { model: 'ollama/local' } } }, lineageResolver: async () => ({ child: null }),
+    logger: { async write() {} }, seam: { status: () => 'unavailable' } });
+  assert.deepEqual(await route({}, {}), { providerOverride: 'google', modelOverride: 'gemini-flash' });
 });

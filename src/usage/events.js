@@ -9,7 +9,7 @@ import { createInterface } from "node:readline";
 import { createLogger } from "../observability/logger.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
 
-const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED, "provider_unavailable", "provider_available", "provider_balance_low"]);
+const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED, "provider_unavailable", "provider_available", "provider_balance_low", "fallback_unresolved"]);
 
 export function isLocalProvider(provider, localProviders = ["ollama", "lmstudio", "llamacpp", "vllm-local"], hostConfig = {}) {
   if (localProviders.includes(String(provider).toLowerCase())) return true;
@@ -81,6 +81,13 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
 
   function emit(event, input = {}) {
     if (!TYPES.has(event)) return Promise.resolve();
+    if (event === "fallback_unresolved") {
+      const row = { schema: "togglelogic.event.v1", ts: new Date(now()).toISOString(), event,
+        ...eventEnvelope({ deploymentId, costCenter, ...input }), provider: identifier(input.provider),
+        reason: input.reason === "routing_hook_error" ? "routing_hook_error" : "no_available_fallback" };
+      queue = queue.then(() => log.write(row)).catch(() => { fallbackLogger?.warn?.("ToggleLogic fallback_unresolved event write failed"); });
+      return queue;
+    }
     if (event === "provider_balance_low") {
       if (!identifier(input.provider) || !identifier(input.period) || !Number.isFinite(input.estimatedRemainingUsd) ||
           !["usd", "pct"].includes(input.threshold?.kind) || !Number.isFinite(input.threshold?.value)) return Promise.resolve();

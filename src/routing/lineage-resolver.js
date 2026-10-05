@@ -43,12 +43,15 @@ export function resolveLineage({ lineage, allowedModels = [], catalog = [], unav
   const allowed = new Set(allowedModels);
   const candidates = catalog.filter((row) => allowed.has(row.ref) && matches(lineage, row.ref) && validDate(row.releaseDate));
   candidates.sort((a, b) => b.releaseDate.localeCompare(a.releaseDate) || (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0));
-  return { lineage, child: candidates[0]?.ref ?? null, reason: candidates.length ? "newest-configured-release" : "no-configured-dated-child" };
+  if (candidates.length) return { lineage, child: candidates[0].ref, reason: "newest-configured-release" };
+  const child = allowedModels.find((ref) => matches(lineage, ref)) ?? null;
+  return { lineage, child, reason: child ? "configured-order-no-release-date" : "no-configured-child" };
 }
 
 export function createLineageResolver({ lineages = [], hostConfig, pricing, availability } = {}) {
   return async (agentId) => {
-    const catalog = await pricing.catalog();
+    let catalog = [];
+    try { if (lineages.length) catalog = await pricing.catalog(); } catch { /* configured order remains available */ }
     const allowedModels = configuredModels(hostConfig, agentId);
     const skipped = [];
     for (const lineage of lineages) {
@@ -56,10 +59,7 @@ export function createLineageResolver({ lineages = [], hostConfig, pricing, avai
       if (result.child) return { ...result, skipped };
       skipped.push(result);
     }
-    const error = new Error("ToggleLogic: no available configured fallback lineage can be resolved");
-    error.code = "FALLBACK_LINEAGE_UNRESOLVED";
-    error.skipped = skipped;
-    throw error;
+    return { lineage: null, child: null, reason: "fallback-unresolved", skipped };
   };
 }
 

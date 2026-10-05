@@ -71,11 +71,11 @@ test('next-turn reroute and owner override conflict are recorded', async (t) => 
   assert.equal(rows[1].selectionDetails.providerUnavailableConflict, true);
 });
 
-test('no available fallback fails explicitly', async () => {
+test('no available fallback preserves the selection', async () => {
   const availability = createProviderAvailability(); availability.observe(output());
   const route = createInterceptor({ config: normalizeConfig({}), hostConfig: { agents: { defaults: { model: 'google/gemini-flash' } } },
     availability, logger: { async write() {} }, seam: { status: () => 'unavailable' } });
-  await assert.rejects(route({}, {}), /no available configured fallback/);
+  assert.deepEqual(await route({}, {}), {});
 });
 
 

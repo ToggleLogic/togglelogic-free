@@ -1,3 +1,6 @@
+import { hostFallbacks } from "../usage/provider-refusal.js";
+import { configuredModels } from "./lineage-resolver.js";
+import { deriveLineage } from "./lineage.js";
 import crypto from "node:crypto";
 import { newDecision, finalizeDecision } from "./decision.js";
 import { resolveEffectiveMode, dispatchByMode } from "./modes.js";
@@ -41,12 +44,19 @@ export function isRequestSelection(current, defaultRef) {
   return Boolean(current.provider && def.provider && current.provider.toLowerCase() !== def.provider.toLowerCase());
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null, lineageResolver = null }) {
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null, lineageResolver = null, usageEvents = null, fallbackLogger = null }) {
   const recent = new Map();
   const preflight = new Map();
   const windowMs = 60_000;
   const fingerprint = (event, context) => clean(event?.prompt) && clean(context?.sessionKey)
     ? crypto.createHash("sha256").update(`${context.sessionKey}\0${event.prompt}`).digest("hex") : null;
+
+  function unresolved(decision, reason) {
+    const details = { reason, selectionReason: "fallback_unresolved", selectedModel: decision.selectedModel };
+    emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.FAILURE, principal: { source: "plugin" }, details, correlationId: decision.requestId });
+    try { void Promise.resolve(usageEvents?.emit("fallback_unresolved", { provider: decision.selectedProvider, reason, requestId: decision.requestId })).catch(() => {}); } catch {}
+    try { fallbackLogger?.warn?.("ToggleLogic fallback_unresolved: no fallback resolved; preserving the selection"); } catch {}
+  }
 
   const beforeModelResolve = async function beforeModelResolve(event = {}, context = {}, preflightResult = null) {
     const preflightKey = fingerprint(event, context);
@@ -80,25 +90,27 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       return override;
     }
 
-    async function failover(ref) {
+    async function failover(ref, unchanged = PASSTHROUGH) {
       if (!ref || !availability?.unavailable(ref.split("/")[0])) return null;
       let resolution;
-      try {
-        if (!lineageResolver) throw new Error("ToggleLogic: no available configured fallback lineage resolver");
-        resolution = await lineageResolver(context?.agentId);
-      } catch (error) {
-        decision.selectionReason = "provider_unavailable";
-        decision.selectionDetails = { failure: "no_available_fallback_lineage", skipped: error.skipped ?? [] };
-        recordDecision();
-        emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.FAILURE, principal: { source: "plugin" },
-          details: decision.selectionDetails, correlationId: decision.requestId });
-        throw error;
+      try { resolution = await lineageResolver?.(context?.agentId); } catch { /* try configured host fallbacks */ }
+      if (!resolution?.child) {
+        const allowed = new Set(configuredModels(hostConfig, context?.agentId));
+        const child = hostFallbacks(hostConfig, context?.agentId).find((candidate) => allowed.has(candidate) && !availability.unavailable(candidate.split("/")[0]));
+        if (child) resolution = { child, lineage: deriveLineage(child).lineage, reason: "host-configured-fallback" };
+      }
+      if (!resolution?.child) {
+        decision.selectedModel = ref; decision.selectedProvider = ref.split("/")[0];
+        decision.selectionReason = "fallback_unresolved";
+        decision.selectionDetails = { failure: "no_available_fallback", skipped: resolution?.skipped ?? [] };
+        unresolved(decision, "no_available_fallback");
+        return unchanged;
       }
       const next = resolution.child, split = next.indexOf("/");
       decision.selectedModel = next; decision.selectedProvider = next.slice(0, split);
       decision.selectionReason = "provider_unavailable";
       decision.selectionDetails = { unavailableProvider: ref.split("/")[0], lineage: resolution.lineage,
-        resolvedChild: next, resolutionReason: resolution.reason, skipped: resolution.skipped };
+        resolvedChild: next, resolutionReason: resolution.reason, skipped: resolution.skipped ?? [] };
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.SUCCESS, principal: { source: "plugin" },
         details: { selectionReason: decision.selectionReason, ...decision.selectionDetails }, correlationId: decision.requestId });
       return { providerOverride: next.slice(0, split), modelOverride: next.slice(split + 1) };
@@ -146,16 +158,29 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       decision.selectionReason = "fallback"; decision.selectionDetails = { error: String(error?.message || error), fallbackOnError: config.intelligence.fallbackOnError };
       if (!config.intelligence.fallbackOnError) throw error;
     }
-    override = await failover(selection(decision.selectedProvider, decision.selectedModel)?.ref) || override;
+    override = await failover(decision.selectedModel?.includes("/") ? decision.selectedModel : selection(decision.selectedProvider, decision.selectedModel)?.ref, override) || override;
     recordDecision();
-    emit(audit, EVENTS.ROUTING_DECISION, { outcome: override === PASSTHROUGH ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
+    if (decision.selectionReason !== "fallback_unresolved") emit(audit, EVENTS.ROUTING_DECISION, { outcome: override === PASSTHROUGH ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
     return override;
   };
 
-  beforeModelResolve.preflight = async (event = {}, context = {}) => {
+  async function safeResolve(event = {}, context = {}, preflightResult = null) {
+    try { return await beforeModelResolve(event, context, preflightResult); }
+    catch {
+      // The host routing hook is fail-soft even when a seam or dependency fails.
+      const decision = newDecision({ event, hookContext: context, mode: config.mode, version });
+      decision.selectedModel = selection(context?.modelProviderId, context?.modelId)?.ref || hostDefaultModelRef(hostConfig, context?.agentId);
+      decision.selectedProvider = decision.selectedModel?.split("/")[0] ?? null;
+      decision.selectionReason = "fallback_unresolved";
+      unresolved(decision, "routing_hook_error");
+      try { finalizeDecision(decision); void Promise.resolve(logger.write(decision)).catch(() => {}); } catch {}
+      return PASSTHROUGH;
+    }
+  }
+  safeResolve.preflight = async (event = {}, context = {}) => {
     const key = fingerprint(event, context);
     const result = {};
-    const override = await beforeModelResolve(event, context, result);
+    const override = await safeResolve(event, context, result);
     const invitation = governedEscalation?.pendingInvitation(context);
     if (invitation) {
       if (key) recent.delete(key);
@@ -165,5 +190,5 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     return { handled: false };
   };
 
-  return beforeModelResolve;
+  return safeResolve;
 }

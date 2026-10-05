@@ -52,7 +52,7 @@ test("shared lineage strips mid-name and terminal date/version components, with 
   for (const ref of ["example/model-2.1", "example/model-v2-v3", "example/model-2026-09-28", "example/model@20260928", "example/model-v2:0"]) {
     assert.deepEqual(deriveLineage(ref), { lineage: "example/model", lineageReason: null });
   }
-  for (const ref of ["example/model-70b", "example/vendor/model-fast"]) {
+  for (const ref of ["ollama/qwen2.5:7b", "example/model-70b", "example/vendor/model-fast"]) {
     assert.equal(deriveLineage(ref).lineage, ref);
   }
   for (const [ref, lineage] of [["google/gemini-3.5-flash", "google/gemini-flash"],

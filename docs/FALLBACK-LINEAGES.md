@@ -33,23 +33,27 @@ agent's primary and fallbacks. It never authorizes a child merely because it
 appears in the public feed, and it does not expand host aliases or unqualified
 model names. Configure qualified references for eligible children.
 
-Eligible children must have a valid models.dev `release_date`. The newest date
-wins; equal dates use ascending qualified-reference order. The feed is refreshed
-on the existing pricing-cache cadence. A new child can be picked without
-changing the lineage plan **only if the host has configured/allowed it**.
-A stale public cache can be used during a source outage; it cannot establish
-that a newer child exists. Bundled rates or price overrides never invent
-release dates. Models without public release dates, including local models,
-are ineligible until the source supplies that metadata.
+When matching children have valid models.dev `release_date` metadata, the newest
+date wins; equal dates use ascending qualified-reference order. If none has a
+valid release date, the first matching child in host-config order is selected
+with `reason: "configured-order-no-release-date"`. This also supports local
+lineages and provider wildcards without inventing release dates.
+
+The feed is refreshed on the existing pricing-cache cadence. A new child can be
+picked without changing the lineage plan only if the host has configured/allowed
+it. A stale cache cannot reveal a newer release. Neither bundled rates nor price
+overrides invent release dates.
 
 A provider in a TL-5 cooldown is skipped. On a subsequent routing decision for
 that provider, Free resolves the first available lineage and records both
 `lineage` and `resolvedChild`, plus the resolution reason. Owner overrides
 retain precedence and record a cooldown conflict. Both routing and cost
 visibility must be enabled to observe refusals and apply next-turn failover.
-An empty or exhausted plan produces a rejected hook plus failure audit; Free
-never silently pins a numbered host fallback. Core decides how to handle hook
-failures and still owns in-turn retries.
+An empty or exhausted plan tries available host-configured fallbacks in order,
+respecting the host allowlist and provider cooldowns. If none is available, Free
+preserves the selection, emits `fallback_unresolved` and a FAILURE audit record,
+and logs a warning. `before_model_resolve` never throws. Core still owns in-turn
+retries; Free does not guarantee provider success.
 
 At routing startup, `FALLBACK_PLAN_CHECK` (`fallback.plan.check`) warns when
 numbered host fallbacks have no matching lineage entry. This audit does not

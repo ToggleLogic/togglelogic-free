@@ -14,8 +14,9 @@ export function deriveLineage(resolvedRef) {
   const provider = resolvedRef.slice(0, split);
   const model = resolvedRef.slice(split + 1);
   // Remove explicitly delimited numeric/version/date components anywhere in
-  // the model name. Embedded digits and size labels such as 70b remain literal.
-  const base = model.replace(/[-_.@:](?:v?\d+)(?=$|[-_.@:])/gi, "");
+  // the model name. Dots belong to the numeric group, never delimit it:
+  // attached qwen2.5 and size labels such as 7b remain literal.
+  const base = model.replace(/[-_@:](?:v?\d+(?:\.\d+)*)(?=$|[-_@:])/gi, "");
   if (!/[a-z]/i.test(base) || /^v?\d+(?:[._:]\d+)*$/i.test(base) || base.endsWith("/")) {
     return { lineage: null, lineageReason: "no-model-stem" };
   }

@@ -43,7 +43,9 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
     const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, buildRuntimeConfigFromApiConfig(api?.config), version, newSessions.consume);
     const governed = config.features.governedEscalation.enabled
       ? createApprovalGate({ config: config.governedEscalation, pricing: createPricing(config.costVisibility.pricing, fallbackLogger) }) : null;
-    const interceptor = createInterceptor({ config, hostConfig: api?.config, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation, availability, lineageResolver });
+    const routingEvents = providerEvents ?? createUsageEvents({ config: config.costVisibility.events, audit, fallbackLogger,
+      deploymentId: config.costVisibility.attribution.deploymentId || hostname().toLowerCase(), costCenter: config.costVisibility.attribution.costCenter });
+    const interceptor = createInterceptor({ config, hostConfig: api?.config, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation, availability, lineageResolver, usageEvents: routingEvents, fallbackLogger });
     api.on("session_start", (event, context) => newSessions.mark({ sessionId: event?.sessionId || context?.sessionId, sessionKey: event?.sessionKey || context?.sessionKey }));
     api.on("before_model_resolve", interceptor, { priority: 100 });
     if (governed) {

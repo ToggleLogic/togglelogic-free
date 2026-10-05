@@ -18,8 +18,10 @@ budget calculations.
 Lineage derivation is shared by the ledger and fallback resolver in
 `src/routing/lineage.js`. It requires a qualified `provider/model` reference and
 removes numeric version/date components introduced by a hyphen, underscore,
-dot, colon, or at-sign, including **mid-name** components. Components may start
-with `v`; embedded digits and size labels such as `70b` remain literal.
+colon, or at-sign, including **mid-name** components. Dots join numeric parts
+within a whole version group; they never start a group. Components may start
+with `v`; attached dotted names such as `ollama/qwen2.5:7b` and size labels
+such as `70b` remain literal.
 Thus `google/gemini-3.5-flash` becomes `google/gemini-flash`,
 `anthropic/claude-haiku-4-5` becomes `anthropic/claude-haiku`,
 `openai/gpt-5.5` becomes `openai/gpt`, and `xai/grok-4.3` becomes `xai/grok`.
