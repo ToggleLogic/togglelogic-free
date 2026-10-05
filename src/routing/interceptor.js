@@ -1,3 +1,4 @@
+import { hostFallbacks } from "../usage/provider-refusal.js";
 import crypto from "node:crypto";
 import { newDecision, finalizeDecision } from "./decision.js";
 import { resolveEffectiveMode, dispatchByMode } from "./modes.js";
@@ -41,7 +42,7 @@ export function isRequestSelection(current, defaultRef) {
   return Boolean(current.provider && def.provider && current.provider.toLowerCase() !== def.provider.toLowerCase());
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null }) {
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null }) {
   const recent = new Map();
   const preflight = new Map();
   const windowMs = 60_000;
@@ -51,7 +52,7 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
   const beforeModelResolve = async function beforeModelResolve(event = {}, context = {}, preflightResult = null) {
     const preflightKey = fingerprint(event, context);
     const cached = preflightKey ? preflight.get(preflightKey) : null;
-    if (cached && Date.now() - cached.at <= windowMs) {
+    if (cached && Date.now() - cached.at <= windowMs && !availability?.unavailable(cached.decision?.selectedProvider)) {
       preflight.delete(preflightKey);
       requestCorrelation?.remember(cached.decision, event, context);
       if (preflightResult) preflightResult.decision = cached.decision;
@@ -74,26 +75,50 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     if (owner.applied) {
       const override = { modelOverride: owner.modelOverride, ...(owner.providerOverride ? { providerOverride: owner.providerOverride } : {}) };
       decision.selectedModel = owner.modelRef; decision.selectedProvider = owner.providerOverride || null; decision.selectionReason = "owner_override"; decision.selectionDetails = { matched_rule: "owner_override" };
+      if (availability?.unavailable(owner.providerOverride || owner.modelRef.split("/")[0])) decision.selectionDetails.providerUnavailableConflict = true;
       recordDecision();
-      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.SUCCESS, principal: { source: "owner" }, subject: { hook: "before_model_resolve" }, details: { mode: "owner_override", selectedModel: owner.modelRef }, correlationId: decision.requestId });
+      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.SUCCESS, principal: { source: "owner" }, subject: { hook: "before_model_resolve" }, details: { mode: "owner_override", selectedModel: owner.modelRef, ...decision.selectionDetails }, correlationId: decision.requestId });
       return override;
     }
 
+    function failover(ref) {
+      if (!ref || !availability?.unavailable(ref.split("/")[0])) return null;
+      const next = hostFallbacks(hostConfig, context?.agentId).find((candidate) => !availability.unavailable(candidate.split("/")[0]));
+      if (!next) {
+        decision.selectionReason = "provider_unavailable";
+        decision.selectionDetails = { failure: "no_available_fallback" };
+        recordDecision();
+        throw new Error("ToggleLogic: provider unavailable and no available configured fallback");
+      }
+      const split = next.indexOf("/");
+      decision.selectedModel = next; decision.selectedProvider = next.slice(0, split);
+      decision.selectionReason = "provider_unavailable";
+      decision.selectionDetails = { unavailableProvider: ref.split("/")[0], resolvedChild: next };
+      return { providerOverride: next.slice(0, split), modelOverride: next.slice(split + 1) };
+    }
     const sessionLookup = readSessionSelection(hostConfig, context);
     const current = selection(context?.modelProviderId, context?.modelId);
     if (current && sessionLookup?.status === "found" && isProtectedUserSessionSelection(sessionLookup.entry)) {
       decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "user_selection"; decision.selectionDetails = { matched_rule: "user_selection_precedence" };
-      recordDecision(); return PASSTHROUGH;
+      if (availability?.unavailable(current.provider)) decision.selectionDetails.userSelectionConflict = true;
+      recordDecision();
+      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, details: { selectedModel: current.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
+      return PASSTHROUGH;
     }
 
     const hostDefault = hostDefaultModelRef(hostConfig, context?.agentId);
     if (isRequestSelection(current, hostDefault)) {
       decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "request_selection";
       decision.selectionDetails = { matched_rule: "request_selection_precedence", host_default: hostDefault };
+      if (availability?.unavailable(current.provider)) decision.selectionDetails.userSelectionConflict = true;
       recordDecision();
-      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, subject: { hook: "before_model_resolve" }, details: { mode: "request_selection", selectedModel: current.ref }, correlationId: decision.requestId });
+      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, subject: { hook: "before_model_resolve" }, details: { mode: "request_selection", selectedModel: current.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
       return PASSTHROUGH;
     }
+
+    const pending = selection(context?.modelProviderId, context?.modelId)?.ref || hostDefaultModelRef(hostConfig, context?.agentId);
+    const earlyFallback = failover(pending);
+    if (earlyFallback) { recordDecision(); return earlyFallback; }
 
     const key = fingerprint(event, context);
     const now = Date.now();
@@ -113,6 +138,7 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       decision.selectionReason = "fallback"; decision.selectionDetails = { error: String(error?.message || error), fallbackOnError: config.intelligence.fallbackOnError };
       if (!config.intelligence.fallbackOnError) throw error;
     }
+    override = failover(selection(decision.selectedProvider, decision.selectedModel)?.ref) || override;
     recordDecision();
     emit(audit, EVENTS.ROUTING_DECISION, { outcome: override === PASSTHROUGH ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
     return override;

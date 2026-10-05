@@ -9,7 +9,7 @@ import { createInterface } from "node:readline";
 import { createLogger } from "../observability/logger.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
 
-const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED]);
+const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED, "provider_unavailable", "provider_available"]);
 
 export function isLocalProvider(provider, localProviders = ["ollama", "lmstudio", "llamacpp", "vllm-local"], hostConfig = {}) {
   if (localProviders.includes(String(provider).toLowerCase())) return true;
@@ -30,6 +30,12 @@ function period(event, ts) {
 function identifier(value) {
   return typeof value === "string" && /^[a-z0-9][a-z0-9._:/@+-]{0,255}$/i.test(value)
     && !value.includes("://") && !value.includes("@") ? value : null;
+}
+
+export function eventEnvelope({ deploymentId, costCenter, requestId, requestIdReason } = {}) {
+  const id = identifier(requestId);
+  return { deploymentId: identifier(deploymentId), costCenter: identifier(costCenter), requestId: id,
+    ...(!id ? { requestIdReason: identifier(requestIdReason) ?? "request-correlation-unavailable" } : {}) };
 }
 
 export function createUsageEvents({ config = {}, audit, fallbackLogger, deploymentId, costCenter,
@@ -75,13 +81,23 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
 
   function emit(event, input = {}) {
     if (!TYPES.has(event)) return Promise.resolve();
+    if (event === "provider_unavailable" || event === "provider_available") {
+      if (!identifier(input.provider)) return Promise.resolve();
+      if (event === "provider_unavailable" && (!["credits_depleted", "billing_disabled", "payment_required"].includes(input.reason) ||
+          !Number.isFinite(input.since) || !Number.isFinite(input.cooldownUntil))) return Promise.resolve();
+      const row = { schema: "togglelogic.event.v1", ts: new Date(now()).toISOString(), event, ...eventEnvelope({ deploymentId, costCenter, ...input }), provider: identifier(input.provider),
+        ...(event === "provider_unavailable" ? { reason: input.reason, since: input.since, cooldownUntil: input.cooldownUntil } : {}) };
+      queue = queue.then(async () => {
+        await Promise.allSettled([log.write(row), Promise.resolve().then(() => audit?.emit?.({ event, outcome: "success", principal: { source: "plugin" }, details: row }))]);
+      }).catch(() => {});
+      return queue;
+    }
     const budget = event === EVENTS.BUDGET_THRESHOLD_CROSSED;
     if (budget && (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month) ||
         ![input.thresholdPct, input.monthlyUsd, input.spentUsd].every(Number.isFinite))) return Promise.resolve();
     const row = {
       schema: "togglelogic.event.v1", ts: new Date(input.ts ?? now()).toISOString(), event,
-      deploymentId: identifier(deploymentId), costCenter: identifier(costCenter),
-      requestId: identifier(input.requestId),
+      ...eventEnvelope({ deploymentId, costCenter, ...input }),
       ...(budget ? { month: input.month, thresholdPct: input.thresholdPct, monthlyUsd: input.monthlyUsd,
         spentUsd: input.spentUsd, unpricedCalls: input.unpricedCalls ?? 0,
         usageMissingCalls: input.usageMissingCalls ?? 0, historyIncomplete: input.historyIncomplete === true } : {
