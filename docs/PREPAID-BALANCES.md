@@ -40,9 +40,16 @@ are best effort. A new top-up starts a new alert period, even if its amount
 leaves the estimate below threshold. Thresholds are observations, not spending
 limits, and never block a call.
 
-Writers use a short directory lock beside the balance history. An interrupted
-writer can leave a lock; after confirming no writer is active, an operator can
-remove that empty lock directory. Corrupt/incomplete history fails explicitly
-and must be restored before appending. The observer reports failures without
-blocking calls. Balance checks replay retained ledger files in the background;
-large histories can delay alerts.
+Writers publish a directory lock containing a unique owner record with PID and
+timestamp. A lock older than 60 seconds is recovered only when its owner process
+is gone; live or recent owners are preserved. Empty legacy locks are recovered
+after 60 seconds. Corrupt/incomplete history still fails explicitly.
+
+The observer replays retained ledger files once at startup, before appending
+live calls. Later calls update daily spend totals in memory. The top-up history
+is reloaded only when its mtime or size changes, including external CLI top-ups.
+Daily totals allow backdated top-ups without another ledger replay. Each CLI
+invocation takes a fresh ledger snapshot. A running observer does not ingest
+external ledger edits; restart it after such edits. Missing costs and retained
+history limitations still apply. Low-balance rows carry deployment, cost-center,
+and request attribution, with an explicit reason when correlation is absent.

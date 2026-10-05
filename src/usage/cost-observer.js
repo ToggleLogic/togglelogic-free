@@ -48,12 +48,21 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
   const budgets = createBudgetTracker({ config: cv.budgets, ledgerPath: costLog.path,
     enabled: cv.log.enabled, costLog, events, deploymentId, now, fallbackLogger });
 
-  const balances = createBalances({ config: cv.balances, ledgerPath: costLog.path, events, now });
-  let balanceQueue = Promise.resolve();
-  function checkBalance(write) {
+  const balances = createBalances({ config: cv.balances, ledgerPath: costLog.path, events, deploymentId, costCenter, now });
+  // Replay completes before this observer appends its first live call, avoiding
+  // double counting a row that is both on disk and delivered incrementally.
+  const balanceReady = cv.log.enabled && costLog.path ? balances.start().catch(() => {
+    fallbackLogger?.warn?.("togglelogic balance: startup replay failed");
+  }) : Promise.resolve();
+  let balanceQueue = balanceReady;
+  function writeCall(row) {
+    const write = budgets.write(row);
     balanceQueue = balanceQueue.then(async () => {
       await write;
-      if (cv.log.enabled && costLog.path) await balances.check();
+      if (cv.log.enabled && costLog.path) {
+        await balances.record(row);
+        await balances.check({ requestId: row.requestId, requestIdReason: row.requestIdReason });
+      }
     }).catch(() => { fallbackLogger?.warn?.("togglelogic balance: estimate update failed; inspect balance history and ledger"); });
   }
 
@@ -199,7 +208,8 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
         row.reason = price?.curated === false ? "outside-price-coverage" : "no-price-in-source";
         row.invoiceEligible = false;
       }
-      checkBalance(budgets.write(row));
+      await balanceReady;
+      writeCall(row);
       tally.record({ ts, ref, provider, inputTok: inTok, outputTok: outTok, cacheTok,
         priced: costed, usageMissing: priced && !usageValid, costUsd: cost });
       if (row.unpriced && !isLocalProvider(provider, cv.localProviders, hostConfig)) {

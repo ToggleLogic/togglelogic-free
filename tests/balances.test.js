@@ -57,6 +57,7 @@ test('percentage threshold and negative balance are estimates, never clamped', a
   await f.append([{ costUsd: 80 }]); await f.balances.check();
   assert.deepEqual(f.events[0].threshold, { kind: 'pct', value: 20 });
   await f.append([{ costUsd: 30 }]);
+  await f.balances.record({ kind: 'call', provider: 'example', ts: '2026-10-04T00:00:00Z', costUsd: 30 });
   assert.equal((await f.balances.balance())[0].estimatedRemainingUsd, -10);
 });
 
@@ -94,4 +95,84 @@ test('cost observer checks threshold after its priced row is persisted', async (
   const rows = (await fs.readFile(f.balancePath, 'utf8')).trim().split('\n').map(JSON.parse);
   assert.equal(rows[1].event, 'provider_balance_low');
   assert.equal(rows[1].estimatedRemainingUsd, 9);
+});
+
+test('startup replay once, incremental spend and stat-gated balance history reload', async (t) => {
+  const f = await fixture(t, { lowBalanceUsd: 0, lowBalancePct: 0 });
+  const { readLedger } = await import('../src/usage/ledger-reader.js');
+  await f.balances.topup({ provider: 'example', amount: 1000, date: '2026-10-04' });
+  await f.append([{ costUsd: 7, ts: '2026-10-01T00:00:00Z' }, { costUsd: 2 }]);
+  let replays = 0, reads = 0;
+  const tracker = createBalances({ ...f.opts, deps: {
+    readLedger: (...args) => { replays++; return readLedger(...args); },
+    fs: { ...fs, readFile: (...args) => { if (args[0] === f.balancePath) reads++; return fs.readFile(...args); } },
+  } });
+  await tracker.start(); await tracker.check();
+  const initialReads = reads;
+  for (let i = 0; i < 5; i++) {
+    await tracker.record({ kind: 'call', provider: 'example', ts: '2026-10-04T00:00:00Z', costUsd: 1 });
+    await tracker.check();
+  }
+  assert.equal(replays, 1); assert.equal(reads, initialReads);
+  assert.equal((await tracker.balance())[0].estimatedRemainingUsd, 993);
+  await f.balances.topup({ provider: 'example', amount: 10, date: '2026-10-01' });
+  assert.equal((await tracker.balance())[0].estimatedRemainingUsd, 996);
+  assert.equal(reads, initialReads + 1); assert.equal(replays, 1);
+});
+
+test('dead stale lock is recovered by checks and concurrent top-ups; live/recent owners survive', async (t) => {
+  const f = await fixture(t);
+  await f.balances.topup({ provider: 'example', amount: 1, date: '2026-10-01' });
+  const deadPid = Number(execFileSync(process.execPath, ['-e', 'console.log(process.pid)'], { encoding: 'utf8' }).trim());
+  const lock = f.balancePath + '.lock';
+  const install = async (pid, age) => {
+    await fs.mkdir(lock);
+    await fs.writeFile(path.join(lock, `${pid}-dead.json`), JSON.stringify({ pid, ts: f.opts.now() - age }));
+  };
+  await install(deadPid, 61000);
+  await f.balances.check(); // recovers and emits
+  assert.equal(f.events.length, 1);
+  await install(deadPid, 61000);
+  await Promise.all([f.balances.topup({ provider: 'example', amount: 1, date: '2026-10-01' }),
+    createBalances(f.opts).topup({ provider: 'example', amount: 1, date: '2026-10-01' })]);
+  assert.equal((await f.balances.balance())[0].topupsUsd, 3);
+  for (const [pid, age] of [[process.pid, 61000], [deadPid, 1000]]) {
+    await install(pid, age);
+    const tracker = createBalances({ ...f.opts, deps: { lockAttempts: 1 } });
+    await assert.rejects(tracker.topup({ provider: 'example', amount: 1, date: '2026-10-01' }), /live or recent/);
+    assert.equal((await fs.readdir(lock)).length, 1);
+    await fs.rm(lock, { recursive: true });
+  }
+});
+
+test('CLI top-up recovers a dead stale writer lock', async (t) => {
+  const f = await fixture(t);
+  const deadPid = Number(execFileSync(process.execPath, ['-e', 'console.log(process.pid)'], { encoding: 'utf8' }).trim());
+  await fs.mkdir(f.balancePath + '.lock');
+  await fs.writeFile(path.join(f.balancePath + '.lock', `${deadPid}-dead.json`), JSON.stringify({ pid: deadPid, ts: Date.now() - 61000 }));
+  const configPath = path.join(f.dir, 'config.json');
+  await fs.writeFile(configPath, JSON.stringify({ plugins: { entries: { togglelogic: { config: { costVisibility: {
+    balances: { path: f.balancePath }, log: { path: f.ledgerPath },
+  } } } } } }));
+  assert.match(execFileSync(process.execPath, ['bin/togglelogic-cost.js', 'topup', '--provider', 'example', '--amount', '1', '--date', '2026-10-01', '--config', configPath], { encoding: 'utf8' }), /Recorded top-up/);
+});
+
+test('low-balance durable and secondary events carry attribution and correlation envelopes', async (t) => {
+  const f = await fixture(t);
+  const tracker = createBalances({ ...f.opts, deploymentId: 'example-deployment', costCenter: 'team' });
+  await tracker.topup({ provider: 'example', amount: 1, date: '2026-10-01' });
+  await tracker.check({ requestId: 'request-1' });
+  await tracker.topup({ provider: 'example', amount: 1, date: '2026-10-01' });
+  await tracker.check();
+  const rows = (await fs.readFile(f.balancePath, 'utf8')).trim().split('\n').map(JSON.parse).filter((row) => row.event);
+  for (const row of rows) { assert.equal(row.deploymentId, 'example-deployment'); assert.equal(row.costCenter, 'team'); }
+  assert.equal(rows[0].requestId, 'request-1'); assert.equal(rows[1].requestId, null); assert.ok(rows[1].requestIdReason);
+  assert.deepEqual(f.events, rows);
+  const { createUsageEvents } = await import('../src/usage/events.js');
+  const emitted = [];
+  const events = createUsageEvents({ logger: { async write(row) { emitted.push(row); } }, deploymentId: 'example-deployment', costCenter: 'team' });
+  for (const row of rows) await events.emit(row.event, row);
+  for (let i = 0; i < rows.length; i++) {
+    for (const field of ['deploymentId', 'costCenter', 'requestId', 'requestIdReason']) assert.equal(emitted[i][field], rows[i][field]);
+  }
 });

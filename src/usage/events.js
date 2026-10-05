@@ -84,7 +84,7 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
     if (event === "provider_balance_low") {
       if (!identifier(input.provider) || !identifier(input.period) || !Number.isFinite(input.estimatedRemainingUsd) ||
           !["usd", "pct"].includes(input.threshold?.kind) || !Number.isFinite(input.threshold?.value)) return Promise.resolve();
-      const row = { schema: "togglelogic.event.v1", ts: new Date(now()).toISOString(), event,
+      const row = { schema: "togglelogic.event.v1", ts: new Date(now()).toISOString(), event, ...eventEnvelope({ deploymentId, costCenter, ...input }),
         provider: identifier(input.provider), period: identifier(input.period), basis: "estimate",
         estimatedRemainingUsd: input.estimatedRemainingUsd, threshold: { kind: input.threshold.kind, value: input.threshold.value } };
       queue = queue.then(async () => {
