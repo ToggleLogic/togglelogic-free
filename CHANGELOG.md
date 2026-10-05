@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.1.0 (unreleased)
+## 2.1.0-rc.2 — 2026-10-05 (release candidate: TL-5, TL-6, fallback lineages; canary only)
 
 - Resolve fallback lineages to the newest host-configured child using public release dates, skip provider cooldowns, audit unresolved plans, and share mid-name version derivation with the cost ledger.
 
