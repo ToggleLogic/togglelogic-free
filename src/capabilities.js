@@ -26,26 +26,28 @@ export function buildRuntimeConfigFromApiConfig(cfg) {
 
 export function registerCapabilities({ api, audit, fallbackLogger, version, config }) {
   const requestCorrelation = createRequestCorrelation();
-  const providerEvents = config.features.costVisibility.enabled ? createUsageEvents({ config: config.costVisibility.events, audit, fallbackLogger,
-    deploymentId: config.costVisibility.attribution.deploymentId || hostname().toLowerCase(), costCenter: config.costVisibility.attribution.costCenter }) : null;
-  const availability = providerEvents ? createProviderAvailability({ cooldownMinutes: config.costVisibility.providerCooldownMinutes,
-    emit: (event, data) => { void providerEvents.emit(event, data); } }) : null;
+  const usageEvents = createUsageEvents({ config: config.costVisibility.events, audit, fallbackLogger,
+    deploymentId: config.costVisibility.attribution.deploymentId || hostname().toLowerCase(), costCenter: config.costVisibility.attribution.costCenter });
+  const availability = config.features.costVisibility.enabled ? createProviderAvailability({ cooldownMinutes: config.costVisibility.providerCooldownMinutes,
+    emit: (event, data) => { void usageEvents.emit(event, data); } }) : null;
   const sharedPricing = createPricing(config.costVisibility.pricing, fallbackLogger);
   const lineageResolver = createLineageResolver({ lineages: config.routing?.fallbackLineages, hostConfig: api?.config, pricing: sharedPricing, availability });
   const registered = [];
   const gates = [];
   const mark = (id, enabled, reason) => gates.push({ id, enabled, reason });
 
+  let costObserver = null;
+  if (config.features.routing.enabled || config.routing?.invalidFallbackLineages?.length) {
+    auditFallbackPlan({ hostConfig: api?.config, lineages: config.routing?.fallbackLineages,
+      invalidLineages: config.routing?.invalidFallbackLineages, audit, logger: fallbackLogger });
+  }
   if (config.features.routing.enabled) {
-    auditFallbackPlan({ hostConfig: api?.config, lineages: config.routing?.fallbackLineages, audit, logger: fallbackLogger });
     const routingLogger = createRoutingLogger(config.logging, fallbackLogger);
     const newSessions = createNewSessionTracker();
     const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, buildRuntimeConfigFromApiConfig(api?.config), version, newSessions.consume);
     const governed = config.features.governedEscalation.enabled
       ? createApprovalGate({ config: config.governedEscalation, pricing: createPricing(config.costVisibility.pricing, fallbackLogger) }) : null;
-    const routingEvents = providerEvents ?? createUsageEvents({ config: config.costVisibility.events, audit, fallbackLogger,
-      deploymentId: config.costVisibility.attribution.deploymentId || hostname().toLowerCase(), costCenter: config.costVisibility.attribution.costCenter });
-    const interceptor = createInterceptor({ config, hostConfig: api?.config, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation, availability, lineageResolver, usageEvents: routingEvents, fallbackLogger });
+    const interceptor = createInterceptor({ config, hostConfig: api?.config, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation, availability, lineageResolver, usageEvents, fallbackLogger });
     api.on("session_start", (event, context) => newSessions.mark({ sessionId: event?.sessionId || context?.sessionId, sessionKey: event?.sessionKey || context?.sessionKey }));
     api.on("before_model_resolve", interceptor, { priority: 100 });
     if (governed) {
@@ -71,9 +73,10 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
 
   if (config.features.costVisibility.enabled) {
     api.on("llm_output", (event, context) => availability.observe(event, requestCorrelation.lookup(event, context)), { priority: 60 });
-    api.on("llm_output", createCostObserver({ config, hostConfig: api?.config, audit, fallbackLogger, requestCorrelation, deps: { pricing: sharedPricing } }).handler, { priority: 50 });
+    costObserver = createCostObserver({ config, hostConfig: api?.config, audit, fallbackLogger, requestCorrelation, usageEvents, deps: { pricing: sharedPricing } });
+    api.on("llm_output", costObserver.handler, { priority: 50 });
     registered.push("costVisibility"); mark("costVisibility", true, "configured");
   } else mark("costVisibility", false, "disabled");
 
-  return { registered, gates };
+  return { registered, gates, usageEvents, costObserver };
 }
