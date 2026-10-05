@@ -11,6 +11,7 @@
     "properties": {
       "mode": { "type": "string", "enum": ["auto", "passthrough", "configured", "cheap", "intelligence"], "default": "auto" },
       "logging": { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean" }, "path": { "type": "string" }, "rotateSizeMb": { "type": "integer", "minimum": 1 } } },
+      "routing": { "type": "object", "additionalProperties": false, "properties": { "fallbackLineages": { "type": "array", "items": { "type": "string", "maxLength": 512 }, "description": "Ordered provider-qualified lineages, never numbered children." } } },
       "configuredRoutes": { "type": "object", "description": "Static host-supplied structured-label routes. Prompt text is never inspected.", "additionalProperties": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" } },
       "cheapHeuristic": { "type": "object", "additionalProperties": false, "properties": { "default": { "type": "string" }, "order": { "type": "array", "items": { "type": "string" } } } },
       "intelligence": { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean" }, "path": { "type": "string" }, "registryPath": { "type": "string" }, "shadow": { "type": "boolean" }, "fallbackOnError": { "type": "boolean" }, "allowReleaseCandidate": { "type": "boolean" } } },

@@ -151,6 +151,7 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
   const now = deps.now ?? (() => Date.now());
 
   let index = null;
+  let releaseCatalog = [];
   let builtAt = 0;
   let building = null;
   let warned = false;
@@ -207,6 +208,8 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
       if (modelsDev) { fetchedAt = now(); await saveCache(modelsDev, fetchedAt); }
       else if (cache && cache.data) modelsDev = cache.data; // stale cache beats nothing
     }
+    releaseCatalog = Object.entries(modelsDev ?? {}).flatMap(([provider, entry]) =>
+      Object.entries(entry?.models ?? {}).map(([model, data]) => ({ ref: `${provider}/${model}`, releaseDate: data?.release_date ?? null })));
     index = buildIndex({ modelsDev, fallback: fallback.data, userOverride: override.data,
       versions: { "models.dev": fetchedAt, override: override.version, bundled: fallback.version } });
     builtAt = now();
@@ -302,6 +305,7 @@ export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
 
   return {
     resolve, costUsd, costBreakdown, ensureIndex, buildIndex,
+    catalog: async () => { await ensureIndex(); return releaseCatalog.map((row) => ({ ...row })); },
     cacheMultipliers: { read: cacheReadMultiplier, write: cacheWriteMultiplier },
     _paths: { cachePath, overridePath, sourceUrl },
   };

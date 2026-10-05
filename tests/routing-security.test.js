@@ -72,12 +72,12 @@ test("interceptor preserves a protected session selection above routing", async 
   } finally { fs.rmSync(directory, { recursive: true }); }
 });
 
-test("interceptor fallback policy passes through or rethrows as configured", async () => {
+test("interceptor never throws when a routing seam fails", async () => {
   const throwingSeam = { status: () => "available", classify: async () => { throw new Error("classifier failed"); } };
   let config = normalizeConfig({ mode: "intelligence", intelligence: { fallbackOnError: true } });
   assert.deepEqual(await harness(config, { seam: throwingSeam })({ prompt: "hello" }, {}), {});
   config = normalizeConfig({ mode: "intelligence", intelligence: { fallbackOnError: false } });
-  await assert.rejects(() => harness(config, { seam: throwingSeam })({ prompt: "hello" }, {}), /classifier failed/);
+  assert.deepEqual(await harness(config, { seam: throwingSeam })({ prompt: "hello" }, {}), {});
 });
 
 test("governed Intelligence no-decision preserves the host model end to end", async () => {

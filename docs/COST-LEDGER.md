@@ -15,14 +15,20 @@ Unknown fields have explicit nulls; missing spend is never converted into zero.
 Summary rows are aggregates rather than calls and are excluded from exports and
 budget calculations.
 
-Lineage derivation is purely syntactic: require a qualified `provider/model`
-reference and repeatedly remove terminal numeric version or date components
-introduced by a hyphen, underscore, dot, colon, or at-sign. Components may start
-with `v`; internal numeric components and size suffixes are preserved. For
-example, `example/model-v2-20261001` becomes `example/model`, while
-`example/model-2-fast` stays unchanged. A bare, invalid, or numeric-only model
-reference yields `lineage: null` with a `lineageReason`. This grouping rule does
-not consult or implement any private model-family resolver.
+Lineage derivation is shared by the ledger and fallback resolver in
+`src/routing/lineage.js`. It requires a qualified `provider/model` reference and
+removes numeric version/date components introduced by a hyphen, underscore,
+colon, or at-sign, including **mid-name** components. Dots join numeric parts
+within a whole version group; they never start a group. Components may start
+with `v`; attached dotted names such as `ollama/qwen2.5:7b` and size labels
+such as `70b` remain literal.
+Thus `google/gemini-3.5-flash` becomes `google/gemini-flash`,
+`anthropic/claude-haiku-4-5` becomes `anthropic/claude-haiku`,
+`openai/gpt-5.5` becomes `openai/gpt`, and `xai/grok-4.3` becomes `xai/grok`.
+`example/model-2-fast` becomes `example/model-fast`. A bare, invalid, or
+numeric-only model yields `lineage: null` with a `lineageReason`. This syntactic
+rule neither consults nor implements any private family resolver. Existing
+persisted lineage values are not rewritten; new rows use this shared rule.
 
 `priceVersion` identifies the actual price data: the pricing cache's `fetchedAt`
 for Models.dev, or `sha256:<digest>` of the exact override or bundled fallback
