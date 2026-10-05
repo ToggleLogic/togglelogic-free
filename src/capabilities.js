@@ -1,3 +1,4 @@
+import { hostname } from "node:os";
 import { createProviderAvailability } from "./usage/provider-refusal.js";
 import { createUsageEvents } from "./usage/events.js";
 import { createRequestCorrelation } from "./routing/request-correlation.js";
@@ -24,7 +25,8 @@ export function buildRuntimeConfigFromApiConfig(cfg) {
 
 export function registerCapabilities({ api, audit, fallbackLogger, version, config }) {
   const requestCorrelation = createRequestCorrelation();
-  const providerEvents = config.features.costVisibility.enabled ? createUsageEvents({ config: config.costVisibility.events, audit, fallbackLogger }) : null;
+  const providerEvents = config.features.costVisibility.enabled ? createUsageEvents({ config: config.costVisibility.events, audit, fallbackLogger,
+    deploymentId: config.costVisibility.attribution.deploymentId || hostname().toLowerCase(), costCenter: config.costVisibility.attribution.costCenter }) : null;
   const availability = providerEvents ? createProviderAvailability({ cooldownMinutes: config.costVisibility.providerCooldownMinutes,
     emit: (event, data) => { void providerEvents.emit(event, data); } }) : null;
   const registered = [];
@@ -62,7 +64,7 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
   } else mark("ownerOverrideAsk", false, "disabled");
 
   if (config.features.costVisibility.enabled) {
-    api.on("llm_output", (event) => availability.observe(event), { priority: 60 });
+    api.on("llm_output", (event, context) => availability.observe(event, requestCorrelation.lookup(event, context)), { priority: 60 });
     api.on("llm_output", createCostObserver({ config, hostConfig: api?.config, audit, fallbackLogger, requestCorrelation }).handler, { priority: 50 });
     registered.push("costVisibility"); mark("costVisibility", true, "configured");
   } else mark("costVisibility", false, "disabled");

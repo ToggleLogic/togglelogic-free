@@ -24,7 +24,8 @@ for (const [message, reason] of [
   ['402 account suspended for billing', 'billing_disabled'],
   ['429 RESOURCE_EXHAUSTED: quota exceeded', null],
   ['RESOURCE_EXHAUSTED', null], ['quota exceeded', null],
-  ['429 insufficient_quota', null], ['credit balance is too low', null],
+  ['429 insufficient_quota', 'credits_depleted'], ['credit balance is too low', 'credits_depleted'],
+  ['HTTP 400 credit balance is too low', 'credits_depleted'], ['insufficient_quota', 'credits_depleted'], ['429', null],
   ['402 request failed', null], ['1402 credits depleted', null],
   ['x'.repeat(1000000) + '402 credits depleted', null],
 ]) test(`classifier: ${message.slice(0, 80)}`, () => assert.equal(classifyProviderRefusal(message), reason));
@@ -75,4 +76,23 @@ test('no available fallback fails explicitly', async () => {
   const route = createInterceptor({ config: normalizeConfig({}), hostConfig: { agents: { defaults: { model: 'google/gemini-flash' } } },
     availability, logger: { async write() {} }, seam: { status: () => 'unavailable' } });
   await assert.rejects(route({}, {}), /no available configured fallback/);
+});
+
+
+test('protected session and explicit request selections win over cooldown and audit conflicts', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tl-selection-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const store = path.join(dir, 'sessions.json');
+  await fs.writeFile(store, JSON.stringify({ pinned: { modelOverrideSource: 'user', modelOverride: 'gemini-flash' } }));
+  const availability = createProviderAvailability(); availability.observe(output());
+  for (const [sessionKey, primary, reason] of [['pinned', 'google/gemini-flash', 'user_selection'], ['other', 'anthropic/claude-haiku', 'request_selection']]) {
+    const rows = [], audit = [];
+    const route = createInterceptor({ config: normalizeConfig({}), availability,
+      hostConfig: { session: { store }, agents: { defaults: { model: { primary, fallbacks: ['anthropic/claude-haiku'] } } } },
+      logger: { async write(row) { rows.push(row); } }, audit: { emit(row) { audit.push(row); } }, seam: { status: () => 'unavailable' } });
+    assert.deepEqual(await route({}, { sessionKey, modelProviderId: 'google', modelId: 'gemini-flash' }), {});
+    assert.equal(rows[0].selectionReason, reason);
+    assert.equal(rows[0].selectionDetails.userSelectionConflict, true);
+    assert.ok(audit.some((row) => row.details?.userSelectionConflict === true));
+  }
 });

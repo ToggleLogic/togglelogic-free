@@ -227,3 +227,18 @@ test("cost observation does not wait for slow event writes; flush still delivers
     assert.equal(events[0].event, priced ? "usage_missing" : "model_unpriced");
   }
 });
+
+
+test('provider availability events retain attribution and explicit missing-correlation reasons', async () => {
+  const rows = [], audits = [];
+  const events = createUsageEvents({ deploymentId: 'example', costCenter: 'team',
+    logger: { async write(row) { rows.push(row); } }, audit: { emit(row) { audits.push(row); } } });
+  await events.emit('provider_unavailable', { provider: 'google', reason: 'payment_required', since: 1, cooldownUntil: 2, requestId: 'request-1' });
+  await events.emit('provider_available', { provider: 'google' });
+  for (const row of rows) {
+    assert.equal(row.schema, 'togglelogic.event.v1'); assert.equal(row.deploymentId, 'example'); assert.equal(row.costCenter, 'team');
+  }
+  assert.equal(rows[0].requestId, 'request-1');
+  assert.equal(rows[1].requestId, null); assert.equal(rows[1].requestIdReason, 'request-correlation-unavailable');
+  assert.deepEqual(audits.map((row) => row.details), rows);
+});

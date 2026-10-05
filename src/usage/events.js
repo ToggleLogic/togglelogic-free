@@ -32,6 +32,12 @@ function identifier(value) {
     && !value.includes("://") && !value.includes("@") ? value : null;
 }
 
+export function eventEnvelope({ deploymentId, costCenter, requestId, requestIdReason } = {}) {
+  const id = identifier(requestId);
+  return { deploymentId: identifier(deploymentId), costCenter: identifier(costCenter), requestId: id,
+    ...(!id ? { requestIdReason: identifier(requestIdReason) ?? "request-correlation-unavailable" } : {}) };
+}
+
 export function createUsageEvents({ config = {}, audit, fallbackLogger, deploymentId, costCenter,
   logger, now = () => Date.now() } = {}) {
   const log = logger ?? createLogger({
@@ -79,7 +85,7 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
       if (!identifier(input.provider)) return Promise.resolve();
       if (event === "provider_unavailable" && (!["credits_depleted", "billing_disabled", "payment_required"].includes(input.reason) ||
           !Number.isFinite(input.since) || !Number.isFinite(input.cooldownUntil))) return Promise.resolve();
-      const row = { schema: "togglelogic.event.v1", ts: new Date(now()).toISOString(), event, provider: identifier(input.provider),
+      const row = { schema: "togglelogic.event.v1", ts: new Date(now()).toISOString(), event, ...eventEnvelope({ deploymentId, costCenter, ...input }), provider: identifier(input.provider),
         ...(event === "provider_unavailable" ? { reason: input.reason, since: input.since, cooldownUntil: input.cooldownUntil } : {}) };
       queue = queue.then(async () => {
         await Promise.allSettled([log.write(row), Promise.resolve().then(() => audit?.emit?.({ event, outcome: "success", principal: { source: "plugin" }, details: row }))]);
@@ -91,8 +97,7 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
         ![input.thresholdPct, input.monthlyUsd, input.spentUsd].every(Number.isFinite))) return Promise.resolve();
     const row = {
       schema: "togglelogic.event.v1", ts: new Date(input.ts ?? now()).toISOString(), event,
-      deploymentId: identifier(deploymentId), costCenter: identifier(costCenter),
-      requestId: identifier(input.requestId),
+      ...eventEnvelope({ deploymentId, costCenter, ...input }),
       ...(budget ? { month: input.month, thresholdPct: input.thresholdPct, monthlyUsd: input.monthlyUsd,
         spentUsd: input.spentUsd, unpricedCalls: input.unpricedCalls ?? 0,
         usageMissingCalls: input.usageMissingCalls ?? 0, historyIncomplete: input.historyIncomplete === true } : {

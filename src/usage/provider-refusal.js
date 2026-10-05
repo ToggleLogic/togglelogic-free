@@ -8,6 +8,7 @@
 // Bound both work and accepted evidence; never stringify arbitrary error objects.
 export function classifyProviderRefusal(error) {
   const text = typeof error === "string" ? error.slice(0, 16384).toLowerCase() : "";
+  if (/\binsufficient_quota\b|\bcredit balance (?:is )?too low\b/.test(text)) return "credits_depleted";
   if (!/\b402\b|\bpayment[ _-]required\b/.test(text)) return null;
   if (/\bbilling[ _-]disabled\b|\baccount suspended for billing\b/.test(text)) return "billing_disabled";
   if (/\bcredits? depleted\b|\binsufficient_quota\b|\bcredit balance (?:is )?too low\b|\binsufficient credits?\b/.test(text)) return "credits_depleted";
@@ -18,7 +19,7 @@ export function classifyProviderRefusal(error) {
 export function createProviderAvailability({ cooldownMinutes = 30, emit = () => {}, now = () => Date.now() } = {}) {
   const states = new Map();
   const unavailable = (provider) => (states.get(provider)?.cooldownUntil ?? 0) > now();
-  function observe(event) {
+  function observe(event, correlation = {}) {
     const provider = event?.provider;
     if (typeof provider !== "string" || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(provider)) return;
     const assistant = event.lastAssistant;
@@ -29,10 +30,10 @@ export function createProviderAvailability({ cooldownMinutes = 30, emit = () => 
       if (unavailable(provider)) return;
       const since = now(), cooldownUntil = since + cooldownMinutes * 60000;
       states.set(provider, { since, cooldownUntil, reason });
-      emit("provider_unavailable", { provider, reason, since, cooldownUntil });
+      emit("provider_unavailable", { provider, reason, since, cooldownUntil, ...correlation });
     } else if (["stop", "toolUse"].includes(assistant.stopReason) && states.has(provider) && !unavailable(provider)) {
       states.delete(provider);
-      emit("provider_available", { provider });
+      emit("provider_available", { provider, ...correlation });
     }
   }
   return { observe, unavailable, state: (provider) => states.get(provider) ?? null };
