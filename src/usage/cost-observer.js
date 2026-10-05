@@ -13,6 +13,7 @@
 
 import { createUsageEvents, isLocalProvider } from "./events.js";
 import { deriveLineage, billingFields } from "./ledger-row.js";
+import { createBalances } from "./balances.js";
 import { createBudgetTracker } from "./budgets.js";
 import { createPricing } from "./pricing.js";
 import { createTally } from "./cost-tally.js";
@@ -46,6 +47,24 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
 
   const budgets = createBudgetTracker({ config: cv.budgets, ledgerPath: costLog.path,
     enabled: cv.log.enabled, costLog, events, deploymentId, now, fallbackLogger });
+
+  const balances = createBalances({ config: cv.balances, ledgerPath: costLog.path, events, deploymentId, costCenter, now });
+  // Replay completes before this observer appends its first live call, avoiding
+  // double counting a row that is both on disk and delivered incrementally.
+  const balanceReady = cv.log.enabled && costLog.path ? balances.start().catch(() => {
+    fallbackLogger?.warn?.("togglelogic balance: startup replay failed");
+  }) : Promise.resolve();
+  let balanceQueue = balanceReady;
+  function writeCall(row) {
+    const write = budgets.write(row);
+    balanceQueue = balanceQueue.then(async () => {
+      await write;
+      if (cv.log.enabled && costLog.path) {
+        await balances.record(row);
+        await balances.check({ requestId: row.requestId, requestIdReason: row.requestIdReason });
+      }
+    }).catch(() => { fallbackLogger?.warn?.("togglelogic balance: estimate update failed; inspect balance history and ledger"); });
+  }
 
   function safeHostname(hostnameFn = hostname) {
     try {
@@ -189,7 +208,8 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
         row.reason = price?.curated === false ? "outside-price-coverage" : "no-price-in-source";
         row.invoiceEligible = false;
       }
-      void budgets.write(row);
+      await balanceReady;
+      writeCall(row);
       tally.record({ ts, ref, provider, inputTok: inTok, outputTok: outTok, cacheTok,
         priced: costed, usageMissing: priced && !usageValid, costUsd: cost });
       if (row.unpriced && !isLocalProvider(provider, cv.localProviders, hostConfig)) {
@@ -211,5 +231,5 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
   // per-call fetch never happens — cached + refreshed on a slow cadence).
   function warm() { try { return pricing.ensureIndex().catch(() => {}); } catch { return Promise.resolve(); } }
 
-  return { handler, emitSummary, warm, tally, pricing, costLog, events, budgets, logPath: costLog.path, deploymentId, costCenter };
+  return { handler, emitSummary, warm, tally, pricing, costLog, events, budgets, balances, flushBalances: () => balanceQueue, logPath: costLog.path, deploymentId, costCenter };
 }

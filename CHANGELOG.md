@@ -2,6 +2,8 @@
 
 ## 2.1.0 (unreleased)
 
+- TL-6: Record prepaid top-ups, report honest remaining-balance estimates with missing-cost counts, and persist once-per-top-up low-balance alerts.
+
 - TL-5: Detect billing refusals from provider error evidence, emit provider availability events, and reroute subsequent turns during cooldown while preserving owner overrides.
 
 ## 2.1.0-rc.1 — 2026-10-03 (release candidate: TL-2, TL-9, TL-7; canary only)

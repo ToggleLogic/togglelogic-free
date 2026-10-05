@@ -21,7 +21,11 @@ const pricing = {
 };
 async function fixture(t, governedEscalation = null) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tl-correlation-"));
-  t.after(async () => { await observer.events.flush(); await fs.rm(dir, { recursive: true, force: true }); });
+  t.after(async () => {
+    await observer.flushBalances(); await observer.budgets.flush();
+    await Promise.all([routing.flush(), audit.flush(), cost.flush(), observer.events.flush()]);
+    await fs.rm(dir, { recursive: true, force: true });
+  });
   const config = normalizeConfig({ mode: "passthrough", costVisibility: { events: { path: path.join(dir, "events.jsonl") } } });
   const log = (name) => ({ enabled: true, path: path.join(dir, name), rotateSizeMb: 1 });
   const routing = createLogger(log("routing.jsonl"));

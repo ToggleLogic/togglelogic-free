@@ -6,13 +6,41 @@
  * PATENT PENDING.
  */
 import { promises as fs } from "node:fs";
+import { createBalances, BALANCE_NOTICE } from "../src/usage/balances.js";
+import { normalizeConfig } from "../src/config/normalize.js";
 import { exportLedger, formatExport } from "../src/usage/cost-export.js";
 import { resolveOpenClawPath } from "../src/path-utils.js";
 
-const USAGE = "Usage: togglelogic-cost export --month YYYY-MM [--format csv|json] [--ledger <path>] [--out <path>]";
+async function balanceCommand(command, args) {
+  const options = {};
+  const allowed = command === "topup" ? ["--provider", "--amount", "--date", "--note", "--config"] : ["--provider", "--config"];
+  while (args.length) {
+    const name = args.shift();
+    if (!allowed.includes(name) || options[name] !== undefined || !args.length || args[0].startsWith("--")) throw new Error("Invalid balance command options");
+    options[name] = args.shift();
+  }
+  let raw = {};
+  const explicitConfig = options["--config"] ?? process.env.OPENCLAW_CONFIG_PATH;
+  try { raw = JSON.parse(await fs.readFile(resolveOpenClawPath(explicitConfig ?? "~/.openclaw/openclaw.json"), "utf8")); }
+  catch (error) {
+    if (explicitConfig || error.code !== "ENOENT") throw new Error("Cannot read config as JSON; provide --config with a valid JSON configuration");
+  }
+  const config = normalizeConfig(raw.plugins?.entries?.togglelogic?.config ?? {});
+  const balances = createBalances({ config: config.costVisibility.balances, ledgerPath: config.costVisibility.log.path });
+  if (command === "topup") {
+    const row = await balances.topup({ provider: options["--provider"], amount: Number(options["--amount"]), date: options["--date"], note: options["--note"] });
+    console.log(`Recorded top-up for ${row.provider} on ${row.date}.`);
+  }
+  const report = await balances.balance(options["--provider"]);
+  console.log(JSON.stringify({ basis: "estimate", notice: BALANCE_NOTICE, providers: report, ...(report.length ? {} : { warning: "No recorded top-ups for the requested provider(s)" }) }, null, 2));
+}
+
+const USAGE = "Usage: togglelogic-cost export --month YYYY-MM [--format csv|json] [--ledger <path>] [--out <path>]\n       togglelogic-cost topup --provider <id> --amount <usd> --date YYYY-MM-DD [--note <text>] [--config <path>]\n       togglelogic-cost balance [--provider <id>] [--config <path>]";
 async function main(args) {
   if (args.length === 1 && ["--help", "-h"].includes(args[0])) { console.log(USAGE); return; }
-  if (args.shift() !== "export") throw new Error(USAGE);
+  const command = args.shift();
+  if (["topup", "balance"].includes(command)) return balanceCommand(command, args);
+  if (command !== "export") throw new Error(USAGE);
   const options = {};
   while (args.length) {
     const name = args.shift();
