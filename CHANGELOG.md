@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.1.0 (unreleased)
+## 2.1.0-rc.3 — 2026-10-05 (release candidate: integration fixes; HQ canary)
 
 - Keep registration active when fallback lineages are invalid, auditing rejected entries while retaining valid order; share one usage-events writer across routing, provider availability, and cost observation.
 
