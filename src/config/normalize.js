@@ -42,10 +42,10 @@ const feature = (value) => ({ enabled: obj(value).enabled === true });
 
 export function normalizeConfig(raw) {
   const r = obj(raw);
-  const fallbackLineages = obj(r.routing).fallbackLineages ?? [];
-  if (!Array.isArray(fallbackLineages) || fallbackLineages.some((value) => !validLineage(value))) {
-    throw new Error("routing.fallbackLineages must be an ordered list of provider-qualified lineages, not numbered children");
-  }
+  const suppliedLineages = obj(r.routing).fallbackLineages;
+  const fallbackLineages = Array.isArray(suppliedLineages) ? suppliedLineages.filter(validLineage) : [];
+  const invalidFallbackLineages = suppliedLineages === undefined ? [] : Array.isArray(suppliedLineages)
+    ? suppliedLineages.filter((value) => !validLineage(value)) : [suppliedLineages];
   const features = obj(r.features);
   const intelligence = obj(r.intelligence);
   const ownerOverride = obj(r.ownerOverride);
@@ -67,7 +67,7 @@ export function normalizeConfig(raw) {
   return {
     mode: MODES.has(r.mode) ? r.mode : DEFAULTS.mode,
     logging: { enabled: logging.enabled !== false, path: str(logging.path, DEFAULTS.logging.path), rotateSizeMb: num(logging.rotateSizeMb, 50, 1) },
-    routing: { fallbackLineages: [...fallbackLineages] },
+    routing: { fallbackLineages, invalidFallbackLineages },
     configuredRoutes: Object.fromEntries(Object.entries(obj(r.configuredRoutes)).filter(([, value]) => typeof value === "string" && value.trim())),
     cheapHeuristic: { default: str(obj(r.cheapHeuristic).default), order: Array.isArray(obj(r.cheapHeuristic).order) ? obj(r.cheapHeuristic).order.filter((value) => typeof value === "string" && value) : [] },
     intelligence: { enabled: intelligence.enabled !== false, path: str(intelligence.path, DEFAULTS.intelligence.path), registryPath: str(intelligence.registryPath), shadow: intelligence.shadow === true, fallbackOnError: intelligence.fallbackOnError !== false, allowReleaseCandidate: intelligence.allowReleaseCandidate === true },

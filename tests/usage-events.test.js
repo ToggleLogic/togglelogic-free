@@ -166,13 +166,18 @@ test("event file append/rotation, audit mirror, payload allowlist, and retained 
 
 test("registration passes host provider config and audit sink to observer", async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tl-event-hook-"));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(async () => {
+    await runtime.costObserver.flushBalances();
+    await runtime.costObserver.budgets.flush();
+    await runtime.usageEvents.flush();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
   const config = normalizeConfig({ features: { costVisibility: { enabled: true } },
     costVisibility: { events: { path: path.join(dir, "events.jsonl") }, log: { path: path.join(dir, "cost.jsonl") } } });
   const hooks = {}, audits = [];
   let delivered;
   const delivery = new Promise((resolve) => { delivered = resolve; });
-  registerCapabilities({ config, version: "test", audit: { emit: async (row) => { audits.push(row); delivered(); } },
+  const runtime = registerCapabilities({ config, version: "test", audit: { emit: async (row) => { audits.push(row); delivered(); } },
     api: { config: { models: { providers: { proxy: { baseUrl: "http://[::1]:8000" } } } },
       on: (name, handler) => { hooks[name] = handler; } } });
   // Non-curated refs never fetch pricing; this integration test stays offline.

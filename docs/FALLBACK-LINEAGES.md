@@ -21,7 +21,8 @@ Configure an ordered `routing.fallbackLineages` array in the plugin config:
 ```
 
 Entries must be provider-qualified lineages or a provider wildcard. Numbered
-children are rejected. Derivation is purely syntactic and shared with the
+children are excluded from the plan and recorded in the startup audit. Invalid
+entries trigger one startup warning without disabling routing or cost visibility. Derivation is purely syntactic and shared with the
 ledger; see [the ledger rule](COST-LEDGER.md). Qualifiers such as `preview`,
 `mini`, and size labels remain distinct. There is no private family data or
 semantic family inference.

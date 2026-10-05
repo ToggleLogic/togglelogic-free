@@ -23,7 +23,7 @@ import { hostname } from "node:os";
 function num(x) { const n = Number(x); return Number.isFinite(n) ? n : 0; }
 function round6(n) { return Math.round((Number(n) || 0) * 1e6) / 1e6; }
 
-export function createCostObserver({ config, hostConfig, audit, fallbackLogger, requestCorrelation = null, deps = {} } = {}) {
+export function createCostObserver({ config, hostConfig, audit, fallbackLogger, requestCorrelation = null, usageEvents = null, deps = {} } = {}) {
   const cv = config.costVisibility;
   const now = deps.now ?? (() => Date.now());
   const pricing = deps.pricing ?? createPricing(cv.pricing, fallbackLogger, deps);
@@ -40,7 +40,7 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
   const deploymentId = configuredDeploymentId || safeHostname(deps.hostname);
   const costCenter = (cv.attribution && cv.attribution.costCenter) || null;
 
-  const events = createUsageEvents({
+  const events = usageEvents ?? createUsageEvents({
     config: cv.events, audit, fallbackLogger, deploymentId, costCenter,
     logger: deps.eventLogger, now,
   });

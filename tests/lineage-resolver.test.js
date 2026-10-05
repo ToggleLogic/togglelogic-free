@@ -121,9 +121,11 @@ test('registered llm_output refusal feeds registered routing using cached public
 });
 
 
-test('configuration rejects numbered children and malformed fallback plans', () => {
+test('configuration retains invalid fallback entries for audit without throwing', () => {
   for (const fallbackLineages of [['google/gemini-3.5-flash'], ['openai/gpt-5.5'], ['anthropic/claude-haiku-4-5'], [42], 'google/gemini-flash']) {
-    assert.throws(() => normalizeConfig({ routing: { fallbackLineages } }), /ordered list/);
+    const routing = normalizeConfig({ routing: { fallbackLineages } }).routing;
+    assert.deepEqual(routing.fallbackLineages, []);
+    assert.deepEqual(routing.invalidFallbackLineages, Array.isArray(fallbackLineages) ? fallbackLineages : [fallbackLineages]);
   }
   assert.deepEqual(normalizeConfig({ routing: { fallbackLineages: ['google/gemini-flash', 'ollama/*'] } }).routing.fallbackLineages,
     ['google/gemini-flash', 'ollama/*']);

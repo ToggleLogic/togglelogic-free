@@ -63,14 +63,14 @@ export function createLineageResolver({ lineages = [], hostConfig, pricing, avai
   };
 }
 
-export function auditFallbackPlan({ hostConfig, lineages = [], audit, logger } = {}) {
+export function auditFallbackPlan({ hostConfig, lineages = [], invalidLineages = [], audit, logger } = {}) {
   const ids = [undefined, ...(hostConfig?.agents?.list ?? []).map((a) => a.id)];
   const fallbacks = [...new Set(ids.flatMap((id) => hostFallbacks(hostConfig, id)))];
   const missing = fallbacks.filter((ref) => {
     const lineage = deriveLineage(ref).lineage;
     return lineage && lineage !== ref && !lineages.some((entry) => validLineage(entry) && matches(entry, ref));
   });
-  const invalid = lineages.filter((entry) => !validLineage(entry));
+  const invalid = [...invalidLineages, ...lineages.filter((entry) => !validLineage(entry))];
   const warning = missing.length > 0 || invalid.length > 0;
   audit?.emit?.({ event: EVENTS.FALLBACK_PLAN_CHECK, outcome: warning ? "failure" : "success", principal: { source: "plugin" },
     details: { numberedFallbacksWithoutLineage: missing, invalidLineages: invalid, status: warning ? "warning" : "ok" } });
