@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.1.0 — 2026-10-10
+
+Spend tracking release. Same code as 2.1.0-rc.3; only the version changes.
+
+- Every routed call is recorded in dollars with lineage, price source, billable
+  flag and invoice-eligibility reason, correlated to the routing requestId.
+- Call-time cost events, monthly CSV/JSON export (`togglelogic-cost export`),
+  monthly budget alerts and prepaid top-up balance estimates.
+- Billing refusals are detected from provider error evidence; the provider is
+  put in cooldown and later turns reroute, while owner overrides still win.
+- Ordered fallback by model lineage (`routing.fallbackLineages`). Off unless
+  configured.
+
+### Install notes
+
+- If your host pins the ToggleLogic Free version in a plugin or skill inventory
+  snapshot, regenerate that snapshot for 2.1.0 **before** the gateway restart.
+  Otherwise the host may refuse the version mismatch and need a second restart.
+- Keep rollback copies of the plugin **outside** the plugin extensions folder.
+  The host scans every folder there, and a backup copy causes a
+  "duplicate plugin id: togglelogic" warning.
+
 ## 2.1.0-rc.3 — 2026-10-05 (release candidate: integration fixes; HQ canary)
 
 - Keep registration active when fallback lineages are invalid, auditing rejected entries while retaining valid order; share one usage-events writer across routing, provider availability, and cost observation.

@@ -1,6 +1,6 @@
 {
   "name": "togglelogic",
-  "version": "2.1.0-rc.3",
+  "version": "2.1.0",
   "private": false,
   "description": "Generic model routing, approval, audit, and cost-visibility primitives for OpenClaw. ToggleLogic Free includes no assistant, memory, skills, or business workflow policy.",
   "type": "module",
