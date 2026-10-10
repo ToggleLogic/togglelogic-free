@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.1 — 2026-10-10
+
+Documentation only. No code or behavior change from 2.1.0; hosts on 2.1.0 do not
+need to upgrade.
+
+- README now describes spend tracking and links to togglelogic.ai, including
+  [what it costs us](https://togglelogic.ai/spend-tracking/).
+
 ## 2.1.0 — 2026-10-10
 
 Spend tracking release. Same code as 2.1.0-rc.3; only the version changes.
