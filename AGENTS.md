@@ -14,6 +14,20 @@ ToggleLogic Free-Tier License (see `LICENSE`); it is **not** open source.
 Because the repository is public, everything committed here is world-readable.
 Treat every change as a publication.
 
+## Canonical repository
+
+The canonical repository for ToggleLogic Free is **`ToggleLogic/togglelogic-free`**
+(branch `main`). Latest published release: **Free 2.1.1**. This is the only
+ToggleLogic repository referenced here.
+
+**ToggleLogic Intelligence is a separate, proprietary, licensed-only product**
+(the benchmark Intelligence engine and the Toggle Registry). It is **not** part
+of this repository, is developed and released entirely separately, and must
+never be added here. This repo contains only the Free-tier generic routing,
+approvals, audit, and cost-visibility plugin, which talks to Intelligence — when
+present in a deployment — solely across the public seam/adapter already in this
+tree.
+
 ## Rules for all agents
 
 These apply to every agent, on every change, without exception.
