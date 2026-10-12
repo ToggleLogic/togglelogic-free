@@ -16,11 +16,17 @@ host-side startup warning. The plugin now surfaces it itself:
   at register time and again on each `session_start` — a non-gated lifecycle
   hook that still fires — so the skip recurs every time routing is skipped. No
   conversation content is recorded.
-- A plugin health check (`togglelogic-conversation-access-required`) that
-  `openclaw doctor` surfaces as not-ready, with a fix hint.
 - When access is denied the routing conversation hooks are no longer registered
   (they would be blocked anyway); the routing and governedEscalation capability
-  gates report `ready: false` with reason `conversation-access-denied`.
+  gates report `ready: false` with reason `conversation-access-denied` in the
+  `plugin.register` audit — the readiness indicator.
+- A reusable health-check primitive (`togglelogic-conversation-access-required`,
+  `src/health/conversation-access-check.js`) encodes the not-ready logic and is
+  unit-tested. NOTE: OpenClaw 2026.9.9 does **not** run an external plugin's
+  health checks in `openclaw doctor` (doctor loads external plugins with
+  `activate:false`), so this primitive is not surfaced there today; the live
+  readiness signal is the capability gate + error log + `routing.skipped` audit
+  above. The primitive ships ready for a host/bundling that runs plugin health.
 - README documents the flag.
 
 Routing code behavior when conversation access **is** granted is unchanged.

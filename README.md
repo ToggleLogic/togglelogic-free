@@ -61,9 +61,9 @@ explicitly grant permission:
 **disabled**: the routing hook never fires and every turn falls through to the
 host default model unrouted. ToggleLogic Free detects this at startup and makes
 it observable — an error-level startup log naming the setting, a `routing.skipped`
-audit record, and an `openclaw doctor` health check that reports not-ready — so
-the misconfiguration is never silent. Set the flag to `true` and restart the
-gateway to enable routing.
+audit record, and a not-ready routing capability gate in the plugin-registration
+audit — so the misconfiguration is never silent. Set the flag to `true` and
+restart the gateway to enable routing.
 
 ## Spend tracking
 
