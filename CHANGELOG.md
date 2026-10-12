@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.1.2 — 2026-10-11
+
+Patch over 2.1.1. Makes the conversation-access hook-permission defect
+observable. When `features.routing.enabled` is true but the host has not set
+`plugins.entries.togglelogic.hooks.allowConversationAccess: true`, the host
+blocks ToggleLogic's conversation hooks, so routing silently never fired and
+turns fell through to the host default model — the only prior signal was a
+host-side startup warning. The plugin now surfaces it itself:
+
+- Error-level startup log naming `plugins.entries.togglelogic.hooks.allowConversationAccess`
+  and stating routing is disabled until the flag is set to true and the gateway
+  is restarted.
+- A `routing.skipped` audit event (controls AU-2 / AU-3 / AU-12), emitted once
+  at register time and again on each `session_start` — a non-gated lifecycle
+  hook that still fires — so the skip recurs every time routing is skipped. No
+  conversation content is recorded.
+- A plugin health check (`togglelogic-conversation-access-required`) that
+  `openclaw doctor` surfaces as not-ready, with a fix hint.
+- When access is denied the routing conversation hooks are no longer registered
+  (they would be blocked anyway); the routing and governedEscalation capability
+  gates report `ready: false` with reason `conversation-access-denied`.
+- README documents the flag.
+
+Routing code behavior when conversation access **is** granted is unchanged.
+
 ## 2.1.1 — 2026-10-10
 
 Documentation only. No code or behavior change from 2.1.0; hosts on 2.1.0 do not

@@ -74,6 +74,14 @@ export const EVENTS = Object.freeze({
   // --- Routing capability (dormant in default config) ---
   ROUTING_HOOK_FIRE: "routing.hook.fire",
   ROUTING_DECISION: "routing.decision",
+  // Routing is enabled in config but could not register its conversation hooks
+  // because the host denied conversation access
+  // (plugins.entries.togglelogic.hooks.allowConversationAccess !== true).
+  // Emitted once at register time and again on each session_start (a non-gated
+  // lifecycle hook that still fires), so the skip recurs every time routing is
+  // skipped. Carries the reason + required setting only — never conversation
+  // content.
+  ROUTING_SKIPPED: "routing.skipped",
 
   // --- Credential boundary ---
   CREDENTIAL_LOOKUP: "credential.lookup",
@@ -117,6 +125,7 @@ export function controlsFor(event) {
     case EVENTS.DISPATCH_DECISION:
     case EVENTS.ROUTING_HOOK_FIRE:
     case EVENTS.ROUTING_DECISION:
+    case EVENTS.ROUTING_SKIPPED:
       return ["AU-2", "AU-3", "AU-12"];
     case EVENTS.CREDENTIAL_LOOKUP:
       return ["AU-2", "AU-3", "AU-12", "IA-5"];

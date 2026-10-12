@@ -26,7 +26,7 @@ async function fixture(t, costEnabled = true) {
     costVisibility: { attribution: { deploymentId: 'test', costCenter: 'team' },
       log: { enabled: false, path: path.join(dir, 'cost.jsonl') },
       events: { path: path.join(dir, 'events.jsonl'), rotateSizeMb: 1 } } };
-  const api = { config: { agents: { defaults: { model: 'vendor/model' } } },
+  const api = { config: { agents: { defaults: { model: 'vendor/model' } }, plugins: { entries: { togglelogic: { hooks: { allowConversationAccess: true } } } } },
     logger: { warn: (message) => warnings.push(message) },
     on(name, handler) { hooks.set(name, [...(hooks.get(name) ?? []), handler]); } };
   const start = () => registerCapabilities({ api, config: normalizeConfig(raw), version: 'test', fallbackLogger: api.logger,

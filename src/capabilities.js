@@ -11,6 +11,9 @@ import { createCostObserver } from "./usage/cost-observer.js";
 import { createApprovalGate } from "./governance/approval-gate.js";
 import { createPricing } from "./usage/pricing.js";
 import { createNewSessionTracker } from "./routing/new-session-tracker.js";
+import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
+import { isConversationAccessGranted, conversationAccessDeniedMessage, conversationAccessDeniedAuditDetails } from "./hooks/conversation-access.js";
+import { createConversationAccessCheck } from "./health/conversation-access-check.js";
 
 export function buildRuntimeConfigFromApiConfig(cfg) {
   const out = { byProvider: {}, byModel: {}, acceptedModelRefs: [] };
@@ -41,7 +44,29 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
     auditFallbackPlan({ hostConfig: api?.config, lineages: config.routing?.fallbackLineages,
       invalidLineages: config.routing?.invalidFallbackLineages, audit, logger: fallbackLogger });
   }
-  if (config.features.routing.enabled) {
+  if (config.features.routing.enabled && !isConversationAccessGranted(api)) {
+    // Routing is enabled, but the host did not grant this non-bundled plugin
+    // permission to register conversation hooks. Those hooks (before_model_resolve
+    // and the governed-escalation hooks) would be blocked by the host, so turns
+    // silently fall through to the host default model. Rather than register hooks
+    // that never fire, make the condition observable: an error-level startup
+    // message, a routing.skipped audit event (now and on each session_start —
+    // a non-gated lifecycle hook that still fires), and a doctor health check
+    // that reports not-ready.
+    try { fallbackLogger?.error?.(conversationAccessDeniedMessage()); } catch {}
+    audit.emit({ event: EVENTS.ROUTING_SKIPPED, outcome: OUTCOMES.SKIP, principal: { source: "plugin-host" }, details: conversationAccessDeniedAuditDetails(config.mode) });
+    api.on("session_start", () => {
+      audit.emit({ event: EVENTS.ROUTING_SKIPPED, outcome: OUTCOMES.SKIP, principal: { source: "plugin-host" }, details: conversationAccessDeniedAuditDetails(config.mode) });
+    });
+    // The doctor health check surfaces the not-ready state. The plugin-sdk health
+    // import may not resolve in every runtime, so register it fire-and-forget and
+    // never let a failure throw out of register().
+    import("openclaw/plugin-sdk/health")
+      .then(({ registerHealthCheck }) => { try { registerHealthCheck(createConversationAccessCheck()); } catch {} })
+      .catch(() => {});
+    gates.push({ id: "routing", enabled: false, reason: "conversation-access-denied", ready: false });
+    gates.push({ id: "governedEscalation", enabled: false, reason: "conversation-access-denied", ready: false });
+  } else if (config.features.routing.enabled) {
     const routingLogger = createRoutingLogger(config.logging, fallbackLogger);
     const newSessions = createNewSessionTracker();
     const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, buildRuntimeConfigFromApiConfig(api?.config), version, newSessions.consume);

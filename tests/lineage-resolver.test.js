@@ -26,7 +26,7 @@ const catalog = [
 const allowedModels = catalog.map((row) => row.ref);
 const hostConfig = { agents: { defaults: { models: Object.fromEntries(allowedModels.map((ref) => [ref, {}])), model: {
   primary: 'google/gemini-3.5-flash', fallbacks: ['anthropic/claude-haiku-4-5'],
-} } } };
+} } }, plugins: { entries: { togglelogic: { hooks: { allowConversationAccess: true } } } } };
 
 test('newest dated child among host allowlist only, independent of version lexicography', () => {
   const result = resolveLineage({ lineage: 'google/gemini-flash', allowedModels: allowedModels.slice(0, 2), catalog });

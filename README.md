@@ -46,6 +46,25 @@ Routing is opt-in:
 `configuredRoutes` matches only structured labels supplied by the host. ToggleLogic
 Free never reads prompt text to infer a workflow.
 
+## Conversation access is required for routing
+
+Routing runs on OpenClaw's conversation hooks. Because ToggleLogic Free is a
+non-bundled plugin, the host will **not** let it register those hooks unless you
+explicitly grant permission:
+
+```json
+"hooks": { "allowConversationAccess": true }
+```
+
+(under `plugins.entries.togglelogic`, as shown in the snippet above). Without
+`plugins.entries.togglelogic.hooks.allowConversationAccess: true`, routing is
+**disabled**: the routing hook never fires and every turn falls through to the
+host default model unrouted. ToggleLogic Free detects this at startup and makes
+it observable — an error-level startup log naming the setting, a `routing.skipped`
+audit record, and an `openclaw doctor` health check that reports not-ready — so
+the misconfiguration is never silent. Set the flag to `true` and restart the
+gateway to enable routing.
+
 ## Spend tracking
 
 ToggleLogic Free records each routed model call with the machine it ran on, the
