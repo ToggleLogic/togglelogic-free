@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.1.3 — 2026-10-12
+
+Patch over 2.1.2. Session model-pin observability + clarity. On OpenClaw
+releases that keep sessions in SQLite, the legacy per-agent pin store
+`sessions/sessions.json` does not exist, so `src/routing/session-store.js`
+always returns `read_error` and the interceptor's `user_selection` branch
+(which requires `status: "found"`) never fires. This was silent.
+
+- **A user's model selection is still honored** on these releases: when the host
+  resolves a one-off `--model` or a stored `/model` session pin into the
+  request's model, the interceptor's `request_selection` branch (added in 2.0.3)
+  passes it through above routing. That path reads the host-resolved model from
+  the hook context, not the legacy file, so it is unaffected by the SQLite move.
+- **New:** the plugin now emits a `session_pin_store_absent` audit event (and an
+  info log) **once per gateway run** when the legacy pin store is unreadable, so
+  the inert legacy path is observable instead of silently dead. It records the
+  store path + read error only — never conversation content.
+- The legacy `sessions.json` reader is **retained** (it still works on older
+  OpenClaw releases that have the file); nothing is removed, so there is no
+  regression for those deployments.
+- Tests cover the once-per-run emit on `read_error` and that `request_selection`
+  still honors a host-resolved non-default model with no `sessions.json` present.
+
+Known limitation (needs an OpenClaw host change, not a Free-plugin fix): a user
+pin **equal to** the agent's host default is not "locked" — `request_selection`
+only triggers on a *difference* from the default, and OpenClaw does not expose
+the pin's provenance (user vs auto) to a plugin hook, so the plugin cannot tell
+a deliberately-pinned default from an ordinary default. Tracked for a host RFE.
+
 ## 2.1.2 — 2026-10-11
 
 Patch over 2.1.1. Makes the conversation-access hook-permission defect

@@ -83,6 +83,14 @@ export const EVENTS = Object.freeze({
   // content.
   ROUTING_SKIPPED: "routing.skipped",
 
+  // Emitted ONCE per gateway run when the legacy per-agent session-pin store
+  // (`sessions/sessions.json`) cannot be read (e.g. absent on OpenClaw releases
+  // that keep sessions in SQLite). Makes the otherwise-silent inert legacy path
+  // observable: user model selections are honored via `request_selection`
+  // (the host-resolved model), not this file. Carries the store path + error
+  // reason only — never conversation content.
+  SESSION_PIN_STORE_ABSENT: "session_pin_store_absent",
+
   // --- Credential boundary ---
   CREDENTIAL_LOOKUP: "credential.lookup",
 
@@ -126,6 +134,7 @@ export function controlsFor(event) {
     case EVENTS.ROUTING_HOOK_FIRE:
     case EVENTS.ROUTING_DECISION:
     case EVENTS.ROUTING_SKIPPED:
+    case EVENTS.SESSION_PIN_STORE_ABSENT:
       return ["AU-2", "AU-3", "AU-12"];
     case EVENTS.CREDENTIAL_LOOKUP:
       return ["AU-2", "AU-3", "AU-12", "IA-5"];

@@ -48,6 +48,9 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
   const recent = new Map();
   const preflight = new Map();
   const windowMs = 60_000;
+  // 2.1.3: emit SESSION_PIN_STORE_ABSENT at most once per gateway run so the
+  // inert legacy sessions.json pin path is observable instead of silent.
+  let sessionPinStoreSignaled = false;
   const fingerprint = (event, context) => clean(event?.prompt) && clean(context?.sessionKey)
     ? crypto.createHash("sha256").update(`${context.sessionKey}\0${event.prompt}`).digest("hex") : null;
 
@@ -117,6 +120,19 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     }
 
     const sessionLookup = readSessionSelection(hostConfig, context);
+    // 2.1.3: the legacy per-agent sessions.json pin store is absent on OpenClaw
+    // releases that keep sessions in SQLite, so the "user_selection" branch below
+    // (status === "found") never fires there. That is not a routing failure — a
+    // user's model selection is honored by the request_selection branch (the
+    // host-resolved model), not this file. Surface the inert legacy path once so
+    // it is never a silent dead code path. Fires at most once per gateway run.
+    if (!sessionPinStoreSignaled && sessionLookup?.status === "read_error") {
+      sessionPinStoreSignaled = true;
+      emit(audit, EVENTS.SESSION_PIN_STORE_ABSENT, { outcome: OUTCOMES.NOOP, principal: { source: "plugin" },
+        details: { storePath: sessionLookup.storePath, reason: sessionLookup.error,
+          note: "legacy sessions.json pin store unreadable; user model selections are honored via request_selection (host-resolved model), not this file" } });
+      try { fallbackLogger?.info?.(`togglelogic: legacy session-pin store not readable (${sessionLookup.storePath}); on this OpenClaw user model selections are honored via request_selection (the host-resolved model). The sessions.json pin path is inert here.`); } catch {}
+    }
     const current = selection(context?.modelProviderId, context?.modelId);
     if (current && sessionLookup?.status === "found" && isProtectedUserSessionSelection(sessionLookup.entry)) {
       decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "user_selection"; decision.selectionDetails = { matched_rule: "user_selection_precedence" };
