@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import { newDecision, finalizeDecision } from "./decision.js";
 import { resolveEffectiveMode, dispatchByMode } from "./modes.js";
 import { resolveOwnerOverride } from "./owner-override.js";
-import { isProtectedUserSessionSelection, readSessionSelection } from "./session-store.js";
+import { hasSessionAutoModelFallbackProvenance, isProtectedUserSessionSelection, readSessionSelection } from "./session-store.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
 
 const PASSTHROUGH = Object.freeze({});
@@ -44,7 +44,22 @@ export function isRequestSelection(current, defaultRef) {
   return Boolean(current.provider && def.provider && current.provider.toLowerCase() !== def.provider.toLowerCase());
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null, lineageResolver = null, usageEvents = null, fallbackLogger = null }) {
+// 2.1.4: the session's stored override was set by the host (auto model
+// selection or a fallback), not by the user, and it is what the host resolved for
+// this request. Such a model is not a user choice, so routing may still apply.
+// A one-off explicit --model differs from the stored override and is unaffected.
+function isHostAutoSelection(sessionLookup, current) {
+  if (sessionLookup?.status !== "found" || !current?.model) return false;
+  const entry = sessionLookup.entry;
+  if (isProtectedUserSessionSelection(entry)) return false;
+  const auto = clean(entry?.modelOverrideSource) === "auto" || hasSessionAutoModelFallbackProvenance(entry);
+  if (!auto) return false;
+  const stored = selection(entry?.providerOverride, entry?.modelOverride);
+  if (!stored?.model || stored.model.toLowerCase() !== current.model.toLowerCase()) return false;
+  return !stored.provider || !current.provider || stored.provider.toLowerCase() === current.provider.toLowerCase();
+}
+
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null, lineageResolver = null, usageEvents = null, fallbackLogger = null, hostSession = null }) {
   const recent = new Map();
   const preflight = new Map();
   const windowMs = 60_000;
@@ -119,23 +134,20 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       return { providerOverride: next.slice(0, split), modelOverride: next.slice(split + 1) };
     }
 
-    const sessionLookup = readSessionSelection(hostConfig, context);
-    // 2.1.3: the legacy per-agent sessions.json pin store is absent on OpenClaw
-    // releases that keep sessions in SQLite, so the "user_selection" branch below
-    // (status === "found") never fires there. That is not a routing failure — a
-    // user's model selection is honored by the request_selection branch (the
-    // host-resolved model), not this file. Surface the inert legacy path once so
-    // it is never a silent dead code path. Fires at most once per gateway run.
+    const sessionLookup = readSessionSelection(hostConfig, context, { hostSession: typeof hostSession === "function" ? hostSession() : hostSession });
+    // 2.1.3/2.1.4: if neither the host session accessor nor the legacy
+    // sessions.json can be read, user pins cannot be recognised by provenance.
+    // Surface that once per gateway run instead of silently.
     if (!sessionPinStoreSignaled && sessionLookup?.status === "read_error") {
       sessionPinStoreSignaled = true;
       emit(audit, EVENTS.SESSION_PIN_STORE_ABSENT, { outcome: OUTCOMES.NOOP, principal: { source: "plugin" },
-        details: { storePath: sessionLookup.storePath, reason: sessionLookup.error,
-          note: "legacy sessions.json pin store unreadable; user model selections are honored via request_selection (host-resolved model), not this file" } });
-      try { fallbackLogger?.info?.(`togglelogic: legacy session-pin store not readable (${sessionLookup.storePath}); on this OpenClaw user model selections are honored via request_selection (the host-resolved model). The sessions.json pin path is inert here.`); } catch {}
+        details: { storePath: sessionLookup.storePath, reason: sessionLookup.error, ...(sessionLookup.hostError ? { hostError: sessionLookup.hostError } : {}),
+          note: "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection" } });
+      try { fallbackLogger?.warn?.(`togglelogic: session pin store not readable (${sessionLookup.storePath}); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored.`); } catch {}
     }
     const current = selection(context?.modelProviderId, context?.modelId);
     if (current && sessionLookup?.status === "found" && isProtectedUserSessionSelection(sessionLookup.entry)) {
-      decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "user_selection"; decision.selectionDetails = { matched_rule: "user_selection_precedence" };
+      decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "user_selection"; decision.selectionDetails = { matched_rule: "user_selection_precedence", pin_source: sessionLookup.source };
       if (availability?.unavailable(current.provider)) decision.selectionDetails.userSelectionConflict = true;
       recordDecision();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, details: { selectedModel: current.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
@@ -143,7 +155,7 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     }
 
     const hostDefault = hostDefaultModelRef(hostConfig, context?.agentId);
-    if (isRequestSelection(current, hostDefault)) {
+    if (isRequestSelection(current, hostDefault) && !isHostAutoSelection(sessionLookup, current)) {
       decision.selectedModel = current.ref; decision.selectedProvider = current.provider; decision.selectionReason = "request_selection";
       decision.selectionDetails = { matched_rule: "request_selection_precedence", host_default: hostDefault };
       if (availability?.unavailable(current.provider)) decision.selectionDetails.userSelectionConflict = true;

@@ -17,7 +17,7 @@ Treat every change as a publication.
 ## Canonical repository
 
 The canonical repository for ToggleLogic Free is **`ToggleLogic/togglelogic-free`**
-(branch `main`). Latest published release: **Free 2.1.1**. This is the only
+(branch `main`). Release history is in `CHANGELOG.md`. This is the only
 ToggleLogic repository referenced here.
 
 **ToggleLogic Intelligence is a separate, proprietary, licensed-only product**

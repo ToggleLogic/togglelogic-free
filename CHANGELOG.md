@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.1.4 — 2026-10-12
+
+Patch over 2.1.3. Session model pins are recognised by provenance again on
+OpenClaw releases that keep sessions in SQLite.
+
+- **Fixed: a user's session pin is honored even when it names the agent's
+  default model.** The pin reader now asks the host through its read-only
+  session accessor (`api.runtime.agent.session.getSessionEntry`), which every
+  plugin receives and which returns `modelOverrideSource`. A `user` pin wins
+  above routing (`selectionReason: user_selection`, `pin_source: host_runtime`).
+  Previously such a pin was routed away from, because `request_selection` only
+  sees a *difference* from the default. This removes the 2.1.3 "known
+  limitation"; no host change is needed.
+- **Fixed: a host-set `auto` override is no longer treated as a user choice.**
+  When the session's stored override has `modelOverrideSource: "auto"` (or host
+  fallback provenance) and is the model the host resolved, routing applies
+  normally. An explicit one-off `--model` that differs from it is still honored
+  via `request_selection`. `modelOverrideSource: "default"` is not protected.
+- **Changed:** the legacy `sessions.json` reader is now the fallback, used only
+  when the host has no session accessor (older OpenClaw). The once-per-run
+  `session_pin_store_absent` audit event and warning now fire only when neither
+  source can be read, and include the host error when there is one.
+- Removed `canary-2.1.2.mjs` and `docs/PROPOSAL-fail-closed-mode.md` from the
+  repository root (internal working files; never in the package).
+- Tests: 9 new (`tests/session-pin-host-runtime.test.js`); 192 pass.
+
 ## 2.1.3 — 2026-10-12
 
 Patch over 2.1.2. Session model-pin observability + clarity. On OpenClaw
