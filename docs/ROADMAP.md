@@ -24,7 +24,7 @@ Detailed designs:
 |---|---|---|
 | **Release version** | The semver of a ToggleLogic product release, e.g. ToggleLogic Free 2.2.0 or ToggleLogic Intelligence 2.1.0. | Required on every release, tag, CHANGELOG entry and plan. Always name the product. |
 | **Model family / lineage** | The durable routing target, e.g. a provider-qualified lineage. A concrete model release is only the current execution child of a lineage. | Routing, docs and policy name families. Never a permanent pin to a numbered model release. |
-| **Patent application numbers and filing dates** | Identifiers of the provisional filings. | Never written anywhere. Public wording: "nine provisional patents pending". |
+| **Patent application numbers and filing dates** | Identifiers of the provisional filings. | Never in this repository or any public material. Public wording: "nine provisional patents pending". |
 
 ## Ground rules (apply to every milestone)
 
