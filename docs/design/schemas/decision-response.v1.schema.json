@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://togglelogic.ai/schema/decision-api/v1/decision-response.json",
+  "title": "ToggleLogic Decision API v1 — response (DRAFT)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "correlationId", "decision", "reason", "policyDigest", "costEstimate", "engine"],
+  "properties": {
+    "apiVersion": { "const": "togglelogic.decision/v1" },
+    "correlationId": { "type": "string", "maxLength": 128 },
+    "decision": {
+      "type": "object", "additionalProperties": false, "required": ["action"],
+      "properties": {
+        "action": { "enum": ["route", "passthrough", "block"] },
+        "ref": { "type": "string", "maxLength": 512 },
+        "provider": { "type": "string", "maxLength": 128 },
+        "model": { "type": "string", "maxLength": 384 }
+      },
+      "if": { "properties": { "action": { "const": "route" } } },
+      "then": { "required": ["ref"] }
+    },
+    "reason": {
+      "enum": ["owner_override", "user_selection", "request_selection", "configured", "cheap_default", "intelligence", "pin", "intelligence_shadow", "provider_unavailable", "fallback_unresolved", "passthrough", "fallback", "blocked"]
+    },
+    "rationale": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "matchedRule": { "type": "string", "maxLength": 256 },
+        "details": { "type": "object", "description": "Allowlisted keys only; see the M2 field allowlists." }
+      }
+    },
+    "policyDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "costEstimate": {
+      "type": "object", "additionalProperties": false, "required": ["priced", "usd"],
+      "properties": {
+        "priced": { "type": "boolean" },
+        "usd": { "type": ["number", "null"], "minimum": 0 },
+        "basis": { "enum": ["usage_estimate", "none"] },
+        "unpricedReason": { "type": "string", "maxLength": 256 }
+      },
+      "if": { "properties": { "priced": { "const": false } } },
+      "then": { "properties": { "usd": { "const": null } }, "required": ["unpricedReason"] }
+    },
+    "engine": {
+      "type": "object", "additionalProperties": false, "required": ["product", "version"],
+      "properties": {
+        "product": { "const": "togglelogic-free" },
+        "version": { "type": "string" },
+        "seamState": { "enum": ["disabled", "detecting", "available", "absent"] }
+      }
+    },
+    "audit": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "recordId": { "type": "string" } }
+    }
+  }
+}
