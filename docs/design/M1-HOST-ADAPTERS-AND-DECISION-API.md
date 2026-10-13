@@ -1,7 +1,7 @@
 # M1 design — Host adapters and the gateway-neutral Decision API
 
-Status: **design for owner review** (2026-10-13). Target: **ToggleLogic Free 2.2.0**.
-Baseline: Free 2.1.4 (`121ed11`). No code has changed.
+Status: **approved design** (2026-10-13). Target: **ToggleLogic Free 2.2.0**.
+Baseline when written: Free 2.1.4 (`121ed11`).
 
 ## 1. Problem
 

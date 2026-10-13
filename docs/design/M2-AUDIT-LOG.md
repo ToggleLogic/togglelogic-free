@@ -1,8 +1,8 @@
 # M2 design — Tamper-evident audit log
 
-Status: **design for owner review** (2026-10-13). Targets: **ToggleLogic Free 2.1.5**
+Status: **approved design** (2026-10-13). Part 1 shipped in **ToggleLogic Free 2.1.5**; targets:
 (loud failures) and **ToggleLogic Free 2.3.0** (chain, retention, export).
-Baseline: Free 2.1.4. No code has changed.
+Baseline before part 1: Free 2.1.4.
 
 Purpose: give deployers an audit trail they can retain, verify and export —
 the kind of automatic, retained logging that high-risk-system rules (for

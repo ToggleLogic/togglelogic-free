@@ -1,8 +1,8 @@
 # ToggleLogic Free — Engineering Roadmap
 
-Status: **proposal for owner review** (2026-10-13). Nothing here is implemented
-until the owner approves it. Version numbers below are **ToggleLogic Free**
-versions unless stated otherwise. Baseline: **Free 2.1.4** (`v2.1.4`, `121ed11`).
+Status: **approved by the owner** (2026-10-13). Milestone 2 part 1 shipped in
+Free 2.1.5; the rest is planned. Version numbers below are **ToggleLogic Free**
+versions unless stated otherwise. Baseline: **Free 2.1.5** (`v2.1.5`, `8e2070c`, released 2026-10-13).
 
 ToggleLogic is the **policy decision-and-evidence block** that sits beside the
 AI gateway a company already runs. It decides which model may handle which
@@ -43,7 +43,7 @@ Detailed designs:
 
 | Free version | Milestone | Content | Compatibility |
 |---|---|---|---|
-| **2.1.5** | M2 (part 1) | Loud audit-write failures. CI matrix on supported Node versions plus Linux/macOS/Windows jobs. | Patch. No config or format change. |
+| **2.1.5** (released) | M2 (part 1) | Loud audit-write failures. CI matrix on supported Node versions plus Linux/macOS/Windows jobs. | Patch. No config or format change. |
 | **2.2.0** | M1 | Host-neutral decision core; versioned Decision API v1 (schema published here); OpenClaw adapter with no behavior change; decision sidecar (HTTP); LiteLLM adapter; Envoy `ext_authz` adapter; seam ABI 2 (ABI 1 still accepted). Known-defect fixes (interpreter path, unwired executor, missing headers). | Minor. OpenClaw behavior unchanged; new surfaces are additive. |
 | **2.3.0** | M2 (part 2) | Audit schema v2: hash chain, verification command, time-based retention (default ≥ 183 days), sealed segments, export (JSON/CSV/SIEM JSONL) with field allowlists, write-time `subject`/`details` allowlists, optional fail-closed audit policy. | Minor if the owner rules the on-disk rotation layout is not a public contract; otherwise **3.0.0** (see M2 risk R1). |
 | **2.4.0** | M5 (Free part) | Trusted data-class labels end to end; local-only enforcement on every selection path; data-boundary document. | Minor. Enforcement applies only when a host supplies a data-class label. |
@@ -250,8 +250,9 @@ non-local attempt blocked, with both audit records.
 
 | Defect | Release |
 |---|---|
-| Audit writer suppresses failures after the first | 2.1.5 |
-| CI declares Node 22; the supported host needs Node `>=24.16 <25 \|\| >=26.1`; Linux/Windows never run end to end | 2.1.5 (CI only). Baseline 2026-10-13: 192/192 tests pass on Node 22.22 and Node 24.21, Linux. |
+| Audit writer suppresses failures after the first | Fixed in 2.1.5 |
+| CI declares Node 22; the supported host needs Node `>=24.16 <25 \|\| >=26.1`; Linux/Windows never run end to end | Fixed in 2.1.5: CI on Node 24/26, Linux and macOS required, real OpenClaw host packages. |
+| Windows: first CI run (2.1.5) fails 8 of 200 tests (path, file-lock and line-ending assumptions) | 2.2.0; Windows becomes a required job once green |
 | Owner-override notification helper hardcodes `/usr/bin/python3` | 2.2.0 (configurable interpreter; default resolved from `PATH`) |
 | `src/enforcement/bounded-executor.js` is exported but not wired in | 2.2.0 (marked deprecated, excluded from the package); removed at the next major |
-| Nine source files lack the published license header (`index.js`, `capabilities.js`, `interceptor.js`, `normalize.js`, `path-utils.js`, `registration-mode.js`, `approval-gate.js`, `artifact-manifest.js`, `bounded-executor.js`) | 2.1.5, with a test that fails on a missing header |
+| Nine source files lacked the published license header | Fixed in 2.1.5, with a test that fails on a missing header |
