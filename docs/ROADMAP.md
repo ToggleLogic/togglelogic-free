@@ -18,6 +18,14 @@ Detailed designs:
 - [M1 — Host adapters and the decision API](design/M1-HOST-ADAPTERS-AND-DECISION-API.md)
 - [M2 — Tamper-evident audit log](design/M2-AUDIT-LOG.md)
 
+## Terminology — three kinds of "number"
+
+| Term | Meaning | Rule |
+|---|---|---|
+| **Release version** | The semver of a ToggleLogic product release, e.g. ToggleLogic Free 2.2.0 or ToggleLogic Intelligence 2.1.0. | Required on every release, tag, CHANGELOG entry and plan. Always name the product. |
+| **Model family / lineage** | The durable routing target, e.g. a provider-qualified lineage. A concrete model release is only the current execution child of a lineage. | Routing, docs and policy name families. Never a permanent pin to a numbered model release. |
+| **Patent application numbers and filing dates** | Identifiers of the provisional filings. | Never written anywhere. Public wording: "nine provisional patents pending". |
+
 ## Ground rules (apply to every milestone)
 
 - Every change ships as a semver release with tests, a CHANGELOG entry and a
