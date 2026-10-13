@@ -1,3 +1,9 @@
+/*
+ * ToggleLogic (Free Tier) — artifact manifest validation.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";

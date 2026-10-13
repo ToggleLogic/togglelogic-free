@@ -1,3 +1,9 @@
+/*
+ * ToggleLogic (Free Tier) — before_model_resolve routing interceptor.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
 import { hostFallbacks } from "../usage/provider-refusal.js";
 import { configuredModels } from "./lineage-resolver.js";
 import { deriveLineage } from "./lineage.js";

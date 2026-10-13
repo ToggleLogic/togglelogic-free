@@ -1,3 +1,9 @@
+/*
+ * ToggleLogic (Free Tier) — OpenClaw plugin entry point.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { normalizeConfig } from "./config/normalize.js";
 import { createAuditLogger } from "./audit/audit-logger.js";
@@ -5,7 +11,7 @@ import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 import { registerCapabilities } from "./capabilities.js";
 import { shouldSkipRuntimeRegistration } from "./registration-mode.js";
 
-const PLUGIN_VERSION = "2.1.4";
+const PLUGIN_VERSION = "2.1.5";
 
 export default definePluginEntry({
   id: "togglelogic",

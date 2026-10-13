@@ -1,3 +1,9 @@
+/*
+ * ToggleLogic (Free Tier) — plugin configuration normalization.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
 import { validLineage } from "../routing/lineage-resolver.js";
 const MODES = new Set(["auto", "passthrough", "configured", "cheap", "intelligence"]);
 

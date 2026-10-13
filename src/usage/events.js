@@ -9,7 +9,9 @@ import { createInterface } from "node:readline";
 import { createLogger } from "../observability/logger.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
 
-const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED, "provider_unavailable", "provider_available", "provider_balance_low", "fallback_unresolved"]);
+const TYPES = new Set([EVENTS.MODEL_UNPRICED, EVENTS.USAGE_MISSING, EVENTS.BUDGET_THRESHOLD_CROSSED, "provider_unavailable", "provider_available", "provider_balance_low", "fallback_unresolved", "audit_write_failed"]);
+const ISO = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T[0-9:.]+Z$/.test(value) ? value : null;
+const COUNT = (value) => Number.isInteger(value) && value >= 0 ? value : 0;
 
 export function isLocalProvider(provider, localProviders = ["ollama", "lmstudio", "llamacpp", "vllm-local"], hostConfig = {}) {
   if (localProviders.includes(String(provider).toLowerCase())) return true;
@@ -86,6 +88,20 @@ export function createUsageEvents({ config = {}, audit, fallbackLogger, deployme
         ...eventEnvelope({ deploymentId, costCenter, ...input }), provider: identifier(input.provider),
         reason: input.reason === "routing_hook_error" ? "routing_hook_error" : "no_available_fallback" };
       queue = queue.then(() => log.write(row)).catch(() => { fallbackLogger?.warn?.("ToggleLogic fallback_unresolved event write failed"); });
+      return queue;
+    }
+    if (event === "audit_write_failed") {
+      // 2.1.5: the audit sink is failing. Written to this events file only —
+      // never to the audit sink, which is the thing that is failing. Fixed
+      // allowlist: counts, ISO timestamps and an error code; no paths, no
+      // error text. Not deduplicated: the audit logger already rate-limits
+      // reports, and every report carries cumulative counts.
+      const row = { schema: "togglelogic.event.v1", ts: new Date(now()).toISOString(), event,
+        ...eventEnvelope({ deploymentId, costCenter, requestIdReason: "audit-sink" }),
+        failedCount: COUNT(input.failedCount), sinceLastReport: COUNT(input.sinceLastReport),
+        firstFailureAt: ISO(input.firstFailureAt), lastFailureAt: ISO(input.lastFailureAt),
+        errorCode: typeof input.errorCode === "string" && /^[A-Z0-9_]{1,32}$/.test(input.errorCode) ? input.errorCode : "EUNKNOWN" };
+      queue = queue.then(() => log.write(row)).catch(() => { fallbackLogger?.error?.("ToggleLogic audit_write_failed event write failed; audit and events sinks are both failing"); });
       return queue;
     }
     if (event === "provider_balance_low") {

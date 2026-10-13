@@ -65,6 +65,17 @@ audit record, and a not-ready routing capability gate in the plugin-registration
 audit — so the misconfiguration is never silent. Set the flag to `true` and
 restart the gateway to enable routing.
 
+### Audit-write failures are loud
+
+If the audit log cannot be written (full disk, missing or read-only directory),
+ToggleLogic Free keeps routing but never fails silently: every failed write is
+counted; an error-level log is written on the first failure and at most once a
+minute after that, and at every session start while the problem lasts; an
+`audit_write_failed` event (counts and error code only) goes to the separate
+events file; and the audit capability gate reports not ready. When writes
+succeed again, an `audit.write.recovered` record in the audit log states how
+many records were lost and when.
+
 ## Spend tracking
 
 ToggleLogic Free records each routed model call with the machine it ran on, the

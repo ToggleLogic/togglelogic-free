@@ -1,4 +1,9 @@
-/* Resolve plugin paths without escaping an OpenClaw named/dev profile. */
+/*
+ * ToggleLogic (Free Tier) — state-path resolution within the active OpenClaw profile.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
 import os from "node:os";
 import path from "node:path";
 

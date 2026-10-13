@@ -91,6 +91,13 @@ export const EVENTS = Object.freeze({
   // reason only — never conversation content.
   SESSION_PIN_STORE_ABSENT: "session_pin_store_absent",
 
+  // --- Audit integrity (2.1.5) ---
+  // Written into the audit stream by the first successful write after one or
+  // more audit writes failed. details: failedCount, firstFailureAt,
+  // lastFailureAt, lastErrorCode, recordsLost. Makes every gap in the audit
+  // stream visible to anyone reading it.
+  AUDIT_WRITE_RECOVERED: "audit.write.recovered",
+
   // --- Credential boundary ---
   CREDENTIAL_LOOKUP: "credential.lookup",
 
@@ -136,6 +143,9 @@ export function controlsFor(event) {
     case EVENTS.ROUTING_SKIPPED:
     case EVENTS.SESSION_PIN_STORE_ABSENT:
       return ["AU-2", "AU-3", "AU-12"];
+    case EVENTS.AUDIT_WRITE_RECOVERED:
+      // AU-5: response to audit logging process failures.
+      return ["AU-2", "AU-3", "AU-5", "AU-12"];
     case EVENTS.CREDENTIAL_LOOKUP:
       return ["AU-2", "AU-3", "AU-12", "IA-5"];
     case EVENTS.REDACTION_INTERCEPT:

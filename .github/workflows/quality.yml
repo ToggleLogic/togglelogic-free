@@ -6,10 +6,37 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    # Windows has never been run end to end; it reports but does not block
+    # until its first green run.
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ["24", "26"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
       - run: npm run quality
+
+  host-compat:
+    name: host compat (openclaw ${{ matrix.openclaw }}, node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        openclaw: ["2026.9.9", "2026.10.2"]
+        node: ["24", "26"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install --no-save --ignore-scripts --no-audit --no-fund openclaw@${{ matrix.openclaw }}
+      - run: npm run quality
+        env:
+          TOGGLELOGIC_REQUIRE_OPENCLAW: ${{ matrix.openclaw }}

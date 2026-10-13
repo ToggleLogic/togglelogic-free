@@ -1,3 +1,9 @@
+/*
+ * ToggleLogic (Free Tier) — bounded execution envelope (exported, not wired into the plugin).
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
 import crypto from "node:crypto";
 
 const refParts = (ref) => {

@@ -1,4 +1,10 @@
 /*
+ * ToggleLogic (Free Tier) — governed escalation approval gate.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
+/*
  * ToggleLogic — governed model escalation coordinator.
  *
  * The classifier recommends. This coordinator decides whether that recommendation

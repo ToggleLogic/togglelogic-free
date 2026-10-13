@@ -29,6 +29,16 @@ fields, billing account IDs, or endpoint URLs are copied into either event sink.
   size. The cost ledger and summary retain every call. This event indicates
   incomplete usage evidence; it does not diagnose a billing refusal.
 
+- `audit_write_failed` (2.1.5): the audit log cannot be written. Fields:
+  `failedCount` (records not written in the current failure window),
+  `sinceLastReport`, `firstFailureAt`, `lastFailureAt`, and `errorCode` (an
+  error code such as `ENOSPC`; never a path or error text). Written to this
+  events file only, never to the audit sink, at most once a minute while
+  failures continue, with cumulative counts. Not deduplicated. `requestId` is
+  null with `requestIdReason: "audit-sink"`. Emitted whether or not cost
+  visibility is enabled. The audit log itself records the gap with an
+  `audit.write.recovered` record once writes succeed.
+
 Suppression is serialized within an observer and restored on restart from the
 retained event files. Independent processes must use separate event paths;
 there is no cross-process lock. Removing or rotating out all records of an event

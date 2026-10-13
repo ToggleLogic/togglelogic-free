@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.1.5 — 2026-10-13
+
+Patch over 2.1.4. Audit-write failures are loud, counted and recovered; CI runs
+on the supported Node versions and against a real OpenClaw host package. No
+configuration or file-layout change.
+
+- **Fixed: audit-write failures were silent after the first.** The audit writer
+  warned once and then dropped every later failure for the life of the process.
+  Now every failed write is counted, and:
+  - an error-level host log names the error code, the count and the time of the
+    first failure — on the first failure, then at most once a minute with
+    cumulative and since-last-report counts, and again at every `session_start`
+    while writes keep failing;
+  - an `audit_write_failed` event (counts, timestamps, error code; no paths or
+    error text) is written to the separate events file;
+  - the audit capability gate (`id: "audit"`) reports `ready: false,
+    reason: "audit-write-failing"`; the gate is included in the
+    `plugin.register` audit record and exposed by `audit.health()`;
+  - the first successful write afterwards is followed by an
+    `audit.write.recovered` record (controls AU-2, AU-3, AU-5, AU-12) stating
+    `failedCount`, `firstFailureAt`, `lastFailureAt`, `lastErrorCode` and
+    `recordsLost`, so every gap is visible in the audit log itself.
+  Routing and dispatch remain fail-soft; failed records are not buffered.
+- **Added: license-header and patent-identifier test.** Nine source files that
+  lacked the published license header now carry it
+  (`index.js`, `capabilities.js`, `routing/interceptor.js`, `config/normalize.js`,
+  `path-utils.js`, `registration-mode.js`, `governance/approval-gate.js`,
+  `enforcement/artifact-manifest.js`, `enforcement/bounded-executor.js`);
+  `tests/license-header.test.js` fails on any shipped file without it.
+- **CI:** Node 24 and 26 on Linux, macOS and Windows (Windows informational
+  until its first green run), plus a host-compatibility job that installs
+  OpenClaw 2026.9.9 and 2026.10.2 and registers the plugin against the real
+  plugin SDK (`tests/openclaw-host-compat.test.js`; skipped locally when no
+  OpenClaw package is installed). CI previously declared Node 22, which the
+  supported OpenClaw host does not run on.
+- Tests: 8 new; 198 pass without a host package, 200 with one (Node 24.21 and
+  26.11 on Linux, OpenClaw 2026.9.9 and 2026.10.2).
+
 ## 2.1.4 — 2026-10-12
 
 Patch over 2.1.3. Session model pins are recognised by provenance again on

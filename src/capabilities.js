@@ -1,3 +1,9 @@
+/*
+ * ToggleLogic (Free Tier) — capability registration and host hook wiring.
+ * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
+ */
 import { hostname } from "node:os";
 import { createLineageResolver, auditFallbackPlan } from "./routing/lineage-resolver.js";
 import { createProviderAvailability } from "./usage/provider-refusal.js";
@@ -37,6 +43,26 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
   const registered = [];
   const gates = [];
   const mark = (id, enabled, reason) => gates.push({ id, enabled, reason });
+
+  // 2.1.5: audit-write failures are loud. Forward each rate-limited failure
+  // report to the usage-events stream (an independent sink), record the audit
+  // capability gate, and repeat an error-level log at every session start while
+  // the audit sink is still failing (session_start is a non-gated lifecycle hook).
+  if (typeof audit?.health === "function") {
+    audit.onFailureReport?.((info) => usageEvents.emit("audit_write_failed", info));
+    const health = audit.health();
+    gates.push({ id: "audit", enabled: health.enabled, reason: health.reason, ready: health.ready });
+    if (health.enabled) {
+      api.on("session_start", () => {
+        const now = audit.health();
+        if (now.ready) return;
+        try {
+          fallbackLogger?.error?.(`togglelogic-audit: audit capability NOT READY (${now.failures.lastErrorCode}); ` +
+            `${now.failures.current} record(s) not written since ${now.failures.firstFailureAt}.`);
+        } catch {}
+      });
+    }
+  }
 
   let costObserver = null;
   if (config.features.routing.enabled || config.routing?.invalidFallbackLineages?.length) {
