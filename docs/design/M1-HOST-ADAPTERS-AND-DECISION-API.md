@@ -19,7 +19,7 @@ returned as a host-neutral response.
 | C3 | Host config shape: `agents.defaults.model`, `agents.list[].model`, `agents.defaults.models` (allowlist), `models.providers[*]` (`agentRuntime`, `baseUrl`, `models[]`), `model.fallbacks`, `session.store` | `interceptor.js`, `lineage-resolver.js`, `provider-refusal.js`, `events.js`, `capabilities.js`, `session-store.js` | Adapter translates to `candidates`, `defaultRef`, `fallbacks`, `providers[].local` |
 | C4 | Hook context fields: `modelProviderId`, `modelId`, `modelOverrideSource`, `sessionKey`, `sessionId`, `agentId`, `channelId`, `taskType`/`task`/`capability`, `metadata.taskType` | `interceptor.js`, `decision.js`, `modes.js` | Adapter translates to `requested` and `work` |
 | C5 | Session-pin provenance: `api.runtime.agent.session.getSessionEntry`, legacy `sessions.json`, `modelOverrideSource`, fallback-origin fields | `session-store.js` | OpenClaw adapter → `requested.source` |
-| C6 | State paths default to `~/.openclaw/...` and honor `OPENCLAW_STATE_DIR` | `path-utils.js`, `normalize.js`, `session-store.js` | `StateStore` / `paths` supplied by adapter |
+| C6 | State paths default to `~/.openclaw/...` and honor `OPENCLAW_STATE_DIR` (audit, routing, cost and event logs; owner-override state; new-session markers in `<state>/togglelogic/new-sessions`) | `path-utils.js`, `normalize.js`, `session-store.js`, `new-session-tracker.js` | `StateStore` / `paths` supplied by adapter |
 | C7 | Host quirks: duplicate `before_model_resolve` dedupe (60 s fingerprint), `before_agent_reply` preflight cache | `interceptor.js` | OpenClaw adapter (core is idempotent per request id) |
 | C8 | `llm_output` event shape (`provider`, `model`, `usage`, `resolvedRef`, assistant message) | `cost-observer.js`, `provider-refusal.js`, `approval-gate.js` | Adapter → `UsageObservation` |
 | C9 | Host override return shape `{ providerOverride, modelOverride }` | `interceptor.js`, `modes.js` | Adapter maps `DecisionResponse.decision` |
@@ -28,7 +28,7 @@ returned as a host-neutral response.
 | C12 | Bounded executor depends on `runtime.subagent.*`; not wired in | `enforcement/bounded-executor.js` | Deprecated; not ported |
 | C13 | Notification helper spawns `/usr/bin/python3` | `capture/owner-override-ask.js` | OpenClaw adapter; interpreter configurable |
 
-Nothing outside this table reads host state. Pricing, lineage resolution,
+Nothing outside this table reads host state. The table was cross-checked on 2026-10-13 against the earlier fact-finding inventory (made from the published Free 2.1.1 artifact); no coupling was missing. Pricing, lineage resolution,
 budgets, balances, cost tally, audit and the routing log are already
 host-neutral apart from their default paths (C6).
 
