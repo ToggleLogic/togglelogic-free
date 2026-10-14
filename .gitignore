@@ -9,3 +9,8 @@ node_modules/
 *.bak*
 reports/
 *.tgz
+
+# Graphify (dev-only code graph; never commit or ship)
+graphify-out/
+.claude/skills/graphify/
+.agents/skills/graphify/
