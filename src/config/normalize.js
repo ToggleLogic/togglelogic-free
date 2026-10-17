@@ -17,7 +17,7 @@ export const DEFAULTS = Object.freeze({
   ownerOverride: Object.freeze({ enabled: false, statePath: "~/.openclaw/togglelogic/owner_model_override.json", askConsumer: "~/.openclaw/togglelogic/owner_override_ask.py" }),
   audit: Object.freeze({ enabled: true, path: "~/.openclaw/logs/togglelogic-audit.jsonl", rotateSizeMb: 50 }),
   costVisibility: Object.freeze({
-    attribution: Object.freeze({ deploymentId: "", costCenter: "", billable: true }),
+    attribution: Object.freeze({ deploymentId: "", costCenter: "", billable: true, invoiceEstimates: false }),
     log: Object.freeze({ enabled: true, path: "~/.openclaw/logs/togglelogic-cost.jsonl", rotateSizeMb: 50 }),
     pricing: Object.freeze({ sourceUrl: "https://models.dev/api.json", cachePath: "~/.openclaw/togglelogic/pricing-cache.json", refreshHours: 24, timeoutMs: 15000, userPriceOverridePath: "", cacheReadMultiplier: 0.25, cacheWriteMultiplier: 1 }),
     events: Object.freeze({ path: "~/.openclaw/logs/togglelogic-events.jsonl", rotateSizeMb: 50 }),
@@ -80,7 +80,8 @@ export function normalizeConfig(raw) {
     ownerOverride: { enabled: ownerOverride.enabled === true, statePath: str(ownerOverride.statePath, DEFAULTS.ownerOverride.statePath), askConsumer: str(ownerOverride.askConsumer, DEFAULTS.ownerOverride.askConsumer) },
     audit: { enabled: audit.enabled !== false, path: str(audit.path, DEFAULTS.audit.path), rotateSizeMb: num(audit.rotateSizeMb, 50, 1) },
     costVisibility: {
-      attribution: { deploymentId: slug(attribution.deploymentId), costCenter: slug(attribution.costCenter), billable: attribution.billable !== false },
+      attribution: { deploymentId: slug(attribution.deploymentId), costCenter: slug(attribution.costCenter), billable: attribution.billable !== false,
+        invoiceEstimates: attribution.invoiceEstimates === true },
       log: { enabled: costLog.enabled !== false, path: str(costLog.path, DEFAULTS.costVisibility.log.path), rotateSizeMb: num(costLog.rotateSizeMb, 50, 1) },
       pricing: { sourceUrl: str(pricing.sourceUrl, DEFAULTS.costVisibility.pricing.sourceUrl), cachePath: str(pricing.cachePath, DEFAULTS.costVisibility.pricing.cachePath), refreshHours: num(pricing.refreshHours, 24, 1), timeoutMs: num(pricing.timeoutMs, 15000, 1), userPriceOverridePath: str(pricing.userPriceOverridePath), cacheReadMultiplier: num(pricing.cacheReadMultiplier, 0.25, 0), cacheWriteMultiplier: num(pricing.cacheWriteMultiplier, 1, 0) },
       events: { path: str(events.path, DEFAULTS.costVisibility.events.path), rotateSizeMb: num(events.rotateSizeMb, 50, 1) },

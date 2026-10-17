@@ -38,10 +38,16 @@ still retains the price provenance even though its cost is null.
 
 `costVisibility.attribution.billable` defaults to true. A call is billable only
 when a price and usable usage exist and the deployment has not disabled billing.
-All public-rate estimates have `invoiceEligible: false`, even if billable. The
+By default, public-rate estimates have `invoiceEligible: false`, even if
+billable. A deployment owner can opt in with
+`costVisibility.attribution.invoiceEstimates: true` (default false): billable
+rows are then written with `invoiceEligible: true`, and their
+`invoiceEligibleReason` stays `public-rate-estimate` so every reader can see the
+basis. Unpriced, usage-missing and non-billable rows are never eligible. The
 reason precedence is `unpriced`, `usage-missing`, `not-billable-deployment`, then
-`public-rate-estimate`. Only later reconciliation can promote invoice eligibility;
-exports preserve a previously promoted row but never perform that promotion.
+`public-rate-estimate`; a reconciled row has reason `null`. Exports preserve the
+eligibility recorded in the ledger while the row is billable, and never promote
+a row themselves.
 
 ## Offline monthly export
 

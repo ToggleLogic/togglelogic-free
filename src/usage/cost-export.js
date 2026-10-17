@@ -26,8 +26,12 @@ function exportRow(row) {
   const billableDeployment = row.billable !== false;
   const billing = billingFields({ priced: !state.unpriced, usageMissing: state.usageMissing, billableDeployment });
   const lineage = deriveLineage(row.resolvedRef);
-  // A future reconciler may promote this field. Export never promotes it.
-  if (row.invoiceEligible === true) { billing.invoiceEligible = true; billing.invoiceEligibleReason = null; }
+  // Export never promotes a row; it keeps eligibility the ledger already recorded
+  // (owner-opted public-rate estimate, or a reconciled row) while it is still billable.
+  if (row.invoiceEligible === true && billing.billable) {
+    billing.invoiceEligible = true;
+    billing.invoiceEligibleReason = row.invoiceEligibleReason === "public-rate-estimate" ? "public-rate-estimate" : null;
+  }
   const complete = {
     ...row, ts: new Date(row.ts).toISOString(), kind: "call",
     lineage: row.lineage ?? lineage.lineage, lineageReason: row.lineage ? null : lineage.lineageReason,

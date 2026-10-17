@@ -166,7 +166,8 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
         priceSource: price?.source ?? null,
         priceVersion: price?.priceVersion ?? null,
         priced, unpriced: !priced, usageMissing,
-        ...billingFields({ priced, usageMissing, billableDeployment: cv.attribution?.billable !== false }),
+        ...billingFields({ priced, usageMissing, billableDeployment: cv.attribution?.billable !== false,
+          invoiceEstimates: cv.attribution?.invoiceEstimates === true }),
         inputTok: inTok,
         outputTok: outTok,
         cacheTok,
@@ -175,11 +176,11 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
       };
       if (costed) {
         row.costUsd = round6(cost);
-        // Public price-card math is useful attribution evidence, but it is not
-        // an authoritative provider invoice. Later reconciliation promotes it to
-        // invoice-ready only after the fleet total agrees with provider truth.
+        // Public price-card math is attribution evidence, not a provider invoice.
+        // Invoice eligibility comes only from billingFields(): off by default,
+        // or the deployment owner's explicit opt-in (attribution.invoiceEstimates),
+        // always labeled public-rate-estimate. Reconciliation may replace it later.
         row.costBasis = "public-rate-estimate";
-        row.invoiceEligible = false;
         row.inputPerM = price.inputPerM;
         row.outputPerM = price.outputPerM;
         // Cache-token basis is stated LOUDLY so the log and the owner receipt

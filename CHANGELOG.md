@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.1.6 — 2026-10-17
+
+Patch over 2.1.5. Owner opt-in invoice eligibility for public-rate estimates.
+Default behavior is unchanged.
+
+- **Added: `costVisibility.attribution.invoiceEstimates`** (boolean, default
+  `false`). When a deployment owner sets it to `true`, a cost row that is priced,
+  has complete usage and belongs to a billable deployment is written with
+  `invoiceEligible: true`. Its `invoiceEligibleReason` stays
+  `public-rate-estimate`, so the basis is always visible. Unpriced,
+  usage-missing and non-billable rows are never eligible; they stay loud, never
+  $0. Provider-invoice reconciliation can replace the estimate later.
+- **Fixed:** the export kept a recorded `invoiceEligible: true` even on a
+  non-billable row; it now keeps eligibility only while the row is billable.
+- Every cost row and export row continues to carry `requestId` (or
+  `requestIdReason` when correlation is unavailable).
+- No change to export columns, file layout or routing.
+- `.claude/settings.local.json` added to `.gitignore`.
+
 ## 2.1.5 — 2026-10-13
 
 Patch over 2.1.4. Audit-write failures are loud, counted and recovered; CI runs

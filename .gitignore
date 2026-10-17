@@ -14,3 +14,6 @@ reports/
 graphify-out/
 .claude/skills/graphify/
 .agents/skills/graphify/
+
+# Local Claude Code settings (per-machine; never commit)
+.claude/settings.local.json
