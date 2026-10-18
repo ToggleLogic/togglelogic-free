@@ -9,7 +9,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { resolveOpenClawPath } from "../path-utils.js";
+import { resolvePath } from "../path-utils.js";
 
 import { AUDIT_SCHEMA, EVENTS, OUTCOMES, controlsFor } from "./audit-events.js";
 
@@ -49,8 +49,9 @@ export function createAuditLogger(auditConfig, hostLogger, runtimeMeta = {}, dep
   const fsApi = deps.fs ?? fs;
   const config = auditConfig ?? {};
   const enabled = config.enabled !== false;
-  const targetPath = resolveOpenClawPath(
-    config.path ?? "~/.openclaw/logs/togglelogic-audit.jsonl"
+  const targetPath = resolvePath(
+    config.path ?? "~/.openclaw/logs/togglelogic-audit.jsonl",
+    deps.paths ?? null
   );
   const rotateBytes = Math.max(1, config.rotateSizeMb ?? 50) * 1024 * 1024;
 

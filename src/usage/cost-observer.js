@@ -32,7 +32,8 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
     deps.logger ??
     createLogger(
       { enabled: cv.log.enabled, path: cv.log.path, rotateSizeMb: cv.log.rotateSizeMb },
-      fallbackLogger
+      fallbackLogger,
+      { paths: deps.paths ?? null }
     );
   const summaryEvery = Math.max(1, cv.summaryEveryCalls ?? 20);
   let calls = 0;
@@ -42,13 +43,13 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
 
   const events = usageEvents ?? createUsageEvents({
     config: cv.events, audit, fallbackLogger, deploymentId, costCenter,
-    logger: deps.eventLogger, now,
+    logger: deps.eventLogger, now, paths: deps.paths ?? null,
   });
 
   const budgets = createBudgetTracker({ config: cv.budgets, ledgerPath: costLog.path,
     enabled: cv.log.enabled, costLog, events, deploymentId, now, fallbackLogger });
 
-  const balances = createBalances({ config: cv.balances, ledgerPath: costLog.path, events, deploymentId, costCenter, now });
+  const balances = createBalances({ config: cv.balances, ledgerPath: costLog.path, events, deploymentId, costCenter, now, paths: deps.paths ?? null });
   // Replay completes before this observer appends its first live call, avoiding
   // double counting a row that is both on disk and delivered incrementally.
   const balanceReady = cv.log.enabled && costLog.path ? balances.start().catch(() => {

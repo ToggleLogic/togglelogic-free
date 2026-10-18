@@ -21,7 +21,7 @@
 import { promises as fs } from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
-import { resolveOpenClawPath } from "../path-utils.js";
+import { resolvePath } from "../path-utils.js";
 
 const MIN_COMPATIBLE_VERSION = "1.0.0-alpha.2";
 
@@ -36,7 +36,7 @@ const MIN_COMPATIBLE_VERSION = "1.0.0-alpha.2";
 export const INTELLIGENCE_SEAM_ABI = 1;
 
 export async function detectIntelligenceLayer(configuredPath, registryPath, pluginVersion = "", options = {}) {
-  const resolvedPath = resolveOpenClawPath(configuredPath ?? "~/togglelogic-intelligence");
+  const resolvedPath = resolvePath(configuredPath ?? "~/togglelogic-intelligence", options.paths ?? null);
 
   // 1. Path must exist and be a directory.
   let stats;
@@ -109,7 +109,7 @@ export async function detectIntelligenceLayer(configuredPath, registryPath, plug
   //    RELATIVE to the layer — no deployment/workspace path is hardcoded here.
   const resolvedRegistry =
     typeof registryPath === "string" && registryPath.length > 0
-      ? resolveOpenClawPath(registryPath)
+      ? resolvePath(registryPath, options.paths ?? null)
       : path.join(resolvedPath, "normalized.json");
   try {
     await fs.access(resolvedRegistry);

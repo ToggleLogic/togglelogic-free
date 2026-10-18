@@ -23,6 +23,7 @@ export function createIntelligenceSeam(
   hostRuntimeConfig = null,
   pluginVersion = "",
   consumeNewSession = null,
+  { paths = null } = {},
 ) {
   const config = intelligenceConfig ?? {};
   const enabled = config.enabled !== false;
@@ -42,6 +43,7 @@ export function createIntelligenceSeam(
       // path relative to the layer when unset. No workspace path hardcoded.
         const result = await detectIntelligenceLayer(config.path, config.registryPath, pluginVersion, {
           allowReleaseCandidate: config.allowReleaseCandidate === true,
+          paths,
         });
         detectionResult = result;
 

@@ -8,7 +8,7 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { resolveOpenClawPath } from "../path-utils.js";
+import { resolvePath } from "../path-utils.js";
 
 /**
  * JSONL routing log writer.
@@ -25,11 +25,12 @@ import { resolveOpenClawPath } from "../path-utils.js";
 
 const MAX_ROTATION_INDEX = 4; // keeps .1 through .5
 
-export function createLogger(loggingConfig, fallbackLogger) {
+export function createLogger(loggingConfig, fallbackLogger, { paths = null } = {}) {
   const config = loggingConfig ?? {};
   const enabled = config.enabled !== false;
-  const targetPath = resolveOpenClawPath(
-    config.path ?? "~/.openclaw/logs/togglelogic-routing.log"
+  const targetPath = resolvePath(
+    config.path ?? "~/.openclaw/logs/togglelogic-routing.log",
+    paths
   );
   const rotateBytes = Math.max(1, config.rotateSizeMb ?? 50) * 1024 * 1024;
 

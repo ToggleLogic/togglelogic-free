@@ -8,7 +8,7 @@
 
 import { spawn } from "node:child_process";
 import { resolveOwnerOverride } from "../routing/owner-override.js";
-import { resolveOpenClawPath } from "../path-utils.js";
+import { resolvePath } from "../path-utils.js";
 
 // User-facing channels only (same generic set as turn-end capture). The
 // consumer decides which one is the owner; the engine stays channel-agnostic.
@@ -22,9 +22,9 @@ const PY = "/usr/bin/python3"; // production interpreter (stock macOS)
  * Build the message_sending handler. Contract: (event, ctx) => Promise<void>.
  * Always returns undefined — observe + notify only; never rewrites outbound.
  */
-export function createOwnerOverrideAskHandler({ config, fallbackLogger }) {
+export function createOwnerOverrideAskHandler({ config, fallbackLogger, paths = null }) {
   const oo = (config && config.ownerOverride) || {};
-  const consumer = resolveOpenClawPath(oo.askConsumer);
+  const consumer = resolvePath(oo.askConsumer, paths);
 
   return async function ownerOverrideAskHandler(event, ctx) {
     try {
@@ -35,7 +35,7 @@ export function createOwnerOverrideAskHandler({ config, fallbackLogger }) {
         event && typeof event.content === "string" ? event.content : "";
       if (!content || content.length < MIN_TURN_CHARS) return; // skip acks
 
-      const owner = resolveOwnerOverride(oo);
+      const owner = resolveOwnerOverride(oo, { paths });
       if (!owner.applied) return; // no active override → nothing to ask about
 
       // Generic state for the consumer. The engine supplies facts; the

@@ -4,23 +4,18 @@
  * License (see LICENSE); all rights reserved.
  * PATENT PENDING.
  */
-import os from "node:os";
-import path from "node:path";
+import { openClawPaths } from "./adapters/openclaw/paths.js";
 
-function homeDir(env) {
-  return typeof env.HOME === "string" && env.HOME.trim() ? env.HOME.trim() : os.homedir();
+/**
+ * Compatibility entry point (Free 2.1.x API). Resolves a configured path with
+ * the OpenClaw environment defaults. New code receives an injected `paths`
+ * object (src/core/paths.js) instead.
+ */
+export function resolveOpenClawPath(value, env = process.env) {
+  return openClawPaths(env).resolve(value);
 }
 
-export function resolveOpenClawPath(value, env = process.env) {
-  if (typeof value !== "string") return value;
-  const home = homeDir(env);
-  const rawState = typeof env.OPENCLAW_STATE_DIR === "string" ? env.OPENCLAW_STATE_DIR.trim() : "";
-  const stateDir = rawState
-    ? path.resolve(rawState === "~" ? home : rawState.startsWith("~/") ? path.join(home, rawState.slice(2)) : rawState)
-    : path.join(home, ".openclaw");
-  if (value === "~/.openclaw") return stateDir;
-  if (value.startsWith("~/.openclaw/")) return path.join(stateDir, value.slice(12));
-  if (value === "~") return home;
-  if (value.startsWith("~/")) return path.join(home, value.slice(2));
-  return value;
+/** Resolve with injected paths when given, else the OpenClaw environment defaults. */
+export function resolvePath(value, paths = null) {
+  return paths ? paths.resolve(value) : resolveOpenClawPath(value);
 }

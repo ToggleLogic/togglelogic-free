@@ -59,7 +59,7 @@
  */
 
 import { statSync, readFileSync } from "node:fs";
-import { resolveOpenClawPath } from "../path-utils.js";
+import { resolveOpenClawPath, resolvePath } from "../path-utils.js";
 
 /** A model_ref must be "provider/model" — a single non-edge slash. */
 function looksLikeModelRef(ref) {
@@ -101,12 +101,12 @@ const NOT_APPLIED = Object.freeze({ applied: false });
  * @returns {{applied:boolean, modelRef?:string, providerOverride?:string,
  *            state?:object, rejected?:string, expiresRaw?:*}}
  */
-export function resolveOwnerOverride(ownerOverrideConfig) {
+export function resolveOwnerOverride(ownerOverrideConfig, { paths = null } = {}) {
   const cfg = ownerOverrideConfig;
   if (!cfg || cfg.enabled !== true || typeof cfg.statePath !== "string") {
     return NOT_APPLIED;
   }
-  const path = resolveOpenClawPath(cfg.statePath);
+  const path = resolvePath(cfg.statePath, paths);
 
   let mtimeMs;
   try {

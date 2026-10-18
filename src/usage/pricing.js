@@ -20,7 +20,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { resolveOpenClawPath } from "../path-utils.js";
+import { resolvePath } from "../path-utils.js";
 
 import { candidateKeys, feedIndexKeys, isCurated, providerOf } from "./normalize-ref.js";
 
@@ -128,9 +128,9 @@ function num(x) {
  * Create the pricing engine. `deps` lets tests inject fetch/clock/paths.
  */
 export function createPricing(cfg = {}, fallbackLogger, deps = {}) {
-  const cachePath = resolveOpenClawPath(cfg.cachePath ?? "~/.openclaw/togglelogic/pricing-cache.json");
+  const cachePath = resolvePath(cfg.cachePath ?? "~/.openclaw/togglelogic/pricing-cache.json", deps.paths ?? null);
   const overridePath = cfg.userPriceOverridePath
-    ? resolveOpenClawPath(cfg.userPriceOverridePath)
+    ? resolvePath(cfg.userPriceOverridePath, deps.paths ?? null)
     : "";
   const refreshMs = Math.max(1, cfg.refreshHours ?? 24) * 3600 * 1000;
   const timeoutMs = Math.max(1000, cfg.timeoutMs ?? 15000);

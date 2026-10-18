@@ -14,7 +14,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { resolveOpenClawPath } from "../path-utils.js";
+import { resolvePath } from "../path-utils.js";
 
 const DEFAULT_AFFIRMATIVE_PHRASES = Object.freeze(["yes"]);
 const DEFAULT_NEGATIVE_PHRASES = Object.freeze(["no"]);
@@ -156,14 +156,14 @@ function hasReceipt(value) {
   return typeof value === "string" && value.includes("\nReceipt\nModel:");
 }
 
-export function createApprovalGate({ config, pricing, now = () => Date.now() } = {}) {
+export function createApprovalGate({ config, pricing, now = () => Date.now(), paths = null } = {}) {
   const cfg = config || {};
   const pending = new Map();
   const receipts = new Map();
   const ttlMs = Math.max(60_000, Number(cfg.ttlMinutes || 30) * 60_000);
   const expiredNoticeTtlMs = Math.max(ttlMs, 60 * 60_000);
   const receiptLimit = 512;
-  const statePath = resolveOpenClawPath(cfg.statePath || "~/.openclaw/togglelogic/governed-escalation.json");
+  const statePath = resolvePath(cfg.statePath || "~/.openclaw/togglelogic/governed-escalation.json", paths);
   const localRef = cfg.localModel || "";
   const receiptMode = cfg.receiptMode === "always" ? "always" : "escalations-only";
   const localTiers = new Set(Array.isArray(cfg.localTiers) ? cfg.localTiers : ["general_purpose"]);

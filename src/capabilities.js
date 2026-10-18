@@ -18,6 +18,8 @@ import { createApprovalGate } from "./governance/approval-gate.js";
 import { createPricing } from "./usage/pricing.js";
 import { createNewSessionTracker } from "./routing/new-session-tracker.js";
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
+import { openClawPaths } from "./adapters/openclaw/paths.js";
+import { systemClock } from "./core/clock.js";
 import { isConversationAccessGranted, conversationAccessDeniedMessage, conversationAccessDeniedAuditDetails } from "./hooks/conversation-access.js";
 
 export function buildRuntimeConfigFromApiConfig(cfg) {
@@ -32,13 +34,13 @@ export function buildRuntimeConfigFromApiConfig(cfg) {
   return out;
 }
 
-export function registerCapabilities({ api, audit, fallbackLogger, version, config }) {
-  const requestCorrelation = createRequestCorrelation();
+export function registerCapabilities({ api, audit, fallbackLogger, version, config, paths = openClawPaths(), clock = systemClock }) {
+  const requestCorrelation = createRequestCorrelation({ now: clock });
   const usageEvents = createUsageEvents({ config: config.costVisibility.events, audit, fallbackLogger,
-    deploymentId: config.costVisibility.attribution.deploymentId || hostname().toLowerCase(), costCenter: config.costVisibility.attribution.costCenter });
+    deploymentId: config.costVisibility.attribution.deploymentId || hostname().toLowerCase(), costCenter: config.costVisibility.attribution.costCenter, now: clock, paths });
   const availability = config.features.costVisibility.enabled ? createProviderAvailability({ cooldownMinutes: config.costVisibility.providerCooldownMinutes,
     emit: (event, data) => { void usageEvents.emit(event, data); } }) : null;
-  const sharedPricing = createPricing(config.costVisibility.pricing, fallbackLogger);
+  const sharedPricing = createPricing(config.costVisibility.pricing, fallbackLogger, { paths, now: clock });
   const lineageResolver = createLineageResolver({ lineages: config.routing?.fallbackLineages, hostConfig: api?.config, pricing: sharedPricing, availability });
   const registered = [];
   const gates = [];
@@ -94,12 +96,12 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
     gates.push({ id: "routing", enabled: false, reason: "conversation-access-denied", ready: false });
     gates.push({ id: "governedEscalation", enabled: false, reason: "conversation-access-denied", ready: false });
   } else if (config.features.routing.enabled) {
-    const routingLogger = createRoutingLogger(config.logging, fallbackLogger);
+    const routingLogger = createRoutingLogger(config.logging, fallbackLogger, { paths });
     const newSessions = createNewSessionTracker();
-    const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, buildRuntimeConfigFromApiConfig(api?.config), version, newSessions.consume);
+    const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, buildRuntimeConfigFromApiConfig(api?.config), version, newSessions.consume, { paths });
     const governed = config.features.governedEscalation.enabled
-      ? createApprovalGate({ config: config.governedEscalation, pricing: createPricing(config.costVisibility.pricing, fallbackLogger) }) : null;
-    const interceptor = createInterceptor({ config, hostConfig: api?.config, hostSession: () => { try { return api?.runtime?.agent?.session ?? null; } catch { return null; } }, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation, availability, lineageResolver, usageEvents, fallbackLogger });
+      ? createApprovalGate({ config: config.governedEscalation, pricing: createPricing(config.costVisibility.pricing, fallbackLogger, { paths, now: clock }), now: clock, paths }) : null;
+    const interceptor = createInterceptor({ config, hostConfig: api?.config, hostSession: () => { try { return api?.runtime?.agent?.session ?? null; } catch { return null; } }, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation, availability, lineageResolver, usageEvents, fallbackLogger, paths });
     api.on("session_start", (event, context) => newSessions.mark({ sessionId: event?.sessionId || context?.sessionId, sessionKey: event?.sessionKey || context?.sessionKey }));
     api.on("before_model_resolve", interceptor, { priority: 100 });
     if (governed) {
@@ -119,13 +121,13 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
   }
 
   if (config.features.ownerOverrideAsk.enabled) {
-    api.on("message_sending", createOwnerOverrideAskHandler({ config, fallbackLogger }), { priority: 50 });
+    api.on("message_sending", createOwnerOverrideAskHandler({ config, fallbackLogger, paths }), { priority: 50 });
     registered.push("ownerOverrideAsk"); mark("ownerOverrideAsk", true, "configured");
   } else mark("ownerOverrideAsk", false, "disabled");
 
   if (config.features.costVisibility.enabled) {
     api.on("llm_output", (event, context) => availability.observe(event, requestCorrelation.lookup(event, context)), { priority: 60 });
-    costObserver = createCostObserver({ config, hostConfig: api?.config, audit, fallbackLogger, requestCorrelation, usageEvents, deps: { pricing: sharedPricing } });
+    costObserver = createCostObserver({ config, hostConfig: api?.config, audit, fallbackLogger, requestCorrelation, usageEvents, deps: { pricing: sharedPricing, paths, now: clock } });
     api.on("llm_output", costObserver.handler, { priority: 50 });
     registered.push("costVisibility"); mark("costVisibility", true, "configured");
   } else mark("costVisibility", false, "disabled");

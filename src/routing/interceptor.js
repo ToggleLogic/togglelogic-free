@@ -65,7 +65,7 @@ function isHostAutoSelection(sessionLookup, current) {
   return !stored.provider || !current.provider || stored.provider.toLowerCase() === current.provider.toLowerCase();
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null, lineageResolver = null, usageEvents = null, fallbackLogger = null, hostSession = null }) {
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null, lineageResolver = null, usageEvents = null, fallbackLogger = null, hostSession = null, paths = null }) {
   const recent = new Map();
   const preflight = new Map();
   const windowMs = 60_000;
@@ -104,7 +104,7 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     const governedPrior = governedEscalation?.beforeRouting(event?.prompt, context);
     if (governedPrior?.shortCircuit) return governedPrior.override || PASSTHROUGH;
 
-    const owner = resolveOwnerOverride(config.ownerOverride);
+    const owner = resolveOwnerOverride(config.ownerOverride, { paths });
     if (owner.applied) {
       const override = { modelOverride: owner.modelOverride, ...(owner.providerOverride ? { providerOverride: owner.providerOverride } : {}) };
       decision.selectedModel = owner.modelRef; decision.selectedProvider = owner.providerOverride || null; decision.selectionReason = "owner_override"; decision.selectionDetails = { matched_rule: "owner_override" };

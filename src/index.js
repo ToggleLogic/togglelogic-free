@@ -9,6 +9,7 @@ import { normalizeConfig } from "./config/normalize.js";
 import { createAuditLogger } from "./audit/audit-logger.js";
 import { EVENTS, OUTCOMES } from "./audit/audit-events.js";
 import { registerCapabilities } from "./capabilities.js";
+import { openClawPaths } from "./adapters/openclaw/paths.js";
 import { shouldSkipRuntimeRegistration } from "./registration-mode.js";
 
 const PLUGIN_VERSION = "2.1.6";
@@ -20,9 +21,11 @@ export default definePluginEntry({
   register(api) {
     if (shouldSkipRuntimeRegistration(api?.registrationMode)) return;
     const config = normalizeConfig(api.pluginConfig);
-    const audit = createAuditLogger(config.audit, api.logger, { pluginId: "togglelogic", pluginVersion: PLUGIN_VERSION });
+    // OpenClaw adapter: host state locations are resolved once here and injected.
+    const paths = openClawPaths(process.env);
+    const audit = createAuditLogger(config.audit, api.logger, { pluginId: "togglelogic", pluginVersion: PLUGIN_VERSION }, { paths });
     audit.emit({ event: EVENTS.CONFIG_LOAD, outcome: OUTCOMES.SUCCESS, principal: { source: "plugin-host" }, subject: { configSource: "openclaw.json#plugins.entries.togglelogic.config" }, details: { mode: config.mode, features: config.features } });
-    const { registered, gates } = registerCapabilities({ api, audit, fallbackLogger: api.logger, version: PLUGIN_VERSION, config });
+    const { registered, gates } = registerCapabilities({ api, audit, fallbackLogger: api.logger, version: PLUGIN_VERSION, config, paths });
     audit.emit({ event: EVENTS.PLUGIN_REGISTER, outcome: OUTCOMES.SUCCESS, principal: { source: "plugin-host" }, subject: { pluginVersion: PLUGIN_VERSION }, details: { registeredCapabilities: registered, capabilityGates: gates } });
   },
 });

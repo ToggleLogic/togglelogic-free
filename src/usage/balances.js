@@ -12,7 +12,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { readLedger } from "./ledger-reader.js";
 import { classifyLedgerCall, dollarsToMicros, microsToDollars } from "./ledger-row.js";
 import { eventEnvelope } from "./events.js";
-import { resolveOpenClawPath } from "../path-utils.js";
+import { resolvePath } from "../path-utils.js";
 
 export const BALANCE_NOTICE = "Estimate only: priced observed spend is a floor on spend; remaining may be overstated. Unpriced and usage-missing calls are excluded from spend. Retained ledger history may be incomplete.";
 const validProvider = (value) => typeof value === "string" && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(value);
@@ -20,8 +20,8 @@ const validAmount = (value) => Number.isFinite(value) && value > 0 && Number.isS
 const validDate = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 
-export function createBalances({ config = {}, ledgerPath, events, deploymentId, costCenter, now = () => Date.now(), deps = {} } = {}) {
-  const target = resolveOpenClawPath(config.path ?? "~/.openclaw/togglelogic/balances.jsonl");
+export function createBalances({ config = {}, ledgerPath, events, deploymentId, costCenter, now = () => Date.now(), paths = null, deps = {} } = {}) {
+  const target = resolvePath(config.path ?? "~/.openclaw/togglelogic/balances.jsonl", paths);
   const lowUsd = config.lowBalanceUsd ?? 10, lowPct = config.lowBalancePct ?? 20;
   const io = deps.fs ?? fs;
   const replay = deps.readLedger ?? readLedger;
@@ -129,7 +129,7 @@ export function createBalances({ config = {}, ledgerPath, events, deploymentId, 
     days.set(key, value);
   }
   function start() {
-    startup ??= replay(resolveOpenClawPath(ledgerPath ?? "~/.openclaw/logs/togglelogic-cost.jsonl"), add).then((result) => { diagnostics = result; });
+    startup ??= replay(resolvePath(ledgerPath ?? "~/.openclaw/logs/togglelogic-cost.jsonl", paths), add).then((result) => { diagnostics = result; });
     return startup;
   }
   async function record(row) { await start(); add(row); }

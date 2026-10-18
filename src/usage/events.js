@@ -41,11 +41,11 @@ export function eventEnvelope({ deploymentId, costCenter, requestId, requestIdRe
 }
 
 export function createUsageEvents({ config = {}, audit, fallbackLogger, deploymentId, costCenter,
-  logger, now = () => Date.now() } = {}) {
+  logger, now = () => Date.now(), paths = null } = {}) {
   const log = logger ?? createLogger({
     path: config.path ?? "~/.openclaw/logs/togglelogic-events.jsonl",
     rotateSizeMb: config.rotateSizeMb ?? 50,
-  }, fallbackLogger);
+  }, fallbackLogger, { paths });
   const seen = new Map();
   let queue = Promise.resolve();
   let loaded = false;

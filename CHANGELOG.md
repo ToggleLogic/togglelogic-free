@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.2.0 — unreleased (branch `release/free-2.2.0`)
+
+Milestone M1 (host adapters and the gateway-neutral Decision API), built in
+the steps of `docs/design/M1-HOST-ADAPTERS-AND-DECISION-API.md` §7. OpenClaw
+behavior is unchanged at every step.
+
+- **Step 2 — injected paths, clock and state store (no behavior change).**
+  New host-neutral `src/core/paths.js` (`createPaths({ home, stateDir })`),
+  `src/core/clock.js` and `src/core/state-store.js` (atomic JSON documents;
+  a missing document reads as null, a corrupt one throws). The OpenClaw
+  adapter (`src/adapters/openclaw/paths.js`) resolves HOME and
+  `OPENCLAW_STATE_DIR` exactly as 2.1.x and injects one `paths` object into
+  the audit log, routing log, usage events, cost log, pricing cache, balances,
+  owner override, governed escalation and the Intelligence detector. A test
+  fails if anything under `src/core/` reads the environment, the OS home or
+  the host SDK.
+
 ## 2.1.6 — 2026-10-17
 
 Patch over 2.1.5. Owner opt-in invoice eligibility for public-rate estimates.
