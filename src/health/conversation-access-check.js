@@ -6,7 +6,7 @@
  * in this package.
  */
 
-import { CONVERSATION_ACCESS_SETTING } from "../hooks/conversation-access.js";
+import { CONVERSATION_ACCESS_SETTING } from "../adapters/openclaw/conversation-access.js";
 
 const CHECK_ID = "togglelogic-conversation-access-required";
 

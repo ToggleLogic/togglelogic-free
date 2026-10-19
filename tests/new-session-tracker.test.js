@@ -71,3 +71,24 @@ test("discards a marker that arrives after a session was already observed", asyn
   tracker.mark({ sessionKey: "agent:main:observed" });
   assert.equal(await tracker.consume({ sessionKey: "agent:main:observed" }), false);
 });
+
+// 2.2.0 (M1 step 4): the marker folder follows the shared OpenClaw state-path rules.
+import { newSessionStateDir } from "../src/routing/new-session-tracker.js";
+import { openClawPaths } from "../src/adapters/openclaw/paths.js";
+
+test("new-session markers live under the injected OpenClaw state dir, with ~ expanded", () => {
+  const paths = openClawPaths({ HOME: "/h/al", OPENCLAW_STATE_DIR: "~/profiles/hq" });
+  assert.equal(newSessionStateDir(paths), path.join("/h/al", "profiles", "hq", "togglelogic", "new-sessions"));
+  assert.equal(newSessionStateDir(openClawPaths({ HOME: "/h/al" })), path.join("/h/al", ".openclaw", "togglelogic", "new-sessions"),
+    "unset OPENCLAW_STATE_DIR: same folder as Free 2.1.x");
+});
+
+test("markers written under one process's paths are consumed by another with the same paths", async (t) => {
+  const home = temporaryStateDir(t);
+  const paths = openClawPaths({ HOME: home, OPENCLAW_STATE_DIR: "~/state" });
+  const gateway = createNewSessionTracker({ stateDir: newSessionStateDir(paths) });
+  const worker = createNewSessionTracker({ stateDir: newSessionStateDir(paths), settleMs: 0 });
+  gateway.mark({ sessionId: "s-step4" });
+  assert.equal(await worker.consume({ sessionId: "s-step4" }), true);
+  assert.ok(fs.existsSync(path.join(home, "state", "togglelogic", "new-sessions")), "real folder, no literal ~");
+});

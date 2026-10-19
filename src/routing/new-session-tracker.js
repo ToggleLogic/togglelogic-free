@@ -6,8 +6,8 @@
 
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { openClawPaths } from "../adapters/openclaw/paths.js";
 
 const DEFAULT_MAX_PENDING = 512;
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
@@ -31,10 +31,16 @@ function digest(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+// 2.2.0 (M1 step 4): the marker folder follows the same OpenClaw state-path
+// rules as every other ToggleLogic file (HOME, OPENCLAW_STATE_DIR with "~"
+// expansion). Before, it read OPENCLAW_STATE_DIR raw and ignored HOME, so a
+// "~/…" state dir produced a literal "~" folder. The adapter passes stateDir.
+export function newSessionStateDir(paths) {
+  return path.join(paths.stateDir, "togglelogic", "new-sessions");
+}
+
 function defaultStateDir() {
-  const stateRoot = normalize(process.env.OPENCLAW_STATE_DIR)
-    ?? path.join(os.homedir(), ".openclaw");
-  return path.join(stateRoot, "togglelogic", "new-sessions");
+  return newSessionStateDir(openClawPaths(process.env));
 }
 
 export function createNewSessionTracker({

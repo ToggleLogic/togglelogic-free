@@ -27,6 +27,19 @@ behavior is unchanged at every step.
   Proof: a recorded-decision replay fixture (38 scenarios, every selection
   reason, recorded from the step-2 code) must match exactly: return value,
   routing record, audit events, usage events, warnings and seam calls.
+- **Step 4 — OpenClaw adapter (no routing behavior change).** Everything
+  OpenClaw-specific now lives in `src/adapters/openclaw/`: the plugin entry
+  (`entry.js`, `definePluginEntry`), hook registration and service wiring
+  (`register.js`), the routing hook (`interceptor.js`), session-store
+  provenance (`session-store.js`), the conversation-access check and the
+  owner-override notification helper. `src/index.js` only carries the version
+  label and builds the adapter. The old module paths re-export the new ones, so
+  imports keep working. A test fails if OpenClaw-only code appears outside the
+  adapter.
+- **Fixed: new-session marker folder.** It now follows the same state-path
+  rules as every other ToggleLogic file (HOME, and `OPENCLAW_STATE_DIR` with
+  `~` expansion). Before, a `~/…` state dir produced a literal `~` folder.
+  With `OPENCLAW_STATE_DIR` unset the folder is unchanged.
 
 ## 2.1.6 — 2026-10-17
 
