@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.0 — unreleased (branch `release/free-2.2.0`)
+## 2.2.0-rc.1 — 2026-10-19 (release candidate: M1 steps 2–3, no behavior change; HQ canary only)
 
 Milestone M1 (host adapters and the gateway-neutral Decision API), built in
 the steps of `docs/design/M1-HOST-ADAPTERS-AND-DECISION-API.md` §7. OpenClaw

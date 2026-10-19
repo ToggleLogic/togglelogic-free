@@ -12,7 +12,7 @@ import { registerCapabilities } from "./capabilities.js";
 import { openClawPaths } from "./adapters/openclaw/paths.js";
 import { shouldSkipRuntimeRegistration } from "./registration-mode.js";
 
-const PLUGIN_VERSION = "2.1.6";
+const PLUGIN_VERSION = "2.2.0-rc.1";
 
 export default definePluginEntry({
   id: "togglelogic",
