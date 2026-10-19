@@ -10,6 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { normalizeConfig } from "../src/config/normalize.js";
 import { createPaths } from "../src/core/paths.js";
 import { createOwnerOverrideAskHandler, resolveAskInterpreter } from "../src/adapters/openclaw/owner-override-ask.js";
@@ -52,14 +53,28 @@ test("the notification consumer runs under the configured interpreter", async ()
 });
 
 test("a missing interpreter is swallowed: the handler never throws or rewrites outbound", async () => {
-  const config = normalizeConfig({ ownerOverride: { enabled: true, askConsumer: "/nonexistent/consumer.py", askInterpreter: "/nonexistent/python-xyz" } });
-  const handler = createOwnerOverrideAskHandler({ config, fallbackLogger: { warn() {} } });
-  assert.equal(await handler({ content: "y".repeat(120) }, { channelId: "telegram" }), undefined);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "tl-ask-missing-"));
+  try {
+    const statePath = path.join(tmp, "owner.json");
+    fs.writeFileSync(statePath, JSON.stringify({ active: true, model_ref: "google/gemini-3.5-flash" }));
+    const config = normalizeConfig({ ownerOverride: { enabled: true, statePath, askConsumer: path.join(tmp, "consumer.py"), askInterpreter: path.join(tmp, "no-such-python") } });
+    const warnings = [];
+    const handler = createOwnerOverrideAskHandler({ config, fallbackLogger: { warn: (m) => warnings.push(m) } });
+    assert.equal(await handler({ content: "y".repeat(120) }, { channelId: "telegram" }), undefined, "the active override reaches the spawn");
+    await new Promise((r) => setTimeout(r, 200));
+    assert.deepEqual(warnings, [], "the spawn error is handled by the child error listener, not thrown");
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
 test("the deprecated bounded executor is excluded from the npm package", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(here, "../package.json"), "utf8"));
   assert.ok(pkg.files.includes("!src/enforcement/bounded-executor.js"));
+  const npm = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: path.join(here, ".."), encoding: "utf8", shell: process.platform === "win32" });
+  if (npm.status === 0) {
+    const packed = JSON.parse(npm.stdout)[0].files.map((f) => f.path);
+    assert.ok(packed.includes("src/core/decide.js"), "the dry run lists package files");
+    assert.ok(!packed.includes("src/enforcement/bounded-executor.js"), "the deprecated executor is not packed");
+  }
   const src = fs.readFileSync(path.join(here, "../src/enforcement/bounded-executor.js"), "utf8");
   assert.match(src, /DEPRECATED/);
   for (const file of fs.readdirSync(path.join(here, "../src"), { recursive: true })) {

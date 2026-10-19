@@ -179,6 +179,11 @@ test("costEstimate: dollars when priced, loud unpriced reason otherwise, never a
     else assert.equal(response.costEstimate.priced, true, "passthrough with no requested model prices the host default");
   }
 
+  const negative = await coreLeg({ mode: "cheap", source: "default", avail: "all_up" }, { pricing: fakePricing, usageEstimate: { inputTokens: -5, outputTokens: 10 } });
+  assert.deepEqual(negative.response.costEstimate, { priced: false, usd: null, basis: "none", unpricedReason: "invalid_usage_estimate" });
+  const costThrows = await coreLeg({ mode: "cheap", source: "default", avail: "all_up" }, { pricing: { ...fakePricing, costUsd: () => { throw new Error("bad math"); } }, usageEstimate: usage });
+  assert.deepEqual(costThrows.response.costEstimate, { priced: false, usd: null, basis: "none", unpricedReason: "pricing_error" });
+
   const throwing = { resolve: async () => { throw new Error("feed down"); }, costUsd: () => 0 };
   const err = await coreLeg({ mode: "cheap", source: "default", avail: "all_up" }, { pricing: throwing, usageEstimate: usage });
   assert.deepEqual(err.response.costEstimate, { priced: false, usd: null, basis: "none", unpricedReason: "pricing_error" });

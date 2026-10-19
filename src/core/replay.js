@@ -16,6 +16,9 @@
  *   intelligence, intelligence_shadow, pin   the licensed seam
  *   provider_unavailable, fallback_unresolved  provider availability then
  *   fallback                             an error during dispatch
+ * task_label_not_logged: the policy routes on a host task label and the record
+ * does not carry one (a default-route or no-match record), so the result
+ * under this policy cannot be known.
  * user_selection and request_selection replay with the precedence source taken
  * from the logged reason (the log has no separate source field); they prove the
  * policy still honors that precedence.
@@ -35,20 +38,46 @@ export const NOT_REPLAYABLE = Object.freeze({
   fallback: "dispatch error at the time",
 });
 
-const ref = (provider, model) => (model?.includes("/") ? model : provider && model ? `${provider}/${model}` : model || null);
+// The host's requested selection, built exactly as the OpenClaw adapter builds
+// it (provider "openrouter" + model "anthropic/x" is "openrouter/anthropic/x").
+function selection(provider, model) {
+  const clean = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const p = clean(provider); const m = clean(model);
+  if (!m) return p ? { provider: p, model: null, ref: p } : null;
+  if (!p && m.includes("/")) return { provider: m.slice(0, m.indexOf("/")), model: m.slice(m.indexOf("/") + 1), ref: m };
+  return { provider: p, model: m, ref: p ? `${p}/${m}` : m };
+}
+
+// The routing record's selection, compared as the logged pair so no ref is
+// reconstructed (a model id may itself contain "/").
+const selected = (provider, model) => ({ provider: provider ?? null, model: model ?? null });
+const same = (a, b) => a.provider === b.provider && a.model === b.model;
+const show = (s) => (s.model?.includes("/") || !s.provider ? s.model : s.model ? `${s.provider}/${s.model}` : s.provider);
+
+// The host task label, when the log carries it: a configured route's matched key
+// other than "default". A miss that fell to the default route, or matched
+// nothing, does not log the label.
+function loggedLabel(record) {
+  const key = record.selectionDetails?.matchedKey;
+  return record.selectionReason === "configured" && typeof key === "string" && key !== "default" ? key : null;
+}
+
+function labelMatters(policy) {
+  return policy.mode === "configured" && Object.keys(policy.configuredRoutes ?? {}).some((key) => key !== "default");
+}
 
 function requestFromRecord(record) {
-  const requestedRef = ref(record.requestedProvider, record.requestedModel);
+  const sel = selection(record.requestedProvider, record.requestedModel);
+  const requestedRef = sel?.ref ?? null;
   const source = record.selectionReason === "user_selection" ? "user"
     : record.selectionReason === "request_selection" ? "request"
       : requestedRef ? (record.modelOverrideSource === "auto" ? "auto" : "default") : "none";
-  const i = requestedRef ? requestedRef.indexOf("/") : -1;
-  const label = record.selectionDetails?.requestedKey ?? (record.selectionDetails?.matchedKey !== "default" ? record.selectionDetails?.matchedKey : null);
+  const label = loggedLabel(record);
   return {
     requestId: record.requestId ?? null,
     agent: null,
     defaultRef: record.selectionDetails?.host_default ?? requestedRef,
-    requested: { ref: requestedRef, provider: i > 0 ? requestedRef.slice(0, i) : null, model: i > 0 ? requestedRef.slice(i + 1) : null, source },
+    requested: { ref: requestedRef, provider: sel?.provider ?? null, model: sel?.model ?? null, source },
     candidates: [],
     fallbacks: [],
     host: { event: {}, context: label ? { taskType: label } : {} },
@@ -66,17 +95,17 @@ export async function replayRecords(lines, policy, { version = null } = {}) {
     let record;
     try { record = JSON.parse(line); } catch { report.unparseable++; continue; }
     if (!record || typeof record.selectionReason !== "string") { report.unparseable++; continue; }
-    if (NOT_REPLAYABLE[record.selectionReason]) {
-      report.notReplayable[record.selectionReason] = (report.notReplayable[record.selectionReason] ?? 0) + 1;
-      continue;
-    }
+    const skip = NOT_REPLAYABLE[record.selectionReason] ? record.selectionReason
+      : labelMatters(policy) && !loggedLabel(record) && record.selectionReason !== "user_selection" && record.selectionReason !== "request_selection" ? "task_label_not_logged" : null;
+    if (skip) { report.notReplayable[skip] = (report.notReplayable[skip] ?? 0) + 1; continue; }
     const decision = { requestId: record.requestId ?? null, selectedModel: null, selectedProvider: null, selectionReason: "passthrough", selectionDetails: {}, mode: null };
     await core.decide(requestFromRecord(record), { decision });
     report.replayed++;
-    const was = { reason: record.selectionReason, model: ref(record.selectedProvider, record.selectedModel) };
-    const now = { reason: decision.selectionReason, model: ref(decision.selectedProvider, decision.selectedModel) };
-    if (was.reason === now.reason && was.model === now.model) report.matched++;
-    else report.differences.push({ requestId: record.requestId ?? null, timestamp: record.timestamp ?? null, recorded: was, replayed: now });
+    const was = selected(record.selectedProvider, record.selectedModel);
+    const now = selected(decision.selectedProvider, decision.selectedModel);
+    if (record.selectionReason === decision.selectionReason && same(was, now)) report.matched++;
+    else report.differences.push({ requestId: record.requestId ?? null, timestamp: record.timestamp ?? null,
+      recorded: { reason: record.selectionReason, model: show(was) }, replayed: { reason: decision.selectionReason, model: show(now) } });
   }
   return report;
 }

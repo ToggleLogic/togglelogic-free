@@ -57,8 +57,11 @@ behavior is unchanged at every step.
   re-runs recorded routing decisions against a policy and prints the
   differences (exit 2 when any differ). Records that depended on state the log
   does not carry (owner override, the Intelligence seam, provider availability,
-  dispatch errors) are counted by reason, not guessed at. Replay reads only and
-  writes nothing. Tests: a 112-row decision matrix (modes × requested source ×
+  dispatch errors, or a host task label the log did not carry when the policy
+  routes on labels) are counted by reason, not guessed at. Replay reads only
+  and writes nothing. Invalid token counts and pricing-service errors give
+  `invalid_usage_estimate` and `pricing_error`; `decide()` never throws on a
+  cost estimate. Tests: a 112-row decision matrix (modes × requested source ×
   provider availability) validates every request and response against the v1
   schemas, requires the OpenClaw hook to return exactly the core's decision,
   and proves request content never reaches a response, routing record, audit

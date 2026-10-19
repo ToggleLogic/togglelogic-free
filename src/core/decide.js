@@ -104,7 +104,9 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
   // host's requested/default model). Only with a caller usageEstimate.
   async function estimate(request, decisionOut) {
     const usage = request?.usageEstimate;
-    if (!usage || (!Number.isFinite(usage.inputTokens) && !Number.isFinite(usage.outputTokens))) return unpriced("no_usage_estimate");
+    if (!usage || (usage.inputTokens === undefined && usage.outputTokens === undefined)) return unpriced("no_usage_estimate");
+    const tokens = (n) => n === undefined || (Number.isInteger(n) && n >= 0);
+    if (!tokens(usage.inputTokens) || !tokens(usage.outputTokens)) return unpriced("invalid_usage_estimate");
     if (!pricing?.resolve || !pricing?.costUsd) return unpriced("no_pricing_service");
     const ref = decisionOut.action === "route" ? decisionOut.ref : (request.requested?.ref || request.defaultRef);
     if (!ref || !ref.includes("/")) return unpriced("no_model_ref");
@@ -112,7 +114,8 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     try { info = await pricing.resolve(ref); } catch { return unpriced("pricing_error"); }
     if (!info?.curated) return unpriced("outside_price_catalog");
     if (!info.priced) return unpriced("no_published_price");
-    const usd = pricing.costUsd(info, { input: usage.inputTokens ?? 0, output: usage.outputTokens ?? 0 });
+    let usd;
+    try { usd = pricing.costUsd(info, { input: usage.inputTokens ?? 0, output: usage.outputTokens ?? 0 }); } catch { return unpriced("pricing_error"); }
     return Number.isFinite(usd) && usd >= 0 ? { priced: true, usd, basis: "usage_estimate" } : unpriced("no_published_price");
   }
 

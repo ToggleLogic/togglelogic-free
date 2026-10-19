@@ -59,3 +59,22 @@ test("togglelogic-decide rejects bad usage", () => {
   const help = spawnSync(process.execPath, [BIN, "--help"], { encoding: "utf8" });
   assert.equal(help.status, 0); assert.match(help.stdout, /togglelogic-decide replay/);
 });
+
+test("replay keeps a provider whose model id contains a slash (no false difference)", async () => {
+  const rec = { requestId: "s1", requestedProvider: "openrouter", requestedModel: "anthropic/claude-x", modelOverrideSource: "user",
+    selectedModel: "openrouter/anthropic/claude-x", selectedProvider: "openrouter", selectionReason: "user_selection", selectionDetails: {} };
+  const report = await replayRecords([JSON.stringify(rec)], normalizeConfig({ mode: "cheap", cheapHeuristic: { default: "google/gemini-3.5-flash" } }));
+  assert.equal(report.replayed, 1); assert.equal(report.matched, 1, JSON.stringify(report.differences));
+});
+
+test("replay never claims a match for a record whose task label the log does not carry", async () => {
+  const policy = normalizeConfig({ mode: "configured", configuredRoutes: { coding: "anthropic/claude-sonnet-4-6", default: "google/gemini-3.5-flash" } });
+  const fellToDefault = { requestId: "c1", requestedProvider: "anthropic", requestedModel: "claude-haiku-4-5", selectedModel: "google/gemini-3.5-flash", selectedProvider: "google", selectionReason: "configured", selectionDetails: { matchedKey: "default" }, mode: "configured" };
+  const noMatch = { requestId: "c2", requestedProvider: "anthropic", requestedModel: "claude-haiku-4-5", selectedModel: null, selectedProvider: null, selectionReason: "passthrough", selectionDetails: { reason: "no configured match" }, mode: "configured" };
+  const labelled = { requestId: "c3", requestedProvider: "anthropic", requestedModel: "claude-haiku-4-5", selectedModel: "anthropic/claude-sonnet-4-6", selectedProvider: "anthropic", selectionReason: "configured", selectionDetails: { matchedKey: "coding" }, mode: "configured" };
+  const report = await replayRecords([fellToDefault, noMatch, labelled].map((r) => JSON.stringify(r)), policy);
+  assert.deepEqual(report.notReplayable, { task_label_not_logged: 2 });
+  assert.equal(report.replayed, 1); assert.equal(report.matched, 1);
+  const defaultOnly = await replayRecords([JSON.stringify(fellToDefault)], normalizeConfig({ mode: "configured", configuredRoutes: { default: "google/gemini-3.5-flash" } }));
+  assert.equal(defaultOnly.matched, 1, "with only a default route the label cannot matter");
+});
