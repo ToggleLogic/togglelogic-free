@@ -1,7 +1,7 @@
 # M2 design — Tamper-evident audit log
 
 Status: **approved design** (2026-10-13). Part 1 shipped in **ToggleLogic Free 2.1.5**; targets:
-(loud failures) and **ToggleLogic Free 2.3.0** (chain, retention, export).
+(loud failures) and **ToggleLogic Free 2.4.0** (chain, retention, export; moved from 2.3.0 by the 2026-10-19 M1 split).
 Baseline before part 1: Free 2.1.4.
 
 Purpose: give deployers an audit trail they can retain, verify and export —
@@ -57,7 +57,7 @@ Tests: read-only directory, `ENOSPC` via an injected `fs`, intermittent
 failure; assert error-log cadence, gate transitions, event counts and the
 recovery record contents.
 
-## 3. Part 2 — audit schema v2 (Free 2.3.0)
+## 3. Part 2 — audit schema v2 (Free 2.4.0)
 
 `auditSchema: "togglelogic-audit/v2"`. All v1 fields are kept; v2 adds `chain`.
 
@@ -232,7 +232,7 @@ source-available tooling; key custody and hosted attestation are services.
 - **2.1.5:** in a scratch profile on the canary host, point `audit.path` at a
   read-only directory; capture the error log, gate state, `audit_write_failed`
   events; restore; capture `audit.write.recovered`.
-- **2.3.0:** after at least three days on the canary host:
+- **2.4.0:** after at least three days on the canary host:
   `togglelogic-audit verify --json` exit 0 on the live log; one sealed segment
   and one checkpoint observed; one export per format delivered to the owner; a
   tamper drill on a copied log fails verification.
