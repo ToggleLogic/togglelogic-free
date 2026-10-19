@@ -1,9 +1,12 @@
 /*
- * ToggleLogic (Free Tier) — bounded execution envelope (exported, not wired into the plugin).
+ * ToggleLogic (Free Tier) — bounded execution envelope (DEPRECATED: not wired in, not packaged).
  * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
  * License (see LICENSE); all rights reserved.
  * PATENT PENDING.
  */
+// DEPRECATED (Free 2.2.0, M1 step 8). Never wired into the plugin; it depends
+// on host subagent APIs the Decision API does not port. Excluded from the npm
+// package; kept in the repository for its tests until the next major removes it.
 import crypto from "node:crypto";
 
 const refParts = (ref) => {

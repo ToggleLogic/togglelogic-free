@@ -70,6 +70,16 @@ behavior is unchanged at every step.
   declined, shadow or unavailable). Routing is unchanged. The replay fixture
   was re-recorded and differs from the step-2 recording only in that field, in
   those 7 scenarios.
+- **Step 8 — Changed: owner-override notification interpreter is
+  configurable.** New `ownerOverride.askInterpreter` (default `python3`,
+  resolved from the gateway's `PATH`; a value containing `/` or starting with
+  `~` is a file path). 2.1.x always ran `/usr/bin/python3`; to keep exactly
+  that, set `askInterpreter` to `/usr/bin/python3`. Only matters when
+  `features.ownerOverrideAsk` is enabled. The plugin manifest accepts the new
+  key.
+- **Step 8 — Deprecated: `src/enforcement/bounded-executor.js`.** It was never
+  wired into the plugin. It is now excluded from the npm package and stays in
+  the repository only for its tests; the next major removes it.
 
 ## 2.1.6 — 2026-10-17
 

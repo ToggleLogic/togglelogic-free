@@ -15,7 +15,7 @@
       "configuredRoutes": { "type": "object", "description": "Static host-supplied structured-label routes. Prompt text is never inspected.", "additionalProperties": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" } },
       "cheapHeuristic": { "type": "object", "additionalProperties": false, "properties": { "default": { "type": "string" }, "order": { "type": "array", "items": { "type": "string" } } } },
       "intelligence": { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean" }, "path": { "type": "string" }, "registryPath": { "type": "string" }, "shadow": { "type": "boolean" }, "fallbackOnError": { "type": "boolean" }, "allowReleaseCandidate": { "type": "boolean" } } },
-      "ownerOverride": { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean" }, "statePath": { "type": "string" }, "askConsumer": { "type": "string" } } },
+      "ownerOverride": { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean" }, "statePath": { "type": "string" }, "askConsumer": { "type": "string" }, "askInterpreter": { "type": "string", "minLength": 1 } } },
       "audit": { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean" }, "path": { "type": "string" }, "rotateSizeMb": { "type": "integer", "minimum": 1 } } },
       "costVisibility": { "type": "object", "additionalProperties": true },
       "governedEscalation": { "type": "object", "additionalProperties": true },

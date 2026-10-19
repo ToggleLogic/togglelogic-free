@@ -16,7 +16,14 @@ const NOTIFY_CHANNELS = new Set(["telegram", "slack", "discord"]);
 // Skip short acks ("On it.") — only a substantive outbound counts as a task
 // completion worth prompting about. Same threshold class as turn-end capture.
 const MIN_TURN_CHARS = 80;
-const PY = "/usr/bin/python3"; // production interpreter (stock macOS)
+// The consumer's interpreter: `ownerOverride.askInterpreter`. A bare command
+// name ("python3", the default) is resolved from the gateway's PATH; a value
+// with a path separator or a leading "~" is a file path (Free 2.1.x always
+// used /usr/bin/python3; set askInterpreter to that to keep it).
+export function resolveAskInterpreter(value, paths = null) {
+  const v = typeof value === "string" && value.trim() ? value.trim() : "python3";
+  return v.includes("/") || v.includes("\\") || v.startsWith("~") ? resolvePath(v, paths) : v;
+}
 
 /**
  * Build the message_sending handler. Contract: (event, ctx) => Promise<void>.
@@ -25,6 +32,7 @@ const PY = "/usr/bin/python3"; // production interpreter (stock macOS)
 export function createOwnerOverrideAskHandler({ config, fallbackLogger, paths = null }) {
   const oo = (config && config.ownerOverride) || {};
   const consumer = resolvePath(oo.askConsumer, paths);
+  const interpreter = resolveAskInterpreter(oo.askInterpreter, paths);
 
   return async function ownerOverrideAskHandler(event, ctx) {
     try {
@@ -50,7 +58,7 @@ export function createOwnerOverrideAskHandler({ config, fallbackLogger, paths = 
       });
 
       // Fire-and-forget. stdout/stderr ignored; errors swallowed.
-      const child = spawn(PY, [consumer], { stdio: ["pipe", "ignore", "ignore"] });
+      const child = spawn(interpreter, [consumer], { stdio: ["pipe", "ignore", "ignore"] });
       child.on("error", () => {});
       try {
         child.stdin.write(payload);

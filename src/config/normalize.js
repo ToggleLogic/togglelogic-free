@@ -14,7 +14,7 @@ export const DEFAULTS = Object.freeze({
   configuredRoutes: Object.freeze({}),
   cheapHeuristic: Object.freeze({ default: "", order: Object.freeze([]) }),
   intelligence: Object.freeze({ enabled: true, path: "~/togglelogic-intelligence", registryPath: "", shadow: false, fallbackOnError: true, allowReleaseCandidate: false }),
-  ownerOverride: Object.freeze({ enabled: false, statePath: "~/.openclaw/togglelogic/owner_model_override.json", askConsumer: "~/.openclaw/togglelogic/owner_override_ask.py" }),
+  ownerOverride: Object.freeze({ enabled: false, statePath: "~/.openclaw/togglelogic/owner_model_override.json", askConsumer: "~/.openclaw/togglelogic/owner_override_ask.py", askInterpreter: "python3" }),
   audit: Object.freeze({ enabled: true, path: "~/.openclaw/logs/togglelogic-audit.jsonl", rotateSizeMb: 50 }),
   costVisibility: Object.freeze({
     attribution: Object.freeze({ deploymentId: "", costCenter: "", billable: true, invoiceEstimates: false }),
@@ -77,7 +77,7 @@ export function normalizeConfig(raw) {
     configuredRoutes: Object.fromEntries(Object.entries(obj(r.configuredRoutes)).filter(([, value]) => typeof value === "string" && value.trim())),
     cheapHeuristic: { default: str(obj(r.cheapHeuristic).default), order: Array.isArray(obj(r.cheapHeuristic).order) ? obj(r.cheapHeuristic).order.filter((value) => typeof value === "string" && value) : [] },
     intelligence: { enabled: intelligence.enabled !== false, path: str(intelligence.path, DEFAULTS.intelligence.path), registryPath: str(intelligence.registryPath), shadow: intelligence.shadow === true, fallbackOnError: intelligence.fallbackOnError !== false, allowReleaseCandidate: intelligence.allowReleaseCandidate === true },
-    ownerOverride: { enabled: ownerOverride.enabled === true, statePath: str(ownerOverride.statePath, DEFAULTS.ownerOverride.statePath), askConsumer: str(ownerOverride.askConsumer, DEFAULTS.ownerOverride.askConsumer) },
+    ownerOverride: { enabled: ownerOverride.enabled === true, statePath: str(ownerOverride.statePath, DEFAULTS.ownerOverride.statePath), askConsumer: str(ownerOverride.askConsumer, DEFAULTS.ownerOverride.askConsumer), askInterpreter: str(ownerOverride.askInterpreter, "").trim() || DEFAULTS.ownerOverride.askInterpreter },
     audit: { enabled: audit.enabled !== false, path: str(audit.path, DEFAULTS.audit.path), rotateSizeMb: num(audit.rotateSizeMb, 50, 1) },
     costVisibility: {
       attribution: { deploymentId: slug(attribution.deploymentId), costCenter: slug(attribution.costCenter), billable: attribution.billable !== false,
