@@ -10,7 +10,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
 import { normalizeConfig } from "../src/config/normalize.js";
 import { createPaths } from "../src/core/paths.js";
 import { createOwnerOverrideAskHandler, resolveAskInterpreter } from "../src/adapters/openclaw/owner-override-ask.js";
@@ -69,12 +68,10 @@ test("a missing interpreter is swallowed: the handler never throws or rewrites o
 test("the deprecated bounded executor is excluded from the npm package", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(here, "../package.json"), "utf8"));
   assert.ok(pkg.files.includes("!src/enforcement/bounded-executor.js"));
-  const npm = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: path.join(here, ".."), encoding: "utf8", shell: process.platform === "win32" });
-  if (npm.status === 0) {
-    const packed = JSON.parse(npm.stdout)[0].files.map((f) => f.path);
-    assert.ok(packed.includes("src/core/decide.js"), "the dry run lists package files");
-    assert.ok(!packed.includes("src/enforcement/bounded-executor.js"), "the deprecated executor is not packed");
-  }
+  // npm applies `files` entries in order, so the exclusion must follow "src/".
+  // (The packed file list itself is checked by `npm pack --dry-run` in every
+  // release task; spawning npm here raced with other test files in parallel runs.)
+  assert.ok(pkg.files.indexOf("!src/enforcement/bounded-executor.js") > pkg.files.indexOf("src/"));
   const src = fs.readFileSync(path.join(here, "../src/enforcement/bounded-executor.js"), "utf8");
   assert.match(src, /DEPRECATED/);
   for (const file of fs.readdirSync(path.join(here, "../src"), { recursive: true })) {
