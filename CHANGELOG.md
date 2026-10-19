@@ -16,6 +16,17 @@ behavior is unchanged at every step.
   owner override, governed escalation and the Intelligence detector. A test
   fails if anything under `src/core/` reads the environment, the OS home or
   the host SDK.
+- **Step 3 — `decide()` extracted into `src/core/decide.js` (no behavior
+  change).** `createDecisionCore({ policy, services })` runs the decision order
+  of design §4.3 on a `DecisionRequest` (`requested`, `defaultRef`,
+  `candidates`, `fallbacks`) and returns a `togglelogic.decision/v1` response
+  (`decision`, `reason`, `rationale`, `engine`). The OpenClaw interceptor is
+  now `toDecisionRequest` → `decide` → `applyDecision`; preflight caching,
+  duplicate-prompt suppression and session-store provenance stay in the
+  adapter, and host state is still read at the same point in the order.
+  Proof: a recorded-decision replay fixture (38 scenarios, every selection
+  reason, recorded from the step-2 code) must match exactly: return value,
+  routing record, audit events, usage events, warnings and seam calls.
 
 ## 2.1.6 — 2026-10-17
 

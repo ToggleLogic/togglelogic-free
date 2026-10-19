@@ -1,0 +1,3680 @@
+{
+ "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2)",
+ "scenarios": [
+  {
+   "name": "passthrough mode, host default",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "passthrough"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "passthrough",
+     "a"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": null,
+      "selectionReason": "passthrough",
+      "selectionDetails": {},
+      "mode": "passthrough",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "passthrough",
+       "selectedModel": null,
+       "selectionReason": "passthrough"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "configured mode, task label match",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "configured"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "configured",
+     "b"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "configured",
+      "selectionDetails": {
+       "matchedKey": "summarize"
+      },
+      "mode": "configured",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "configured",
+       "selectedModel": "google/gemini-3.5-flash",
+       "selectionReason": "configured"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "configured mode, label miss falls to default route",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "configured"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "configured",
+     "c"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "configured",
+      "selectionDetails": {
+       "matchedKey": "default"
+      },
+      "mode": "configured",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "configured",
+       "selectedModel": "anthropic/claude-sonnet-4-6",
+       "selectionReason": "configured"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "configured mode, no route",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "configured"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "passthrough",
+     "d"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": null,
+      "selectionReason": "passthrough",
+      "selectionDetails": {
+       "reason": "no configured match"
+      },
+      "mode": "configured",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "configured",
+       "selectedModel": null,
+       "selectionReason": "passthrough"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "configured mode, family alias",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "configured"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "passthrough",
+     "e"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": null,
+      "selectionReason": "passthrough",
+      "selectionDetails": {
+       "reason": "family aliases require ToggleLogic Intelligence",
+       "matchedKey": "default"
+      },
+      "mode": "configured",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "configured",
+       "selectedModel": null,
+       "selectionReason": "passthrough"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "cheap mode",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "f"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "google/gemini-3.5-flash",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "cheap mode, model-only ref",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-haiku-4-5"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "f2"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "claude-haiku-4-5",
+      "selectedProvider": null,
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "claude-haiku-4-5",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "cheap mode, nothing configured",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "passthrough",
+     "g"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": null,
+      "selectionReason": "passthrough",
+      "selectionDetails": {
+       "reason": "no cheap default configured"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": null,
+       "selectionReason": "passthrough"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "auto mode, seam unavailable, cheap default",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "auto"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "h"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "anthropic/claude-sonnet-4-6",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "intelligence routes",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "seam.classify",
+     "i",
+     [
+      {
+       "mimeType": "image/png"
+      }
+     ],
+     "agent:main:s1"
+    ],
+    [
+     "correlation",
+     "intelligence",
+     "i"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [
+       "attachments",
+       "vision"
+      ],
+      "selectedModel": "gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "intelligence",
+      "selectionDetails": {
+       "tier": "general_purpose"
+      },
+      "mode": "intelligence",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence",
+       "selectedModel": "gemini-3.5-flash",
+       "selectionReason": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "intelligence provider-only recommendation",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "seam.classify",
+     "i2",
+     null,
+     "agent:main:s1"
+    ],
+    [
+     "correlation",
+     "intelligence",
+     "i2"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": "google",
+      "selectionReason": "intelligence",
+      "selectionDetails": {},
+      "mode": "intelligence",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence",
+       "selectedModel": null,
+       "selectionReason": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "intelligence pin honored",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "seam.classify",
+     "j",
+     null,
+     "agent:main:s1"
+    ],
+    [
+     "correlation",
+     "pin",
+     "j"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "pin",
+      "selectionDetails": {
+       "pin_matched": "drafts",
+       "pin_resolution": "honored"
+      },
+      "mode": "intelligence",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence",
+       "selectedModel": "claude-sonnet-4-6",
+       "selectionReason": "pin"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "intelligence shadow",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "seam.classify",
+     "k",
+     null,
+     "agent:main:s1"
+    ],
+    [
+     "correlation",
+     "intelligence_shadow",
+     "k"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": null,
+      "selectionReason": "intelligence_shadow",
+      "selectionDetails": {
+       "would": "google/gemini-3.5-flash"
+      },
+      "mode": "intelligence",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence",
+       "selectedModel": null,
+       "selectionReason": "intelligence_shadow"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "intelligence declined",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "seam.classify",
+     "l",
+     null,
+     "agent:main:s1"
+    ],
+    [
+     "correlation",
+     "passthrough",
+     "l"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": null,
+      "selectionReason": "passthrough",
+      "selectionDetails": {
+       "reason": "intelligence declined"
+      },
+      "mode": "intelligence",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence",
+       "selectedModel": null,
+       "selectionReason": "passthrough"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "explicit intelligence unavailable",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "passthrough",
+     "m"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": null,
+      "selectionReason": "passthrough",
+      "selectionDetails": {
+       "reason": "explicit Intelligence mode unavailable",
+       "intelligenceStatus": "unavailable"
+      },
+      "mode": "intelligence_unavailable",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence_unavailable",
+       "selectedModel": null,
+       "selectionReason": "passthrough"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "seam throws, fallbackOnError on",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "seam.classify",
+     "n",
+     null,
+     "agent:main:s1"
+    ],
+    [
+     "correlation",
+     "fallback",
+     "n"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": null,
+      "selectedProvider": null,
+      "selectionReason": "fallback",
+      "selectionDetails": {
+       "error": "seam boom",
+       "fallbackOnError": true
+      },
+      "mode": "intelligence",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "noop",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence",
+       "selectedModel": null,
+       "selectionReason": "fallback"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "seam throws, fallbackOnError off",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "intelligence"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "seam.classify",
+     "o",
+     null,
+     "agent:main:s1"
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "failure",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "reason": "routing_hook_error",
+       "selectionReason": "fallback_unresolved",
+       "selectedModel": "anthropic/claude-haiku-4-5"
+      },
+      "correlationId": "id2"
+     }
+    ],
+    [
+     "usage_event",
+     "fallback_unresolved",
+     {
+      "provider": "anthropic",
+      "reason": "routing_hook_error",
+      "requestId": "id2"
+     }
+    ],
+    [
+     "warn",
+     "ToggleLogic fallback_unresolved: no fallback resolved; preserving the selection"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id2",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-haiku-4-5",
+      "selectedProvider": "anthropic",
+      "selectionReason": "fallback_unresolved",
+      "selectionDetails": {},
+      "mode": "intelligence",
+      "durationMs": "number"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "owner override",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "owner_override",
+     "p"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-sonnet-4-6",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "owner_override",
+      "selectionDetails": {
+       "matched_rule": "owner_override"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "owner"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "owner_override",
+       "selectedModel": "google/gemini-3.5-flash",
+       "matched_rule": "owner_override"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "owner override with provider override, provider down",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "owner_override",
+     "q"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "owner_override",
+      "selectionDetails": {
+       "matched_rule": "owner_override",
+       "providerUnavailableConflict": true
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "owner"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "owner_override",
+       "selectedModel": "google/gemini-3.5-flash",
+       "matched_rule": "owner_override",
+       "providerUnavailableConflict": true
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "owner override inactive",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "r"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "anthropic/claude-sonnet-4-6",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "user pin via host session",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "user_selection",
+     "s"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-haiku-4-5",
+      "selectedProvider": "anthropic",
+      "selectionReason": "user_selection",
+      "selectionDetails": {
+       "matched_rule": "user_selection_precedence",
+       "pin_source": "host_runtime"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "noop",
+      "principal": {
+       "source": "user"
+      },
+      "details": {
+       "selectedModel": "anthropic/claude-haiku-4-5",
+       "matched_rule": "user_selection_precedence",
+       "pin_source": "host_runtime"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "user pin, provider down",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "user_selection",
+     "t"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-haiku-4-5",
+      "selectedProvider": "anthropic",
+      "selectionReason": "user_selection",
+      "selectionDetails": {
+       "matched_rule": "user_selection_precedence",
+       "pin_source": "host_runtime",
+       "userSelectionConflict": true
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "noop",
+      "principal": {
+       "source": "user"
+      },
+      "details": {
+       "selectedModel": "anthropic/claude-haiku-4-5",
+       "matched_rule": "user_selection_precedence",
+       "pin_source": "host_runtime",
+       "userSelectionConflict": true
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "user pin via legacy session file",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "user_selection",
+     "u"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-haiku-4-5",
+      "selectedProvider": "anthropic",
+      "selectionReason": "user_selection",
+      "selectionDetails": {
+       "matched_rule": "user_selection_precedence",
+       "pin_source": "legacy_file"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "noop",
+      "principal": {
+       "source": "user"
+      },
+      "details": {
+       "selectedModel": "anthropic/claude-haiku-4-5",
+       "matched_rule": "user_selection_precedence",
+       "pin_source": "legacy_file"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "request selection",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "request_selection",
+     "v"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-sonnet-4-6",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "request_selection",
+      "selectionDetails": {
+       "matched_rule": "request_selection_precedence",
+       "host_default": "anthropic/claude-haiku-4-5"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "noop",
+      "principal": {
+       "source": "user"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "request_selection",
+       "selectedModel": "anthropic/claude-sonnet-4-6",
+       "matched_rule": "request_selection_precedence",
+       "host_default": "anthropic/claude-haiku-4-5"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "request selection, provider down",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "request_selection",
+     "w"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "gemini-3.5-flash",
+      "requestedProvider": "google",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "request_selection",
+      "selectionDetails": {
+       "matched_rule": "request_selection_precedence",
+       "host_default": "anthropic/claude-haiku-4-5",
+       "userSelectionConflict": true
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "noop",
+      "principal": {
+       "source": "user"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "request_selection",
+       "selectedModel": "google/gemini-3.5-flash",
+       "matched_rule": "request_selection_precedence",
+       "host_default": "anthropic/claude-haiku-4-5",
+       "userSelectionConflict": true
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "host auto selection is routed",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-haiku-4-5",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "x"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-sonnet-4-6",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-haiku-4-5",
+      "selectedProvider": "anthropic",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "anthropic/claude-haiku-4-5",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "host session read error, signalled once",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
+     }
+    },
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "Expected property name or '}' in JSON at position 1 (line 1 column 2)",
+       "hostError": "db locked",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "y1"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "anthropic/claude-sonnet-4-6",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id2"
+     }
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "y2"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id2",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "anthropic/claude-sonnet-4-6",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id2"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "no session key",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "z"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "anthropic/claude-sonnet-4-6",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "early failover via lineage resolver",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "lineage",
+     "main"
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "selectionReason": "provider_unavailable",
+       "unavailableProvider": "anthropic",
+       "lineage": "gemini-flash",
+       "resolvedChild": "google/gemini-3.5-flash",
+       "resolutionReason": "resolved:main",
+       "skipped": [
+        "anthropic/claude-haiku-4-5"
+       ]
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "provider_unavailable",
+     "aa"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "provider_unavailable",
+      "selectionDetails": {
+       "unavailableProvider": "anthropic",
+       "lineage": "gemini-flash",
+       "resolvedChild": "google/gemini-3.5-flash",
+       "resolutionReason": "resolved:main",
+       "skipped": [
+        "anthropic/claude-haiku-4-5"
+       ]
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "early failover via host fallbacks (resolver throws)",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "lineage",
+     "main"
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "selectionReason": "provider_unavailable",
+       "unavailableProvider": "anthropic",
+       "lineage": "google/gemini-flash",
+       "resolvedChild": "google/gemini-3.5-flash",
+       "resolutionReason": "host-configured-fallback",
+       "skipped": []
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "provider_unavailable",
+     "ab"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "provider_unavailable",
+      "selectionDetails": {
+       "unavailableProvider": "anthropic",
+       "lineage": "google/gemini-flash",
+       "resolvedChild": "google/gemini-3.5-flash",
+       "resolutionReason": "host-configured-fallback",
+       "skipped": []
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "early failover unresolved",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "lineage",
+     "main"
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "failure",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "reason": "no_available_fallback",
+       "selectionReason": "fallback_unresolved",
+       "selectedModel": "anthropic/claude-haiku-4-5"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "usage_event",
+     "fallback_unresolved",
+     {
+      "provider": "anthropic",
+      "reason": "no_available_fallback",
+      "requestId": "id1"
+     }
+    ],
+    [
+     "warn",
+     "ToggleLogic fallback_unresolved: no fallback resolved; preserving the selection"
+    ],
+    [
+     "correlation",
+     "fallback_unresolved",
+     "ac"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-haiku-4-5",
+      "selectedProvider": "anthropic",
+      "selectionReason": "fallback_unresolved",
+      "selectionDetails": {
+       "failure": "no_available_fallback",
+       "skipped": [
+        "google/gemini-3.5-flash"
+       ]
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "late failover of the selected model",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "lineage",
+     "main"
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "selectionReason": "provider_unavailable",
+       "unavailableProvider": "google",
+       "lineage": "anthropic/claude-sonnet",
+       "resolvedChild": "anthropic/claude-sonnet-4-6",
+       "resolutionReason": "host-configured-fallback",
+       "skipped": []
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "provider_unavailable",
+     "ad"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "provider_unavailable",
+      "selectionDetails": {
+       "unavailableProvider": "google",
+       "lineage": "anthropic/claude-sonnet",
+       "resolvedChild": "anthropic/claude-sonnet-4-6",
+       "resolutionReason": "host-configured-fallback",
+       "skipped": []
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "anthropic/claude-sonnet-4-6",
+       "selectionReason": "provider_unavailable"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "late failover unresolved keeps the selection",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "glm4:9b",
+      "providerOverride": "ollama"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "failure",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "reason": "no_available_fallback",
+       "selectionReason": "fallback_unresolved",
+       "selectedModel": "ollama/glm4:9b"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "usage_event",
+     "fallback_unresolved",
+     {
+      "provider": "ollama",
+      "reason": "no_available_fallback",
+      "requestId": "id1"
+     }
+    ],
+    [
+     "warn",
+     "ToggleLogic fallback_unresolved: no fallback resolved; preserving the selection"
+    ],
+    [
+     "correlation",
+     "fallback_unresolved",
+     "ae"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "ollama/glm4:9b",
+      "selectedProvider": "ollama",
+      "selectionReason": "fallback_unresolved",
+      "selectionDetails": {
+       "failure": "no_available_fallback",
+       "skipped": []
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "duplicate prompt in the window",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    },
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": true,
+     "value": {}
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "same"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "google/gemini-3.5-flash",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id2"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "preflight then resolve uses the cached decision",
+   "results": [
+    {
+     "kind": "preflight",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "handled": false
+     }
+    },
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "gemini-3.5-flash",
+      "providerOverride": "google"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "pf"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "google/gemini-3.5-flash",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "pf"
+    ]
+   ]
+  },
+  {
+   "name": "governed short-circuit before routing",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "glm4:9b",
+      "providerOverride": "ollama"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "governed.before",
+     "gov1",
+     "agent:main:s1"
+    ]
+   ]
+  },
+  {
+   "name": "governed override after routing",
+   "results": [
+    {
+     "kind": "resolve",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "modelOverride": "claude-opus-4-8",
+      "providerOverride": "anthropic"
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "governed.before",
+     "gov2",
+     "agent:main:s1"
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "governed.after",
+     "gov2",
+     "cheap_default"
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "gov2"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "google/gemini-3.5-flash",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "governed invitation on preflight",
+   "results": [
+    {
+     "kind": "preflight",
+     "ok": true,
+     "frozenEmpty": false,
+     "value": {
+      "handled": true,
+      "reason": "togglelogic_owner_approval_required",
+      "reply": {
+       "text": "Owner approval required"
+      }
+     }
+    }
+   ],
+   "trace": [
+    [
+     "audit",
+     {
+      "event": "routing.hook.fire",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "governed.before",
+     "gov3",
+     "agent:main:s1"
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
+     "governed.after",
+     "gov3",
+     "cheap_default"
+    ],
+    [
+     "correlation",
+     "cheap_default",
+     "gov3"
+    ],
+    [
+     "routing_log",
+     {
+      "requestId": "id1",
+      "timestamp": "string",
+      "pluginVersion": "replay",
+      "requestedModel": "claude-haiku-4-5",
+      "requestedProvider": "anthropic",
+      "modelOverrideSource": null,
+      "capabilityNeeds": [],
+      "selectedModel": "google/gemini-3.5-flash",
+      "selectedProvider": "google",
+      "selectionReason": "cheap_default",
+      "selectionDetails": {
+       "matchedKey": "cheap_default"
+      },
+      "mode": "cheap",
+      "durationMs": "number"
+     }
+    ],
+    [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "agent"
+      },
+      "subject": {
+       "hook": "before_model_resolve"
+      },
+      "details": {
+       "mode": "cheap",
+       "selectedModel": "google/gemini-3.5-flash",
+       "selectionReason": "cheap_default"
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
+     "governed.invite",
+     "agent:main:s1"
+    ]
+   ]
+  }
+ ]
+}
