@@ -1,0 +1,18 @@
+{
+ "plugins": {
+  "entries": {
+   "togglelogic": {
+    "config": {
+     "mode": "cheap",
+     "cheapHeuristic": {
+      "default": "google/gemini-3.5-flash"
+     },
+     "ownerOverride": {
+      "enabled": true,
+      "statePath": "/nonexistent/should-not-be-read.json"
+     }
+    }
+   }
+  }
+ }
+}

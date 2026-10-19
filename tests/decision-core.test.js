@@ -51,7 +51,10 @@ test("decide() routes a plain request by mode and returns a v1 response", async 
   assert.deepEqual(res.decision, { action: "route", ref: "google/gemini-3.5-flash", provider: "google", model: "gemini-3.5-flash" });
   assert.equal(res.reason, "cheap_default");
   assert.deepEqual(res.engine, { product: "togglelogic-free", version: "2.2.0-test" });
-  assert.equal(res.recorded, true); assert.equal(writes, 1);
+  assert.equal(writes, 1);
+  assert.match(res.policyDigest, /^sha256:[a-f0-9]{64}$/);
+  assert.deepEqual(res.costEstimate, { priced: false, usd: null, basis: "none", unpricedReason: "no_usage_estimate" });
+  assert.equal("recorded" in res, false);
 });
 
 test("decide() honors requested.source user and request without reading any host state", async () => {
@@ -77,9 +80,10 @@ test("decide() reads lazy request fields only when the decision order reaches th
   Object.defineProperty(lazy, "requested", { get: () => { reads.push("requested"); return { ref: null, provider: null, model: null, source: "none" }; } });
   Object.defineProperty(lazy, "candidates", { get: () => { reads.push("candidates"); return []; } });
   const core = createDecisionCore({ policy: policy({ ownerOverride: { enabled: false } }), services: services({ governedEscalation: { beforeRouting: () => ({ shortCircuit: true, override: null }) } }) });
-  const res = await core.decide(lazy, { decision: record() });
+  let writes = 0;
+  await core.decide(lazy, { decision: record(), record: () => { writes++; } });
   assert.deepEqual(reads, [], "a governed short-circuit reads no host state");
-  assert.equal(res.recorded, false);
+  assert.equal(writes, 0);
   const core2 = createDecisionCore({ policy: policy(), services: services() });
   await core2.decide(lazy, { decision: record() });
   assert.deepEqual(reads, ["requested"], "candidates are read only on failover");
@@ -90,7 +94,7 @@ test("beforeDispatch=false stops before mode dispatch with no record", async () 
   const core = createDecisionCore({ policy: policy({ mode: "intelligence" }), services: services({ seam: { status: () => "available", classify: async () => { classified++; return null; } } }) });
   let writes = 0;
   const res = await core.decide(request(), { decision: record(), record: () => { writes++; }, beforeDispatch: () => false });
-  assert.deepEqual(res.decision, { action: "passthrough" }); assert.equal(res.recorded, false);
+  assert.deepEqual(res.decision, { action: "passthrough" });
   assert.equal(writes, 0); assert.equal(classified, 0);
 });
 

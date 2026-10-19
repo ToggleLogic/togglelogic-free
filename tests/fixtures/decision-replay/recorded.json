@@ -1,5 +1,5 @@
 {
- "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2)",
+ "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); D28 (M1 step 5) re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios",
  "scenarios": [
   {
    "name": "passthrough mode, host default",
@@ -75,7 +75,7 @@
      "audit",
      {
       "event": "routing.decision",
-      "outcome": "success",
+      "outcome": "noop",
       "principal": {
        "source": "agent"
       },
@@ -360,7 +360,7 @@
      "audit",
      {
       "event": "routing.decision",
-      "outcome": "success",
+      "outcome": "noop",
       "principal": {
        "source": "agent"
       },
@@ -454,7 +454,7 @@
      "audit",
      {
       "event": "routing.decision",
-      "outcome": "success",
+      "outcome": "noop",
       "principal": {
        "source": "agent"
       },
@@ -738,7 +738,7 @@
      "audit",
      {
       "event": "routing.decision",
-      "outcome": "success",
+      "outcome": "noop",
       "principal": {
        "source": "agent"
       },
@@ -1244,7 +1244,7 @@
      "audit",
      {
       "event": "routing.decision",
-      "outcome": "success",
+      "outcome": "noop",
       "principal": {
        "source": "agent"
       },
@@ -1343,7 +1343,7 @@
      "audit",
      {
       "event": "routing.decision",
-      "outcome": "success",
+      "outcome": "noop",
       "principal": {
        "source": "agent"
       },
@@ -1437,7 +1437,7 @@
      "audit",
      {
       "event": "routing.decision",
-      "outcome": "success",
+      "outcome": "noop",
       "principal": {
        "source": "agent"
       },

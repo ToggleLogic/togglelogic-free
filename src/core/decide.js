@@ -33,8 +33,12 @@
  *   decision      { action: "route" | "passthrough", ref?, provider?, model? }
  *   reason        selectionReason vocabulary
  *   rationale     { details }
- *   recorded      false only when no routing record was written (governed
- *                 short-circuit, duplicate within the window)
+ *   policyDigest  "sha256:<hex>" of the canonical JSON of the policy in force
+ *   costEstimate  { priced, usd, basis, unpricedReason? } — dollars only; only
+ *                 computed when the request carries usageEstimate and a pricing
+ *                 service is injected; never a $0 stand-in for unknown
+ *   engine        { product, version }
+ * The response conforms to docs/design/schemas/decision-response.v1.schema.json.
  *
  * The adapter supplies hooks: `decision` (the routing record to fill),
  * `record()` (finalize and write it) and `beforeDispatch()` (host dedupe; false
@@ -46,26 +50,48 @@ import { deriveLineage } from "../routing/lineage.js";
 import { resolveEffectiveMode, dispatchByMode } from "../routing/modes.js";
 import { resolveOwnerOverride } from "../routing/owner-override.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
+import crypto from "node:crypto";
 
 export const DECISION_API_VERSION = "togglelogic.decision/v1";
 
-// The interceptor's own "no change" marker. Mode dispatch returns its own
-// empty override object, which the audit outcome deliberately does not treat
-// as this marker (Free 2.1.x behavior, kept unchanged in this step).
+// The interceptor's own "no change" marker. The audit outcome is "noop" for any
+// decision that leaves the model unchanged — this marker or an empty override
+// from mode dispatch (D28; Free 2.1.x reported the latter as "success").
 const NO_CHANGE = Object.freeze({});
 const emit = (audit, event, value) => { try { audit?.emit?.({ event, ...value }); } catch {} };
 
 export function overrideToDecision(override) {
-  const provider = override?.providerOverride ?? null;
-  const model = override?.modelOverride ?? null;
+  const provider = override?.providerOverride || null;
+  const model = override?.modelOverride || null;
   if (!provider && !model) return { action: "passthrough" };
-  return { action: "route", ref: provider && model ? `${provider}/${model}` : (model || provider), provider, model };
+  return { action: "route", ref: provider && model ? `${provider}/${model}` : (model || provider),
+    ...(provider ? { provider } : {}), ...(model ? { model } : {}) };
 }
+
+// Canonical JSON (sorted keys, no whitespace) so the digest names the policy, not
+// its key order. Functions/undefined are dropped as JSON.stringify would.
+export function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map((v) => (v === undefined || typeof v === "function" ? "null" : canonicalJson(v))).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().filter((k) => value[k] !== undefined && typeof value[k] !== "function")
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function policyDigestOf(policy) {
+  return `sha256:${crypto.createHash("sha256").update(canonicalJson(policy ?? {})).digest("hex")}`;
+}
+
+function unpriced(reason) { return { priced: false, usd: null, basis: "none", unpricedReason: reason }; }
+
 
 export function createDecisionCore({ policy, services = {}, product = "togglelogic-free", version = null } = {}) {
   const { audit = null, seam, availability = null, lineageResolver = null, usageEvents = null,
     fallbackLogger = null, governedEscalation = null, paths = null } = services;
   const config = policy;
+  const policyDigest = policyDigestOf(policy);
+  const pricing = services.pricing ?? null;
 
   function unresolved(decision, reason) {
     const details = { reason, selectionReason: "fallback_unresolved", selectedModel: decision.selectedModel };
@@ -74,15 +100,33 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     try { fallbackLogger?.warn?.("ToggleLogic fallback_unresolved: no fallback resolved; preserving the selection"); } catch {}
   }
 
-  function respond(decision, override, recorded) {
+  // Dollar estimate for the model that will actually run (the routed ref, else the
+  // host's requested/default model). Only with a caller usageEstimate.
+  async function estimate(request, decisionOut) {
+    const usage = request?.usageEstimate;
+    if (!usage || (!Number.isFinite(usage.inputTokens) && !Number.isFinite(usage.outputTokens))) return unpriced("no_usage_estimate");
+    if (!pricing?.resolve || !pricing?.costUsd) return unpriced("no_pricing_service");
+    const ref = decisionOut.action === "route" ? decisionOut.ref : (request.requested?.ref || request.defaultRef);
+    if (!ref || !ref.includes("/")) return unpriced("no_model_ref");
+    let info;
+    try { info = await pricing.resolve(ref); } catch { return unpriced("pricing_error"); }
+    if (!info?.curated) return unpriced("outside_price_catalog");
+    if (!info.priced) return unpriced("no_published_price");
+    const usd = pricing.costUsd(info, { input: usage.inputTokens ?? 0, output: usage.outputTokens ?? 0 });
+    return Number.isFinite(usd) && usd >= 0 ? { priced: true, usd, basis: "usage_estimate" } : unpriced("no_published_price");
+  }
+
+  async function respond(request, decision, override) {
+    const decisionOut = overrideToDecision(override);
     return {
       apiVersion: DECISION_API_VERSION,
-      correlationId: decision?.requestId ?? null,
-      decision: overrideToDecision(override),
+      correlationId: String(decision?.requestId ?? request?.requestId ?? ""),
+      decision: decisionOut,
       reason: decision?.selectionReason ?? "passthrough",
       rationale: { details: decision?.selectionDetails ?? {} },
-      engine: { product, version },
-      recorded,
+      policyDigest,
+      costEstimate: await estimate(request, decisionOut),
+      engine: { product, version: String(version ?? "unknown") },
     };
   }
 
@@ -92,7 +136,7 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
 
     // 1. Governed escalation pre-check.
     const governedPrior = governedEscalation?.beforeRouting(event?.prompt, context);
-    if (governedPrior?.shortCircuit) return respond(decision, governedPrior.override || NO_CHANGE, false);
+    if (governedPrior?.shortCircuit) return respond(request, decision, governedPrior.override || NO_CHANGE);
 
     // 2. Owner override.
     const owner = resolveOwnerOverride(config.ownerOverride, { paths });
@@ -102,7 +146,7 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       if (availability?.unavailable(owner.providerOverride || owner.modelRef.split("/")[0])) decision.selectionDetails.providerUnavailableConflict = true;
       record();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.SUCCESS, principal: { source: "owner" }, subject: { hook: "before_model_resolve" }, details: { mode: "owner_override", selectedModel: owner.modelRef, ...decision.selectionDetails }, correlationId: decision.requestId });
-      return respond(decision, override, true);
+      return respond(request, decision, override);
     }
 
     async function failover(ref, unchanged = NO_CHANGE) {
@@ -138,7 +182,7 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       if (availability?.unavailable(requested.provider)) decision.selectionDetails.userSelectionConflict = true;
       record();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, details: { selectedModel: requested.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
-      return respond(decision, NO_CHANGE, true);
+      return respond(request, decision, NO_CHANGE);
     }
 
     // 4. Request selection.
@@ -148,15 +192,15 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       if (availability?.unavailable(requested.provider)) decision.selectionDetails.userSelectionConflict = true;
       record();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, subject: { hook: "before_model_resolve" }, details: { mode: "request_selection", selectedModel: requested.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
-      return respond(decision, NO_CHANGE, true);
+      return respond(request, decision, NO_CHANGE);
     }
 
     // 5. Early failover if the pending model's provider is unavailable.
     const pending = requested?.ref || request.defaultRef;
     const earlyFallback = await failover(pending);
-    if (earlyFallback) { record(); return respond(decision, earlyFallback, true); }
+    if (earlyFallback) { record(); return respond(request, decision, earlyFallback); }
 
-    if (!beforeDispatch()) return respond(decision, NO_CHANGE, false);
+    if (!beforeDispatch()) return respond(request, decision, NO_CHANGE);
 
     // 6. Mode dispatch, then 7. governed escalation post-check.
     let override = NO_CHANGE;
@@ -177,8 +221,8 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       : refOf(decision.selectedProvider, decision.selectedModel);
     override = await failover(selectedRef, override) || override;
     record();
-    if (decision.selectionReason !== "fallback_unresolved") emit(audit, EVENTS.ROUTING_DECISION, { outcome: override === NO_CHANGE ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
-    return respond(decision, override, true);
+    if (decision.selectionReason !== "fallback_unresolved") emit(audit, EVENTS.ROUTING_DECISION, { outcome: overrideToDecision(override).action === "passthrough" ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
+    return respond(request, decision, override);
   }
 
   return Object.freeze({ decide, unresolved });

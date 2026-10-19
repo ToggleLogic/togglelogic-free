@@ -27,6 +27,9 @@ behavior is unchanged at every step.
   Proof: a recorded-decision replay fixture (38 scenarios, every selection
   reason, recorded from the step-2 code) must match exactly: return value,
   routing record, audit events, usage events, warnings and seam calls.
+
+## 2.2.0-rc.2 — unreleased (M1 steps 4, 5 and 8; HQ canary only)
+
 - **Step 4 — OpenClaw adapter (no routing behavior change).** Everything
   OpenClaw-specific now lives in `src/adapters/openclaw/`: the plugin entry
   (`entry.js`, `definePluginEntry`), hook registration and service wiring
@@ -40,6 +43,33 @@ behavior is unchanged at every step.
   rules as every other ToggleLogic file (HOME, and `OPENCLAW_STATE_DIR` with
   `~` expansion). Before, a `~/…` state dir produced a literal `~` folder.
   With `OPENCLAW_STATE_DIR` unset the folder is unchanged.
+- **Step 5 — Decision API v1 responses, decision matrix and replay.**
+  `decide()` now returns a response that validates against
+  `docs/design/schemas/decision-response.v1.schema.json`: it adds
+  `policyDigest` (`sha256:` of the canonical policy JSON) and `costEstimate`
+  (dollars for the model that will run, only when the caller supplies
+  `usageEstimate` and a pricing service; otherwise `priced: false`, `usd: null`
+  and a named `unpricedReason` — never a $0 stand-in), and omits empty
+  `provider`/`model` instead of sending null. The internal `recorded` flag is
+  gone from the response. New `src/core/request.js` maps a v1 wire request to
+  the core request; `content` is never copied. New
+  `togglelogic-decide replay --log <routing.jsonl> --config <file> [--json]`
+  re-runs recorded routing decisions against a policy and prints the
+  differences (exit 2 when any differ). Records that depended on state the log
+  does not carry (owner override, the Intelligence seam, provider availability,
+  dispatch errors) are counted by reason, not guessed at. Replay reads only and
+  writes nothing. Tests: a 112-row decision matrix (modes × requested source ×
+  provider availability) validates every request and response against the v1
+  schemas, requires the OpenClaw hook to return exactly the core's decision,
+  and proves request content never reaches a response, routing record, audit
+  event or warning.
+- **Changed (D28): audit outcome for unchanged-model decisions.** A
+  `routing.decision` audit event for a decision that leaves the model unchanged
+  is now `noop`; 2.1.x reported `success` when the passthrough came from mode
+  dispatch (passthrough mode, no configured or cheap route, Intelligence
+  declined, shadow or unavailable). Routing is unchanged. The replay fixture
+  was re-recorded and differs from the step-2 recording only in that field, in
+  those 7 scenarios.
 
 ## 2.1.6 — 2026-10-17
 
