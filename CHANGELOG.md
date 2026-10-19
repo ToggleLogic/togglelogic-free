@@ -1,34 +1,11 @@
 # Changelog
 
-## 2.2.0-rc.1 — 2026-10-19 (release candidate: M1 steps 2–3, no behavior change; HQ canary only)
+## 2.2.0-rc.2 — 2026-10-19 (release candidate: M1 steps 4, 5 and 8; HQ canary only)
 
-Milestone M1 (host adapters and the gateway-neutral Decision API), built in
-the steps of `docs/design/M1-HOST-ADAPTERS-AND-DECISION-API.md` §7. OpenClaw
-behavior is unchanged at every step.
-
-- **Step 2 — injected paths, clock and state store (no behavior change).**
-  New host-neutral `src/core/paths.js` (`createPaths({ home, stateDir })`),
-  `src/core/clock.js` and `src/core/state-store.js` (atomic JSON documents;
-  a missing document reads as null, a corrupt one throws). The OpenClaw
-  adapter (`src/adapters/openclaw/paths.js`) resolves HOME and
-  `OPENCLAW_STATE_DIR` exactly as 2.1.x and injects one `paths` object into
-  the audit log, routing log, usage events, cost log, pricing cache, balances,
-  owner override, governed escalation and the Intelligence detector. A test
-  fails if anything under `src/core/` reads the environment, the OS home or
-  the host SDK.
-- **Step 3 — `decide()` extracted into `src/core/decide.js` (no behavior
-  change).** `createDecisionCore({ policy, services })` runs the decision order
-  of design §4.3 on a `DecisionRequest` (`requested`, `defaultRef`,
-  `candidates`, `fallbacks`) and returns a `togglelogic.decision/v1` response
-  (`decision`, `reason`, `rationale`, `engine`). The OpenClaw interceptor is
-  now `toDecisionRequest` → `decide` → `applyDecision`; preflight caching,
-  duplicate-prompt suppression and session-store provenance stay in the
-  adapter, and host state is still read at the same point in the order.
-  Proof: a recorded-decision replay fixture (38 scenarios, every selection
-  reason, recorded from the step-2 code) must match exactly: return value,
-  routing record, audit events, usage events, warnings and seam calls.
-
-## 2.2.0-rc.2 — unreleased (M1 steps 4, 5 and 8; HQ canary only)
+Completes the Free 2.2.0 scope of M1 (design §7 steps 1–5 and 8). Routing is
+unchanged. Behavior changes, all below: the audit outcome for unchanged-model
+decisions (D28), the notification interpreter default, and the new-session
+marker folder fix.
 
 - **Step 4 — OpenClaw adapter (no routing behavior change).** Everything
   OpenClaw-specific now lives in `src/adapters/openclaw/`: the plugin entry
@@ -83,6 +60,34 @@ behavior is unchanged at every step.
 - **Step 8 — Deprecated: `src/enforcement/bounded-executor.js`.** It was never
   wired into the plugin. It is now excluded from the npm package and stays in
   the repository only for its tests; the next major removes it.
+
+## 2.2.0-rc.1 — 2026-10-19 (release candidate: M1 steps 2–3, no behavior change; HQ canary only)
+
+Milestone M1 (host adapters and the gateway-neutral Decision API), built in
+the steps of `docs/design/M1-HOST-ADAPTERS-AND-DECISION-API.md` §7. OpenClaw
+behavior is unchanged at every step.
+
+- **Step 2 — injected paths, clock and state store (no behavior change).**
+  New host-neutral `src/core/paths.js` (`createPaths({ home, stateDir })`),
+  `src/core/clock.js` and `src/core/state-store.js` (atomic JSON documents;
+  a missing document reads as null, a corrupt one throws). The OpenClaw
+  adapter (`src/adapters/openclaw/paths.js`) resolves HOME and
+  `OPENCLAW_STATE_DIR` exactly as 2.1.x and injects one `paths` object into
+  the audit log, routing log, usage events, cost log, pricing cache, balances,
+  owner override, governed escalation and the Intelligence detector. A test
+  fails if anything under `src/core/` reads the environment, the OS home or
+  the host SDK.
+- **Step 3 — `decide()` extracted into `src/core/decide.js` (no behavior
+  change).** `createDecisionCore({ policy, services })` runs the decision order
+  of design §4.3 on a `DecisionRequest` (`requested`, `defaultRef`,
+  `candidates`, `fallbacks`) and returns a `togglelogic.decision/v1` response
+  (`decision`, `reason`, `rationale`, `engine`). The OpenClaw interceptor is
+  now `toDecisionRequest` → `decide` → `applyDecision`; preflight caching,
+  duplicate-prompt suppression and session-store provenance stay in the
+  adapter, and host state is still read at the same point in the order.
+  Proof: a recorded-decision replay fixture (38 scenarios, every selection
+  reason, recorded from the step-2 code) must match exactly: return value,
+  routing record, audit events, usage events, warnings and seam calls.
 
 ## 2.1.6 — 2026-10-17
 

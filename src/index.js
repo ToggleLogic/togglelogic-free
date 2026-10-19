@@ -6,6 +6,6 @@
  */
 import { createOpenClawPluginEntry } from "./adapters/openclaw/entry.js";
 
-const PLUGIN_VERSION = "2.2.0-rc.1";
+const PLUGIN_VERSION = "2.2.0-rc.2";
 
 export default createOpenClawPluginEntry({ version: PLUGIN_VERSION });
