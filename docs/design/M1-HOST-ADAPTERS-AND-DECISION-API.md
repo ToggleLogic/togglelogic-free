@@ -1,6 +1,6 @@
 # M1 design — Host adapters and the gateway-neutral Decision API
 
-Status: **approved design** (2026-10-13). Target: **ToggleLogic Free 2.2.0** (§7 steps 1–5 and 8) and **Free 2.3.0** (steps 6–7: sidecar, LiteLLM/Envoy kits, seam ABI 2), split by the owner on 2026-10-19.
+Status: **approved design** (2026-10-13). Target: **ToggleLogic Free 2.2.0** (§7 steps 1–5 and 8) and **Free 2.4.0** (steps 6–7: sidecar, LiteLLM/Envoy kits, seam ABI 2), split by the owner on 2026-10-19 and shifted from 2.3.0 to 2.4.0 by the 2026-10-22 M6 insertion.
 Baseline when written: Free 2.1.4 (`121ed11`).
 
 ## 1. Problem
@@ -76,7 +76,7 @@ field requires `v2`.
 | `requestId` | Caller id; echoed as the correlation id. Generated if absent. |
 | `tenant` | `{ id, costCenter? }` — department or client; drives attribution and (M3) policy selection. |
 | `work` | `{ label?, labelSource, capabilityNeeds[] }`. `label` is a structured task label from the host, never derived from prompt text. |
-| `dataClass` | Reserved for M5: `{ label, source: "host" }`. Accepted and audited from 2.2.0; enforced in 2.5.0. |
+| `dataClass` | Reserved for M5: `{ label, source: "host" }`. Accepted and audited from 2.2.0; enforced in 2.6.0. |
 | `requested` | `{ ref?, source }` with `source` ∈ `user`, `request`, `auto`, `default`, `none`. This is the host's statement of who chose the current model. |
 | `defaultRef` | The host's declared default for this agent or route. |
 | `candidates` | `[{ ref, lineage?, local?, surfaces?, releaseDate? }]` — the models this host is allowed to run. Authoritative allowlist. |
@@ -158,7 +158,7 @@ StateStore {        // owner-override state, chain head (M2), budgets
 
 ### Seam ABI 2
 
-- Free 2.3.0 advertises `INTELLIGENCE_SEAM_ABI = [1, 2]`. The detector loads a
+- Free 2.4.0 advertises `INTELLIGENCE_SEAM_ABI = [1, 2]`. The detector loads a
   licensed layer whose manifest says `seam_abi: 1` or `2`.
 - ABI 2 call: `decide({ request, catalog })` where `request` is the
   `DecisionRequest` (with `content` only when the host opted in) and `catalog`

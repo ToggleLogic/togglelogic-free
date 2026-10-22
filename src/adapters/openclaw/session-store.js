@@ -1,7 +1,8 @@
 /*
  * ToggleLogic (Free Tier) — OpenClaw session-store reader.
  * (c) 2026 Motherboard, Inc. Source-available under the ToggleLogic Free-Tier
- * License (see LICENSE). PATENT PENDING.
+ * License (see LICENSE); all rights reserved.
+ * PATENT PENDING.
  *
  * Reads the host's per-agent session state to recover a protected user/session
  * model selection (a "pin"). GENERIC mechanism: it reads through the host's
