@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1 — 2026-10-22
+
+Documentation only. The README now links the changelog (togglelogic.ai/changelog
+and GitHub releases), and ClawHub releases now carry release notes. No code or
+behavior change from 2.2.0.
+
 ## 2.2.0 — 2026-10-22
 
 Milestone M1 part 1 — host adapters and the gateway-neutral Decision API, built

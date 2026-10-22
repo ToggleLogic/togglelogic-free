@@ -96,11 +96,18 @@ The controlling boundary is [docs/INTEGRATION-RESPONSIBILITY-CONTRACT.md](docs/I
 Version 2.0 removes the application-specific orchestration surface that was
 mistakenly included in the 1.6–1.7 line.
 
+## Changelog
+
+- Release notes for every version: [togglelogic.ai/changelog](https://togglelogic.ai/changelog/)
+- GitHub releases: [github.com/ToggleLogic/togglelogic-free/releases](https://github.com/ToggleLogic/togglelogic-free/releases)
+- Full history: [`CHANGELOG.md`](CHANGELOG.md) in this package.
+
 ## Links
 
 - Website: [togglelogic.ai](https://togglelogic.ai/)
 - What it costs us: [togglelogic.ai/spend-tracking](https://togglelogic.ai/spend-tracking/)
 - Release notes: [togglelogic.ai/changelog](https://togglelogic.ai/changelog/)
+- GitHub releases: [github.com/ToggleLogic/togglelogic-free/releases](https://github.com/ToggleLogic/togglelogic-free/releases)
 
 ## License
 

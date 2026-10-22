@@ -109,4 +109,6 @@ Claude Code only. In order:
    mismatch fails `npm run quality`.
 4. Tag `vX.Y.Z` created on `main`.
 5. Push (tag + branch) — **before any install anywhere.**
-6. Install: canary host first, then the fleet.
+6. Every ClawHub publish passes `--changelog` with that version's CHANGELOG
+   section (plain text); published ClawHub versions cannot be edited.
+7. Install: canary host first, then the fleet.
