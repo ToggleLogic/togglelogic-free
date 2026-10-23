@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://togglelogic.ai/schema/owner-pins/v2/owner-pins.json",
+  "title": "ToggleLogic owner-pin state file v2 (DRAFT)",
+  "description": "Deployment-supplied owner-pin state. One file holds every scope. Written only by the togglelogic-pin CLI (atomic temp+rename); the routing hook reads it and never writes. The 'all' scope MUST carry expires_at_ms at set time (enforced by the CLI, not by this schema, because a value cannot be conditioned on its own key). A v1 file (no 'schema'/'pins' keys, override fields at the top level) is a separate, still-honored shape — see M6-PER-TASK-OWNER-PINS.md §3.2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "pins"],
+  "properties": {
+    "schema": { "const": "togglelogic-owner-pins/v2" },
+    "pins": {
+      "type": "object",
+      "description": "Keyed by scope. 'all' is the all-tasks override; 'task:<label>' pins one normalized (lowercase/trim) host task label.",
+      "propertyNames": { "pattern": "^(all|task:[a-z0-9][a-z0-9._-]{0,127})$" },
+      "additionalProperties": { "$ref": "#/$defs/pin" }
+    }
+  },
+  "$defs": {
+    "pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active", "set_by", "set_at_ms"],
+      "oneOf": [
+        { "required": ["model_ref"], "not": { "required": ["family"] } },
+        { "required": ["family"], "not": { "required": ["model_ref"] } }
+      ],
+      "properties": {
+        "active": { "type": "boolean" },
+        "model_ref": {
+          "type": "string",
+          "maxLength": 512,
+          "pattern": "^[^/\\s]+/.+$",
+          "description": "Exact provider/model ref. Split on the FIRST slash (provider = head, model = tail) so multi-segment refs keep their tail."
+        },
+        "family": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "A provider-qualified lineage accepted by lineage-resolver.validLineage, resolved to the newest configured+allowed member at decision time."
+        },
+        "provider_override": { "type": "string", "maxLength": 128 },
+        "set_by": { "type": "string", "maxLength": 128 },
+        "set_at_ms": { "type": "integer", "minimum": 0 },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Optional for task:<label> scopes (holds until cleared if absent). Required at SET time for the 'all' scope (CLI-enforced). A present-but-non-integer value fails closed at read time (loud); true absence is honored (backward compatible)."
+        },
+        "reason": { "type": "string", "maxLength": 256 }
+      }
+    }
+  }
+}
