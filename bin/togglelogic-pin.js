@@ -14,7 +14,7 @@ import { pluginConfigFrom } from './togglelogic-decide.js';
 import { normalizeConfig } from '../src/config/normalize.js';
 import { normalizeLabel } from '../src/routing/modes.js';
 import { validLineage } from '../src/routing/lineage-resolver.js';
-import { resolveOwnerPinsStatePath } from '../src/routing/owner-pins.js';
+import { resolveOwnerPinsStatePath, migrateStateToV2 } from '../src/routing/owner-pins.js';
 import { resolveOpenClawPath } from '../src/path-utils.js';
 
 const POINTER = 'Want the best model recommended for each task? See ToggleLogic Intelligence — https://togglelogic.ai';
@@ -51,18 +51,32 @@ function matches(value, rule, root) {
 
 async function validate(doc) {
   const schema = JSON.parse(await fs.readFile(SCHEMA, 'utf8'));
-  if (!matches(doc, schema, schema) || Object.values(doc.pins).some((pin) => pin.family !== undefined && !validLineage(pin.family))) throw new Error('Invalid owner-pin state (v2 schema or family)');
+  // The published v2 schema requires exactly one target (model_ref XOR family)
+  // on EVERY pin. The routing engine consults a pin's target only when the pin
+  // is ACTIVE — an inactive pin is reported inactive and never applied — so a
+  // legacy inactive override with a null/absent target is honored on read. To
+  // accept exactly what the engine accepts, validate the structure with that
+  // oneOf relaxed to "never BOTH targets", then separately require exactly one
+  // target on ACTIVE pins only. Active pins (the only shape the CLI ever writes)
+  // stay strict; inactive/targetless legacy state lists instead of fail-closing.
+  const { oneOf, ...pin } = schema.$defs.pin;
+  const relaxed = { ...schema, $defs: { ...schema.$defs, pin: { ...pin, not: { required: ['model_ref', 'family'] } } } };
+  if (!matches(doc, relaxed, relaxed)
+    || Object.values(doc.pins).some((p) => p.active === true && (p.model_ref !== undefined) === (p.family !== undefined))
+    || Object.values(doc.pins).some((p) => p.family !== undefined && !validLineage(p.family))) throw new Error('Invalid owner-pin state (v2 schema or family)');
 }
 
 async function readState(file, now) {
   let doc;
   try { doc = JSON.parse(await fs.readFile(file, 'utf8')); }
   catch (error) { if (error.code === 'ENOENT') return { schema: 'togglelogic-owner-pins/v2', pins: {} }; throw new Error('Cannot read owner-pin state as JSON'); }
-  if (doc && !Object.hasOwn(doc, 'pins') && !Object.hasOwn(doc, 'schema') && typeof doc.active === 'boolean' && typeof doc.model_ref === 'string') {
-    const pin = { ...doc, set_by: doc.set_by ?? 'unknown', set_at_ms: doc.set_at_ms ?? now };
-    delete pin.family_input; // Legacy audit-only metadata has no v2 field.
-    doc = { schema: 'togglelogic-owner-pins/v2', pins: { all: pin } };
-  }
+  // One shared v1→v2 read path with the routing engine (src/routing/owner-pins.js):
+  // migrateStateToV2 applies the §3.3 migration exactly as resolveOwnerPins
+  // interprets a v1 file — lifting only v2 fields onto the `all` pin and dropping
+  // legacy resume/audit metadata such as resumed_at_ms — so the CLI accepts every
+  // v1 file the engine accepts. A v2 (or unrecognized) document passes through
+  // unchanged, preserving the strict v2 validation below.
+  doc = migrateStateToV2(doc, { now });
   await validate(doc);
   return doc;
 }
@@ -127,7 +141,10 @@ function expiry(value, now) {
 }
 
 function line(scope, pin) {
-  return `${scope} ${pin.model_ref ?? `${pin.family} (resolved at decision time)`} active=${pin.active} set_by=${JSON.stringify(pin.set_by)} set_at_ms=${pin.set_at_ms} expires=${pin.expires_at_ms ?? 'none'}${scope === 'all' && pin.expires_at_ms === undefined ? ' no_expiry=true' : ''}`;
+  // A migrated inactive legacy override may carry no target; show it plainly
+  // rather than printing an "undefined" ref.
+  const target = pin.model_ref ?? (typeof pin.family === 'string' && pin.family ? `${pin.family} (resolved at decision time)` : '(no target)');
+  return `${scope} ${target} active=${pin.active} set_by=${JSON.stringify(pin.set_by)} set_at_ms=${pin.set_at_ms} expires=${pin.expires_at_ms ?? 'none'}${scope === 'all' && pin.expires_at_ms === undefined ? ' no_expiry=true' : ''}`;
 }
 
 export async function run(args, { clock = Date.now, paths = null, stdout = console.log, stderr = console.error, ...lockOptions } = {}) {

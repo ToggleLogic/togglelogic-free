@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { run, atomicWrite } from '../bin/togglelogic-pin.js';
+import { resolveOwnerPins, migrateStateToV2 } from '../src/routing/owner-pins.js';
 
 const pointer = 'Want the best model recommended for each task? See ToggleLogic Intelligence — https://togglelogic.ai';
 const now = 1800000000000;
@@ -109,6 +110,67 @@ test('pointer config detection never loads the licensed layer', async (t) => {
       const r = await f.invoke(args); assert.equal(r.code, 0); assert.equal(r.out.includes(pointer), present);
     }
     assert.ok(!(await f.invoke(set('all'))).err.join('').includes(pointer));
+  }
+});
+
+// Legacy v1 override files that the routing engine honors but an earlier CLI
+// list validator rejected. The fixtures capture the shapes seen in the field: a
+// sanitized real inactive override (carrying the legacy resume field
+// `resumed_at_ms`), an inactive override whose target is null, and an active
+// override padded with extra legacy fields.
+const legacyFixture = (name) => path.resolve('tests/fixtures/owner-pins', name);
+async function legacyState(t, name) {
+  const f = await fixture(t);
+  await fs.copyFile(legacyFixture(name), f.state);
+  return f;
+}
+
+test('legacy v1 override files list as a single all scope', async (t) => {
+  const cases = [
+    ['legacy-v1-inactive.json', /^all provider\/legacy-model active=false .*no_expiry=true$/],
+    ['legacy-v1-inactive-null-target.json', /^all \(no target\) active=false .*no_expiry=true$/],
+    ['legacy-v1-extra-legacy-field.json', /^all provider\/legacy-model active=true .*set_at_ms=1770000000000/],
+  ];
+  for (const [name, expected] of cases) {
+    const f = await legacyState(t, name);
+    const before = await fs.readFile(f.state, 'utf8');
+    const r = await f.invoke(['list']);
+    assert.equal(r.code, 0, `${name}: ${r.err.join(' ')}`);
+    assert.equal(r.out.length, 2); // one scope line + the licensing pointer
+    assert.match(r.out[0], expected);
+    assert.equal(await fs.readFile(f.state, 'utf8'), before); // list never rewrites v1
+  }
+});
+
+test('set on a legacy v1 file writes valid v2 and drops legacy-only fields', async (t) => {
+  for (const name of ['legacy-v1-inactive.json', 'legacy-v1-extra-legacy-field.json']) {
+    const f = await legacyState(t, name);
+    assert.equal((await f.invoke(set('task:inventory-sync'))).code, 0);
+    const doc = await f.read();
+    assert.equal(doc.schema, 'togglelogic-owner-pins/v2');
+    assert.equal(doc.pins.all.model_ref, 'provider/legacy-model');
+    assert.equal(doc.pins.all.set_by, 'model-switch');
+    assert.ok(!Object.hasOwn(doc.pins.all, 'resumed_at_ms')); // legacy field gone
+    assert.ok(!Object.hasOwn(doc.pins.all, 'family_input'));
+    assert.ok(!Object.hasOwn(doc.pins.all, 'expires_at_ms'));
+    assert.equal(doc.pins['task:inventory-sync'].model_ref, 'provider/model');
+    // The rewritten file is itself valid v2 — a second read succeeds.
+    assert.equal((await f.invoke(['list'])).code, 0);
+  }
+});
+
+test('engine resolveOwnerPins and the CLI read path agree on every legacy fixture', async (t) => {
+  for (const name of ['legacy-v1-inactive.json', 'legacy-v1-inactive-null-target.json', 'legacy-v1-extra-legacy-field.json']) {
+    const state = legacyFixture(name);
+    const parsed = JSON.parse(await fs.readFile(state, 'utf8'));
+    const engine = resolveOwnerPins({ enabled: true, statePath: state }, { clock: () => now });
+    const cli = migrateStateToV2(parsed, { now });
+    // Same scope set, same active state, same resolved target — the two readers
+    // never disagree on what the file means.
+    assert.deepEqual(Object.keys(cli.pins), ['all'], name);
+    assert.ok(engine.all && !engine.task, name);
+    assert.equal(engine.all.active, cli.pins.all.active, name);
+    assert.equal(engine.all.resolvedRef ?? null, cli.pins.all.model_ref ?? cli.pins.all.family ?? null, name);
   }
 });
 

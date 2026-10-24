@@ -89,6 +89,41 @@ function classify(parsed) {
   return { schemaVersion: null, allRaw: null, taskRaw: null };
 }
 
+// The v2 pin fields (owner-pins.v2.schema.json $defs.pin.properties). The v1
+// migration lifts ONLY these onto the single `all` pin; legacy resume/audit
+// metadata (e.g. resumed_at_ms, family_input) is dropped so the migrated object
+// validates under the schema's additionalProperties:false. scopeResult below
+// likewise reads only these fields and ignores the rest, so the engine and the
+// togglelogic-pin CLI — which reads v1 state through migrateStateToV2 — interpret
+// a v1 file identically (one read path, not two).
+const V2_PIN_FIELDS = Object.freeze(["active", "model_ref", "family", "provider_override", "set_by", "set_at_ms", "expires_at_ms", "reason"]);
+
+/**
+ * Normalize a parsed owner-pin state document to the v2 shape (§3.3). This is
+ * the single v1→v2 read path the CLI shares with this resolver: a v1 file (no
+ * `pins`/`schema`, top-level override shape — detected by classify()) becomes a
+ * v2 document carrying one `all` pin with only v2 fields. A null/absent target
+ * is dropped: an inactive legacy override may carry none, and the engine honors
+ * it as inactive (scopeResult consults the target only when the pin is active).
+ * A v2 — or unrecognized — document is returned UNCHANGED so the CLI's strict v2
+ * validation still catches a malformed v2 file. `now` supplies `set_at_ms` when
+ * a migrated v1 pin carries none (the v2 schema requires it; on read, the engine
+ * simply leaves setAtMs undefined).
+ *
+ * @param {unknown} parsed  the JSON.parse'd state document
+ * @param {{now?:number}} [opts]
+ * @returns {unknown} a v2-shaped document, or `parsed` unchanged when not v1.
+ */
+export function migrateStateToV2(parsed, { now } = {}) {
+  const { schemaVersion, allRaw } = classify(parsed);
+  if (schemaVersion !== "v1" || !allRaw || typeof allRaw !== "object") return parsed;
+  const pin = {};
+  for (const field of V2_PIN_FIELDS) if (allRaw[field] !== undefined && allRaw[field] !== null) pin[field] = allRaw[field];
+  if (pin.set_by === undefined) pin.set_by = "unknown";
+  if (pin.set_at_ms === undefined && typeof now === "number") pin.set_at_ms = now;
+  return { schema: "togglelogic-owner-pins/v2", pins: { all: pin } };
+}
+
 // Build the intrinsic (pre-ranking) result for one scope from its raw pin.
 // `nowMs` drives the TTL verdict so expiry is live on every call. The result
 // describes whether the pin is eligible to apply and, if not, the block reason;

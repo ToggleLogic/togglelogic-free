@@ -1,0 +1,9 @@
+{
+  "active": true,
+  "model_ref": "provider/legacy-model",
+  "set_by": "model-switch",
+  "set_at_ms": 1770000000000,
+  "family_input": "legacy",
+  "resumed_at_ms": 1780000000000,
+  "reason": "owner switch"
+}
