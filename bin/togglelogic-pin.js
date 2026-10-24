@@ -76,6 +76,11 @@ export async function atomicWrite(file, doc, io = fs) {
     await handle.sync();
     await handle.close(); handle = null;
     await io.rename(tmp, file);
+    // Durably persist the rename itself: fsync the containing directory so the
+    // new directory entry survives a crash, not just the file's bytes. Best-
+    // effort — some platforms reject a directory fsync, and the rename is
+    // already atomic to concurrent readers regardless.
+    try { const dir = await io.open(path.dirname(file), 'r'); try { await dir.sync(); } finally { await dir.close(); } } catch { /* directory fsync unsupported */ }
   } finally {
     await handle?.close();
     await io.unlink(tmp).catch((error) => { if (error.code !== 'ENOENT') throw error; });

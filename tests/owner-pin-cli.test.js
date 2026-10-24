@@ -152,7 +152,8 @@ test('atomic write fsyncs before rename; interrupted write leaves original intac
     const handle = await fs.open(...args);
     return { writeFile: async (s) => { events.push('write'); await handle.writeFile(s); }, sync: async () => { events.push('sync'); await handle.sync(); }, close: async () => { events.push('close'); await handle.close(); } };
   }, rename: async (...args) => { events.push('rename'); assert.equal(await fs.readFile(f.state, 'utf8'), before); await fs.rename(...args); } };
-  await atomicWrite(f.state, doc, io); assert.deepEqual(events, ['write', 'sync', 'close', 'rename']);
+  // Trailing sync/close are the containing-directory fsync after the rename.
+  await atomicWrite(f.state, doc, io); assert.deepEqual(events, ['write', 'sync', 'close', 'rename', 'sync', 'close']);
   await assert.rejects(atomicWrite(f.state, doc, { ...fs, rename: async () => { throw new Error('interrupted'); } }), /interrupted/);
   assert.equal(await fs.readFile(f.state, 'utf8'), before);
   await assert.rejects(atomicWrite(f.state, doc, { ...fs, open: async (...args) => {
