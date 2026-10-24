@@ -457,7 +457,12 @@ togglelogic-pin list  [--json] --config <...>
   cache already detects the change), carrying the scopes present and their
   set_by/set_at/expiry — so every set/clear is accounted for in the audit
   stream, by the single writer. A malformed/rejected scope emits
-  `OWNER_PIN_REJECTED` once per version (the §2.2 loud pattern).
+  `OWNER_PIN_REJECTED` once per version (the §2.2 loud pattern). Edge, accepted:
+  the ask handler (§2.3) shares the resolver's per-process mtime cache, so an
+  outbound turn that fires *before* any decide has observed a brand-new file
+  version would populate the cache first and suppress that version's
+  `OWNER_PIN_CHANGE`. In a normal turn `before_model_resolve` runs before
+  `message_sending`, so decide observes the new version first and emits it.
 - **One recommendation pointer, CLI-only (Free never recommends a model).** Free
   does not recommend models — choosing the model is the owner's job; model
   *recommendations* (benchmarks, multiple-choice) are a licensed ToggleLogic
@@ -525,13 +530,19 @@ records NOT replayable, with precise reasons.** Rationale:
 ### 5.1 Resolving a family pin
 
 A pin whose target is `family` resolves through the **existing**
-`createLineageResolver` / `resolveLineage` (`lineage-resolver.js:40`–`64`): the
-newest configured+allowed member with a valid release date wins
-(`"newest-configured-release"`), else configured order
-(`"configured-order-no-release-date"`). The resolved child becomes
-`resolved_ref`; `resolution_reason` is carried in `selectionDetails` and the
-`pins` block. The same resolver serves **configured per-task routes** that name
-a `family:<name>` value (§2.4) — §5.2.
+`createLineageResolver` / `resolveLineage` (`lineage-resolver.js:40`–`64`). At
+**decision time** the hot path resolves the family **synchronously, in the
+owner's configured order** — the first configured+allowed member
+(`"configured-order-no-release-date"`) — so each decision keeps §3.1's
+one-stat-per-decision cost model with **no** per-decision pricing-catalog fetch.
+The owner's configured order is the owner's choice: deterministic and
+loud-on-failure. **Release-date ordering** (`"newest-configured-release"`,
+newest dated child first) is applied **only on the async failover path**, where
+the catalog is already resolved; a family that must fail over there lands on the
+newest available dated member. The resolved child becomes `resolved_ref`;
+`resolution_reason` is carried in `selectionDetails` and the `pins` block. The
+same resolver serves **configured per-task routes** that name a `family:<name>`
+value (§2.4) — §5.2.
 
 ### 5.2 Configured `family:` routes
 
@@ -604,8 +615,9 @@ default — a documented limitation (ROADMAP M6 risk). It is made visible:
   (`register.js:46`–`47`, `:56`): `{ id: "taskPins", enabled:
   <ownerOverride enabled>, ready: true, reason: <see below> }`. Reasons:
   `"no-task-labels-seen"` (enabled, but no labelled turn observed yet),
-  `"active"` (labelled turns seen / task pins configured), `"disabled"`
-  (`ownerOverride.enabled !== true`).
+  `"active"` (at least one labelled turn has been observed — the signal is the
+  observed labelled turn, **not** whether task pins are configured),
+  `"disabled"` (`ownerOverride.enabled !== true`).
 - The gate's `reason` flips from `no-task-labels-seen` to `active` the first
   time a decision observes a non-null `labelSeen`, so an operator can tell at a
   glance whether per-task routing is actually reaching the engine (a real gap:
