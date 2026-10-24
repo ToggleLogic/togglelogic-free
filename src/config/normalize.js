@@ -5,7 +5,49 @@
  * PATENT PENDING.
  */
 import { validLineage } from "../routing/lineage-resolver.js";
+import { normalizeLabel } from "../routing/modes.js";
+import { EVENTS } from "../audit/audit-events.js";
 const MODES = new Set(["auto", "passthrough", "configured", "cheap", "intelligence"]);
+
+/**
+ * Normalize configuredRoutes keys with the canonical label rule (M6 §3.5:
+ * lowercase + trim) so stored keys match the normalized incoming task label.
+ * Keeps entries whose value is a non-empty string. On a key collision (two raw
+ * keys normalizing to the same scope) the LAST wins and the collision is
+ * recorded so the engine can warn loudly (not silently) at registration.
+ * @returns {{ routes: Record<string,string>, collisions: Array<{normalized:string, keys:string[]}> }}
+ */
+export function normalizeConfiguredRoutes(raw) {
+  const seen = new Map(); // normalizedKey -> { rawKeys: string[], value: string }
+  for (const [rawKey, value] of Object.entries(raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {})) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    const key = normalizeLabel(rawKey);
+    if (!key) continue;
+    const prior = seen.get(key);
+    if (prior) { prior.rawKeys.push(rawKey); prior.value = value; } // keep last
+    else seen.set(key, { rawKeys: [rawKey], value });
+  }
+  const routes = {};
+  const collisions = [];
+  for (const [key, entry] of seen) {
+    routes[key] = entry.value;
+    if (entry.rawKeys.length > 1) collisions.push({ normalized: key, keys: entry.rawKeys });
+  }
+  return { routes, collisions };
+}
+
+/**
+ * Emit the loud configuredRoutes key-collision warning (M6 §3.5): a
+ * FALLBACK_PLAN_CHECK-style config.load audit event plus an operator-facing
+ * logger warning. No-op when there are no collisions. Returns whether it warned.
+ */
+export function warnConfiguredRouteCollisions(collisions, { audit = null, logger = null } = {}) {
+  if (!collisions || collisions.length === 0) return false;
+  try { audit?.emit?.({ event: EVENTS.CONFIG_LOAD, outcome: "failure", principal: { source: "plugin" },
+    details: { check: "configured_routes_collision", status: "warning", collisions } }); } catch {}
+  try { logger?.warn?.(`ToggleLogic CONFIG_LOAD: configuredRoutes keys collide after normalization (lowercase+trim); keeping the last of each: ${collisions.map((c) => `${c.normalized} <- [${c.keys.join(", ")}]`).join("; ")}`); } catch {}
+  return true;
+}
 
 export const DEFAULTS = Object.freeze({
   mode: "auto",
@@ -70,11 +112,13 @@ export function normalizeConfig(raw) {
   const slug = (value) => { const lowered = String(value || "").trim().toLowerCase(); return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(lowered) ? lowered : ""; };
   const phrases = (value, fallback) => [...new Set((Array.isArray(value) ? value : fallback).map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean))];
   const labels = (value) => Object.fromEntries(Object.entries(obj(value)).map(([key, item]) => [key, typeof item === "string" ? item.trim() : ""]).filter(([, item]) => item));
+  const { routes: configuredRoutes, collisions: configuredRoutesCollisions } = normalizeConfiguredRoutes(r.configuredRoutes);
   return {
     mode: MODES.has(r.mode) ? r.mode : DEFAULTS.mode,
     logging: { enabled: logging.enabled !== false, path: str(logging.path, DEFAULTS.logging.path), rotateSizeMb: num(logging.rotateSizeMb, 50, 1) },
     routing: { fallbackLineages, invalidFallbackLineages },
-    configuredRoutes: Object.fromEntries(Object.entries(obj(r.configuredRoutes)).filter(([, value]) => typeof value === "string" && value.trim())),
+    configuredRoutes,
+    configuredRoutesCollisions,
     cheapHeuristic: { default: str(obj(r.cheapHeuristic).default), order: Array.isArray(obj(r.cheapHeuristic).order) ? obj(r.cheapHeuristic).order.filter((value) => typeof value === "string" && value) : [] },
     intelligence: { enabled: intelligence.enabled !== false, path: str(intelligence.path, DEFAULTS.intelligence.path), registryPath: str(intelligence.registryPath), shadow: intelligence.shadow === true, fallbackOnError: intelligence.fallbackOnError !== false, allowReleaseCandidate: intelligence.allowReleaseCandidate === true },
     ownerOverride: { enabled: ownerOverride.enabled === true, statePath: str(ownerOverride.statePath, DEFAULTS.ownerOverride.statePath), askConsumer: str(ownerOverride.askConsumer, DEFAULTS.ownerOverride.askConsumer), askInterpreter: str(ownerOverride.askInterpreter, "").trim() || DEFAULTS.ownerOverride.askInterpreter },

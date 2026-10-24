@@ -6,6 +6,7 @@
  */
 import { hostname } from "node:os";
 import { createLineageResolver, auditFallbackPlan } from "../../routing/lineage-resolver.js";
+import { warnConfiguredRouteCollisions } from "../../config/normalize.js";
 import { createProviderAvailability } from "../../usage/provider-refusal.js";
 import { createUsageEvents } from "../../usage/events.js";
 import { createRequestCorrelation } from "../../routing/request-correlation.js";
@@ -71,6 +72,9 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
     auditFallbackPlan({ hostConfig: api?.config, lineages: config.routing?.fallbackLineages,
       invalidLineages: config.routing?.invalidFallbackLineages, audit, logger: fallbackLogger });
   }
+  // M6 §3.5: configuredRoutes keys normalize to lowercase+trim; warn loudly if
+  // two keys collided (the last was kept) so a silent routing change is visible.
+  warnConfiguredRouteCollisions(config.configuredRoutesCollisions, { audit, logger: fallbackLogger });
   if (config.features.routing.enabled && !isConversationAccessGranted(api)) {
     // Routing is enabled, but the host did not grant this non-bundled plugin
     // permission to register conversation hooks. Those hooks (before_model_resolve

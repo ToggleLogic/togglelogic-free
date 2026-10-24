@@ -24,6 +24,17 @@ import { pickCheapDefault } from "./cheap-heuristic.js";
 
 const PASSTHROUGH = Object.freeze({});
 
+/**
+ * Canonical task-label normalization (M6 §3.5): lowercase + trim. The IDENTICAL
+ * rule is applied to the incoming host task label (configuredTaskLabel, below)
+ * and to the stored configuredRoutes keys and CLI pin scopes, so a pin or route
+ * for `Inventory-Sync` matches a turn labelled `inventory-sync`. Returns "" for
+ * a non-string or blank value.
+ */
+export function normalizeLabel(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
 export function resolveEffectiveMode(configuredMode, seamStatus, config) {
   if (configuredMode === "passthrough") return "passthrough";
   if (configuredMode === "configured") return "configured";
@@ -168,7 +179,7 @@ export function pickConfiguredRoute(configuredRoutes, event = {}, hookContext = 
   return null;
 }
 
-function configuredTaskLabel(event, hookContext) {
+export function configuredTaskLabel(event, hookContext) {
   // These are documented, structured task labels supplied by the host or
   // integration. Keep the accepted field list narrow so configuration cannot
   // turn this public static mode into hidden prompt classification.
@@ -181,7 +192,8 @@ function configuredTaskLabel(event, hookContext) {
     event?.metadata?.taskType,
   ];
   for (const value of candidates) {
-    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    const normalized = normalizeLabel(value); // M6 §3.5: lowercase + trim
+    if (normalized) return normalized;
   }
   return null;
 }
