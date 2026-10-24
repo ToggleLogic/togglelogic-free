@@ -9,5 +9,5 @@ This is a major release because the prior application-specific configuration and
 public planning/run tools are removed. The generic routing, audit, approval,
 cost-visibility, and optional Intelligence seam remain.
 
-For SAM deployments, upgrade the private SAM orchestration adapter and the
+For a production deployment, upgrade the private orchestration adapter and the
 compatible Intelligence release before enabling ToggleLogic Free 2.0.0.

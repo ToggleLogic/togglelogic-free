@@ -31,7 +31,7 @@ test("a model different from the host default is an explicit selection; the defa
   assert.equal(isRequestSelection({ provider: "anthropic", model: "claude-sonnet-4-6" }, null), false, "unknown host default never guesses");
 });
 
-test("SAM-Andy regression: --model sonnet is honored instead of replaced by the cheap default", async () => {
+test("regression: an explicit --model sonnet is honored instead of replaced by the cheap default", async () => {
   const { interceptor, decisions } = harness(cheap());
   const out = await interceptor({ prompt: "Reply with OK" }, { sessionKey: "agent:main:t1", agentId: "main", modelProviderId: "anthropic", modelId: "claude-sonnet-4-6" });
   assert.deepEqual(out, {}, "passthrough keeps the requested model");

@@ -138,7 +138,7 @@ test("matrix: precedence holds — user and request selections are never reroute
   }
 });
 
-test("D28: a decision that leaves the model unchanged audits as noop, a route as success", async () => {
+test("a decision that leaves the model unchanged audits as noop, a route as success", async () => {
   for (const row of ROWS.filter((r) => r.avail === "all_up" && (r.source === "default" || r.source === "none"))) {
     const { response, sink } = await coreLeg(row);
     const routing = sink.filter((e) => e?.event === "routing.decision");

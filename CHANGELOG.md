@@ -65,7 +65,7 @@ behavior change from 2.2.0.
 Milestone M1 part 1 — host adapters and the gateway-neutral Decision API, built
 in the steps of `docs/design/M1-HOST-ADAPTERS-AND-DECISION-API.md` §7 (steps 1–5
 and 8). OpenClaw routing is unchanged at every step. Behavior changes, all
-below: the audit outcome for unchanged-model decisions (D28), the notification
+below: the audit outcome for unchanged-model decisions, the notification
 interpreter default, and the new-session marker folder fix.
 
 - **Step 2 — injected paths, clock and state store (no behavior change).**
@@ -125,7 +125,7 @@ interpreter default, and the new-session marker folder fix.
   schemas, requires the OpenClaw hook to return exactly the core's decision,
   and proves request content never reaches a response, routing record, audit
   event or warning.
-- **Changed (D28): audit outcome for unchanged-model decisions.** A
+- **Changed: audit outcome for unchanged-model decisions.** A
   `routing.decision` audit event for a decision that leaves the model unchanged
   is now `noop`; 2.1.x reported `success` when the passthrough came from mode
   dispatch (passthrough mode, no configured or cheap route, Intelligence
@@ -322,7 +322,7 @@ Spend tracking release. Same code as 2.1.0-rc.3; only the version changes.
   The host scans every folder there, and a backup copy causes a
   "duplicate plugin id: togglelogic" warning.
 
-## 2.1.0-rc.3 — 2026-10-05 (release candidate: integration fixes; HQ canary)
+## 2.1.0-rc.3 — 2026-10-05 (release candidate: integration fixes; canary host)
 
 - Keep registration active when fallback lineages are invalid, auditing rejected entries while retaining valid order; share one usage-events writer across routing, provider availability, and cost observation.
 

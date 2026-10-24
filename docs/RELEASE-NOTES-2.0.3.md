@@ -9,4 +9,4 @@ Maintenance release: ToggleLogic Free respects a model the user explicitly chose
 - Owner overrides keep top precedence; ordinary requests on the default model are
   routed exactly as in 2.0.2.
 
-Found by the SAM-Andy dogfood acceptance test on 2026-09-26.
+Found by a production dogfood acceptance test on 2026-09-26.

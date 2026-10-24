@@ -7,7 +7,7 @@
  *
  * Prices are fetched LIVE from a public, open-source source (Models.dev, MIT),
  * cached locally, and refreshed on a slow cadence — never hardcoded, never
- * fetched per-call, and NEVER fetched from any Motherboard/HQ endpoint. If the
+ * fetched per-call, and NEVER fetched from any Motherboard-operated endpoint. If the
  * live source is unreachable, pricing degrades to a bundled LiteLLM snapshot
  * (MIT) so the feature never breaks. Anything the curated free-tier set can't
  * price resolves as UNPRICED (loud) — never a silent $0.00.

@@ -266,7 +266,7 @@ test("a pending escalation exposes a deterministic positive approval invitation"
   assert.match(invitation, /this request and active Test Agent context will be sent to Anthropic for one use/);
   assert.match(invitation, /Reply with an approval or denial/);
   assert.match(invitation, /confirm the decision before anything is sent/);
-  assert.doesNotMatch(invitation, /SAM/);
+  assert.doesNotMatch(invitation, /Acme/, "no deployment-specific display name leaks into the invitation");
   assert.doesNotMatch(invitation, /could not be sent|blocked by/i);
 });
 
@@ -287,7 +287,7 @@ test("default governed escalation is deployment-neutral and uses strict decision
   });
   const invitation = base.gate.pendingInvitation({ sessionKey: "neutral" });
   assert.match(invitation, /active conversation context/);
-  assert.doesNotMatch(invitation, /SAM|Anthropic/);
+  assert.doesNotMatch(invitation, /Acme|Anthropic/, "the neutral invitation names no deployment and no provider");
   assert.equal(base.gate.beforeRouting("Go for it", { sessionKey: "neutral" }).action, "confirmation_required");
   assert.match(base.gate.pendingInvitation({ sessionKey: "neutral" }), /^I’m not certain/);
   assert.equal(base.gate.beforeRouting("Yes", { sessionKey: "neutral" }).action, "approved");
