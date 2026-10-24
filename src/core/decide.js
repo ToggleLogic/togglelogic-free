@@ -6,13 +6,22 @@
  */
 
 /**
- * M1 step 3 (Free 2.2.0): the routing decision order, extracted unchanged from
- * the OpenClaw interceptor. Order (design M1 §4.3):
+ * The routing decision order. Extracted from the OpenClaw interceptor in M1
+ * step 3 (Free 2.2.0); reordered in M6 (Free 2.3.0) so owner pins sit BELOW the
+ * owner's own protected pick and ABOVE a skill's request. Order (M6 §4.1):
  *
  *   1. governed escalation pre-check      5. early failover of the pending model
- *   2. owner override                     6. mode dispatch
- *   3. protected user selection           7. governed escalation post-check
+ *   2. protected user selection           6. mode dispatch (configured route)
+ *   3. owner pins (task, else all-tasks)  7. governed escalation post-check
  *   4. request selection                  8. failover of the selected model
+ *
+ * BEHAVIOR CHANGE vs 2.2.x (stated loudly in CHANGELOG/README at release): an
+ * explicit `/model` pick (source "user") now beats an active all-tasks owner
+ * override; in 2.2.x the override won. The override still beats a skill's
+ * request selection and the configured route. Owner pins resolve through
+ * routing/owner-pins.js; the most specific applicable pin wins (a task pin beats
+ * the all-tasks pin, §4.4). The `pins` block (§4.2) rides on every response from
+ * step 2 onward — applied, outranked, blocked, or absent.
  *
  * Input is a DecisionRequest built by a host adapter:
  *   requestId     correlation id (the routing record's id)
@@ -47,8 +56,8 @@
  * No environment reads, no default home paths, no host imports.
  */
 import { deriveLineage } from "../routing/lineage.js";
-import { resolveEffectiveMode, dispatchByMode } from "../routing/modes.js";
-import { resolveOwnerOverride } from "../routing/owner-override.js";
+import { resolveEffectiveMode, dispatchByMode, configuredTaskLabel } from "../routing/modes.js";
+import { resolveOwnerPins } from "../routing/owner-pins.js";
 import { EVENTS, OUTCOMES } from "../audit/audit-events.js";
 import crypto from "node:crypto";
 
@@ -119,7 +128,7 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     return Number.isFinite(usd) && usd >= 0 ? { priced: true, usd, basis: "usage_estimate" } : unpriced("no_published_price");
   }
 
-  async function respond(request, decision, override) {
+  async function respond(request, decision, override, pins = null) {
     const decisionOut = overrideToDecision(override);
     return {
       apiVersion: DECISION_API_VERSION,
@@ -130,6 +139,7 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       policyDigest,
       costEstimate: await estimate(request, decisionOut),
       engine: { product, version: String(version ?? "unknown") },
+      ...(pins ? { pins } : {}),
     };
   }
 
@@ -141,16 +151,48 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     const governedPrior = governedEscalation?.beforeRouting(event?.prompt, context);
     if (governedPrior?.shortCircuit) return respond(request, decision, governedPrior.override || NO_CHANGE);
 
-    // 2. Owner override.
-    const owner = resolveOwnerOverride(config.ownerOverride, { paths });
-    if (owner.applied) {
-      const override = { modelOverride: owner.modelOverride, ...(owner.providerOverride ? { providerOverride: owner.providerOverride } : {}) };
-      decision.selectedModel = owner.modelRef; decision.selectedProvider = owner.providerOverride || null; decision.selectionReason = "owner_override"; decision.selectionDetails = { matched_rule: "owner_override" };
-      if (availability?.unavailable(owner.providerOverride || owner.modelRef.split("/")[0])) decision.selectionDetails.providerUnavailableConflict = true;
-      record();
-      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.SUCCESS, principal: { source: "owner" }, subject: { hook: "before_model_resolve" }, details: { mode: "owner_override", selectedModel: owner.modelRef, ...decision.selectionDetails }, correlationId: decision.requestId });
-      return respond(request, decision, override);
-    }
+    // Owner pins (M6 §4.1). Resolved here — after the governed pre-check, before
+    // the pin tier (step 3) — so the `pins` block (§4.2) can ride on every
+    // response from step 2 onward, including the user-selection return where a
+    // pin is reported `outranked_by_user`. Reads the host task label only (not
+    // any lazy request field), so it does not perturb the host read order.
+    const pinLabel = configuredTaskLabel(event, context);
+    const pins = resolveOwnerPins(config.ownerOverride, { label: pinLabel, paths });
+    // Malformed scope → fail-closed; surface it loudly exactly once per file
+    // version. (The pins block below still reports the scope as `malformed`.)
+    if (pins.rejections.length) { try { fallbackLogger?.warn?.(`ToggleLogic owner-pin rejected (fail-closed): ${pins.rejections.map((r) => `${r.scope} ${r.reason}`).join("; ")}`); } catch {} }
+    const taskEligible = pins.task?.eligible === true;
+    const allEligible = pins.all?.eligible === true;
+
+    // The `pins` block for the response (§4.2). `applied` is "task" | "all" | null
+    // (the scope that won the pin tier); `outrankedBy` is "user" when the owner's
+    // own pick beat the pin tier. Intrinsic block reasons (expired / inactive /
+    // unavailable / malformed) take precedence over an outranking reason.
+    const pinScopeBlock = (scope, { applied, outrankedBy }) => {
+      if (!scope) return null;
+      const base = {
+        scope: scope.scope,
+        pin_target: scope.pinTarget,
+        ...(scope.modelRef !== undefined ? { model_ref: scope.modelRef } : {}),
+        ...(scope.family !== undefined ? { family: scope.family } : {}),
+        resolved_ref: scope.resolvedRef,
+        ...(scope.resolutionReason !== undefined ? { resolution_reason: scope.resolutionReason } : {}),
+        ...(scope.setBy !== undefined ? { set_by: scope.setBy } : {}),
+        ...(scope.setAtMs !== undefined ? { set_at_ms: scope.setAtMs } : {}),
+        expires_at_ms: scope.expiresAtMs,
+        ...(scope.noExpiry ? { no_expiry: true } : {}),
+      };
+      if (applied) return { ...base, status: "applied", reason: "applied" };
+      return { ...base, status: "not_applied", reason: scope.blockReason ?? outrankedBy };
+    };
+    const pinsBlock = (applied, outrankedBy) => ({
+      labelSeen: pins.labelSeen,
+      task: pinScopeBlock(pins.task, { applied: applied === "task", outrankedBy: outrankedBy === "user" ? "outranked_by_user" : null }),
+      all: pinScopeBlock(pins.all, {
+        applied: applied === "all",
+        outrankedBy: outrankedBy === "user" ? "outranked_by_user" : applied === "task" ? "outranked_by_task_pin" : null,
+      }),
+    });
 
     async function failover(ref, unchanged = NO_CHANGE) {
       if (!ref || !availability?.unavailable(ref.split("/")[0])) return null;
@@ -178,32 +220,61 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       return { providerOverride: next.slice(0, split), modelOverride: next.slice(split + 1) };
     }
 
-    // 3. Protected user selection.
+    // 2. Protected user selection — the owner's own `/model` pick. Wins over
+    //    every pin (M6 §4.1, R1); active pins are reported `outranked_by_user`.
     const requested = request.requested;
     if (requested?.source === "user") {
       decision.selectedModel = requested.ref; decision.selectedProvider = requested.provider; decision.selectionReason = "user_selection"; decision.selectionDetails = { matched_rule: "user_selection_precedence", pin_source: requested.pinSource };
       if (availability?.unavailable(requested.provider)) decision.selectionDetails.userSelectionConflict = true;
       record();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, details: { selectedModel: requested.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
-      return respond(request, decision, NO_CHANGE);
+      return respond(request, decision, NO_CHANGE, pinsBlock(null, "user"));
     }
 
-    // 4. Request selection.
+    // 3. Owner pins — the most specific applicable pin wins (task beats all,
+    //    §4.4). A task pin keeps 2.2.x's richer details; the all-tasks pin keeps
+    //    emitting `owner_override` unchanged (§3.4, Q3) so no existing decision
+    //    consumer breaks — scope/target ride in the `pins` block, not the reason.
+    const applyPin = (scope, reason, details, mode) => {
+      const ref = scope.resolvedRef, slash = ref.indexOf("/");
+      const providerOverride = ref.slice(0, slash), modelOverride = ref.slice(slash + 1);
+      decision.selectedModel = ref; decision.selectedProvider = providerOverride;
+      decision.selectionReason = reason; decision.selectionDetails = { ...details };
+      if (availability?.unavailable(providerOverride)) decision.selectionDetails.providerUnavailableConflict = true;
+      record();
+      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.SUCCESS, principal: { source: "owner" }, subject: { hook: "before_model_resolve" }, details: { mode, selectedModel: ref, ...decision.selectionDetails }, correlationId: decision.requestId });
+      return { modelOverride, providerOverride };
+    };
+    if (taskEligible) {
+      const s = pins.task;
+      const details = s.pinTarget === "family"
+        ? { matched_rule: "task_pin", scope: s.scope, pin_target: "family", family: s.family, resolved_ref: s.resolvedRef, resolution_reason: s.resolutionReason }
+        : { matched_rule: "task_pin", scope: s.scope, pin_target: "model", resolved_ref: s.resolvedRef };
+      return respond(request, decision, applyPin(s, "task_pin", details, "task_pin"), pinsBlock("task", null));
+    }
+    if (allEligible) {
+      // The all-tasks pin keeps 2.2.x's `owner_override` reason + minimal details
+      // in the record/audit (scope/target are in the `pins` block).
+      return respond(request, decision, applyPin(pins.all, "owner_override", { matched_rule: "owner_override" }, "owner_override"), pinsBlock("all", null));
+    }
+
+    // 4. Request selection — a skill's requested model. Below the pin tier, so an
+    //    applicable pin already won above; a blocked pin shows its block reason.
     if (requested?.source === "request") {
       decision.selectedModel = requested.ref; decision.selectedProvider = requested.provider; decision.selectionReason = "request_selection";
       decision.selectionDetails = { matched_rule: "request_selection_precedence", host_default: request.defaultRef };
       if (availability?.unavailable(requested.provider)) decision.selectionDetails.userSelectionConflict = true;
       record();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, subject: { hook: "before_model_resolve" }, details: { mode: "request_selection", selectedModel: requested.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
-      return respond(request, decision, NO_CHANGE);
+      return respond(request, decision, NO_CHANGE, pinsBlock(null, null));
     }
 
     // 5. Early failover if the pending model's provider is unavailable.
     const pending = requested?.ref || request.defaultRef;
     const earlyFallback = await failover(pending);
-    if (earlyFallback) { record(); return respond(request, decision, earlyFallback); }
+    if (earlyFallback) { record(); return respond(request, decision, earlyFallback, pinsBlock(null, null)); }
 
-    if (!beforeDispatch()) return respond(request, decision, NO_CHANGE);
+    if (!beforeDispatch()) return respond(request, decision, NO_CHANGE, pinsBlock(null, null));
 
     // 6. Mode dispatch, then 7. governed escalation post-check.
     let override = NO_CHANGE;
@@ -225,7 +296,7 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     override = await failover(selectedRef, override) || override;
     record();
     if (decision.selectionReason !== "fallback_unresolved") emit(audit, EVENTS.ROUTING_DECISION, { outcome: overrideToDecision(override).action === "passthrough" ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
-    return respond(request, decision, override);
+    return respond(request, decision, override, pinsBlock(null, null));
   }
 
   return Object.freeze({ decide, unresolved });

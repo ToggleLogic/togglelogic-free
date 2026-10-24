@@ -1,5 +1,5 @@
 {
- "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); D28 (M1 step 5) re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios",
+ "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); D28 (M1 step 5) re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios; M6 (Free 2.3.0) re-record: owner pins moved below protected user selection (R1), so the two active-owner-override scenarios now read the session store (emitting session_pin_store_absent + warn) before the pin applies — the pin's routing_log, routing.decision audit and hook return value are unchanged",
  "scenarios": [
   {
    "name": "passthrough mode, host default",
@@ -1688,6 +1688,25 @@
      }
     ],
     [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
+    ],
+    [
      "correlation",
      "owner_override",
      "p"
@@ -1763,6 +1782,25 @@
       },
       "correlationId": "id1"
      }
+    ],
+    [
+     "audit",
+     {
+      "event": "session_pin_store_absent",
+      "outcome": "noop",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "storePath": "<TMP>/sessions.json",
+       "reason": "ENOENT: no such file or directory, open '<TMP>/sessions.json'",
+       "note": "session pin store unreadable (no host session accessor and no legacy sessions.json); only model selections that differ from the agent default are honored, via request_selection"
+      }
+     }
+    ],
+    [
+     "warn",
+     "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
     ],
     [
      "correlation",

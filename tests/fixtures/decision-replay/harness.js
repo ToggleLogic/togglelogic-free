@@ -14,6 +14,12 @@
  * runs the same harness against the current code and requires an exact match.
  * Volatile values (request ids, timestamps, durations, temp paths) are
  * normalized; everything else must be identical.
+ *
+ * M6 (Free 2.3.0) rebaseline: R1 moved owner pins BELOW protected user
+ * selection, so for the two active-owner-override scenarios decide() now reads
+ * the session store (emitting session_pin_store_absent + a warn) before the pin
+ * applies. The pin's routing_log, routing.decision audit and hook return value
+ * are unchanged; only that pre-pin session read was added. See recordedFrom.
  */
 import fs from "node:fs";
 import os from "node:os";

@@ -20,7 +20,7 @@
       "then": { "required": ["ref"] }
     },
     "reason": {
-      "enum": ["owner_override", "user_selection", "request_selection", "configured", "cheap_default", "intelligence", "pin", "intelligence_shadow", "provider_unavailable", "fallback_unresolved", "passthrough", "fallback", "blocked"]
+      "enum": ["owner_override", "task_pin", "user_selection", "request_selection", "configured", "cheap_default", "intelligence", "pin", "intelligence_shadow", "provider_unavailable", "fallback_unresolved", "passthrough", "fallback", "blocked"]
     },
     "rationale": {
       "type": "object", "additionalProperties": false,
@@ -52,6 +52,36 @@
     "audit": {
       "type": "object", "additionalProperties": false,
       "properties": { "recordId": { "type": "string" } }
+    },
+    "pins": {
+      "type": "object", "additionalProperties": false,
+      "description": "Owner-pin snapshot for this turn (M6 §4.2). Carried on every decision from step 2 onward so a host can show what is pinned, to what, and why — including a pin that exists but was not applied. task/all are null when no pin is configured for that scope.",
+      "required": ["labelSeen", "task", "all"],
+      "properties": {
+        "labelSeen": { "type": ["string", "null"], "maxLength": 160 },
+        "task": { "$ref": "#/$defs/pinScope" },
+        "all": { "$ref": "#/$defs/pinScope" }
+      }
+    }
+  },
+  "$defs": {
+    "pinScope": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["scope", "status", "reason", "pin_target", "resolved_ref"],
+      "properties": {
+        "scope": { "type": "string", "maxLength": 160 },
+        "status": { "enum": ["applied", "not_applied"] },
+        "reason": { "enum": ["applied", "expired", "unavailable", "outranked_by_user", "outranked_by_request", "outranked_by_task_pin", "no_label", "malformed", "inactive"] },
+        "pin_target": { "enum": ["model", "family"] },
+        "model_ref": { "type": "string", "maxLength": 512 },
+        "family": { "type": "string", "maxLength": 512 },
+        "resolved_ref": { "type": ["string", "null"], "maxLength": 512 },
+        "resolution_reason": { "type": "string", "maxLength": 128 },
+        "set_by": { "type": "string", "maxLength": 128 },
+        "set_at_ms": { "type": "integer", "minimum": 0 },
+        "expires_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "no_expiry": { "type": "boolean" }
+      }
     }
   }
 }
