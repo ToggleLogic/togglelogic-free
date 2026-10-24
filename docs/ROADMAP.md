@@ -156,8 +156,11 @@ always visible.
   expiry and is reported as held on every decision.
 - The task label comes only from the host's structured fields already accepted
   by configured mode, never prompt text.
-- Owner pin order: a task pin sits above the configured route and below
-  user/request selection — the same position the owner override holds today.
+- Owner pin order: the owner's own pick in chat (a protected `/model` selection)
+  beats every pin; owner pins — a task pin, then the all-tasks pin — sit above a
+  skill's request selection and the configured route. This moves the all-tasks
+  override below an explicit `/model` pick, a behavior change from 2.2.x (where
+  the override won), called out loudly in the CHANGELOG and README.
 
 ### Proposed versions
 

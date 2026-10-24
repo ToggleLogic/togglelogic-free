@@ -1,9 +1,9 @@
 # M6 design — Per-task owner pins
 
-Status: **design draft for owner review** (2026-10-23). Target: **ToggleLogic
-Free 2.3.0** (minor). Baseline: **Free 2.2.1** (`v2.2.1` = `0bdd628`; routing
-core unchanged since `v2.2.0`). This document is design only — no code change
-ships with it.
+Status: **design — owner rulings applied; ready to build** (revised 2026-10-24;
+original draft 2026-10-23). Target: **ToggleLogic Free 2.3.0** (minor). Baseline:
+**Free 2.2.1** (`v2.2.1` = `0bdd628`; routing core unchanged since `v2.2.0`).
+This document is design only — no code change ships with it.
 
 Related designs: [M1 — Host adapters and the decision API](M1-HOST-ADAPTERS-AND-DECISION-API.md)
 (decision order, Decision API v1 shapes); [M2 — Tamper-evident audit log](M2-AUDIT-LOG.md)
@@ -12,6 +12,33 @@ Related designs: [M1 — Host adapters and the decision API](M1-HOST-ADAPTERS-AN
 row. State-file schema: [schemas/owner-pins.v2.schema.json](schemas/owner-pins.v2.schema.json).
 
 ---
+
+## Owner decisions (plain words)
+
+Al's rulings of 2026-10-24, in plain words. The engineering detail is in the
+sections below and the resolved-questions list in §10.
+
+- **The owner is in charge.** If the owner picks a model in chat (a `/model`
+  pick), that choice wins over every pin. A skill can never override the owner's
+  pins.
+- **Then the owner's pins.** A pin set for the current task applies; if there is
+  none, the all-tasks pin applies. A task pin beats the all-tasks pin (§4.4).
+- **Below the pins:** a skill's requested model, then the configured route.
+- **Behavior change from 2.2.x.** An explicit `/model` pick now beats an active
+  all-tasks owner override. In 2.2.x the override won. This is stated loudly in
+  the CHANGELOG and the README at release. The override still beats a skill's
+  request selection and the configured route — that part is unchanged.
+- **Host-contract note.** On a host where several people may chat, every allowed
+  chat user's `/model` pick counts as the owner's. A host that needs otherwise
+  must not mark such picks `source: "user"`.
+- **Free never recommends a model.** Choosing the model is the owner's job.
+  Model *recommendations* (benchmarks, multiple-choice) are a licensed
+  ToggleLogic Intelligence capability and are not part of Free. The only pointer
+  Free carries is a single line printed by the `togglelogic-pin` CLI (§4.3); it
+  never appears in chat replies, decision responses, audit or routing logs, or
+  errors, and it is omitted when a licensed layer is configured.
+- **All engineering questions are resolved** (§10); this design is ready to
+  build.
 
 ## 1. Problem and the owner's direction
 
@@ -24,7 +51,7 @@ unrelated chat turns, and nothing on the decision tells the host that a global
 pin is the reason. There is no scoped pin, and the override's presence is
 invisible unless someone reads the state file.
 
-Al's direction (D40 a, D41 a, D42 a on 2026-10-20; D50 a, D51 a on 2026-10-23):
+Al's direction (2026-10-20 and 2026-10-23, finalized 2026-10-24):
 
 - A pin should be **remembered for its task only** — set once for a labelled
   job, it applies to that job and never leaks onto other tasks. Unlabelled turns
@@ -39,10 +66,10 @@ Al's direction (D40 a, D41 a, D42 a on 2026-10-20; D50 a, D51 a on 2026-10-23):
   as held.
 - A pin target may be an **exact model** or a **model family**; a family resolves
   to the newest configured member, and failure to resolve fails **loudly**.
-- Free ships a **small CLI** to set/clear/list pins (D50 a). The routing hook
-  still only reads; the CLI is the only writer.
-- Task-pin expiry is **optional** (D51 a): a task pin holds until cleared unless
-  the owner gives one.
+- Free ships a **small CLI** to set/clear/list pins. The routing hook still only
+  reads; the CLI is the only writer.
+- Task-pin expiry is **optional**: a task pin holds until cleared unless the
+  owner gives one.
 
 The engine stays host-agnostic: no host, skill, or customer names appear in code
 or examples. Examples below use a neutral label, `inventory-sync`.
@@ -68,11 +95,16 @@ restated in the file header `decide.js:9`–`16` and in M1 §4.3):
 | 8 | Failover of the selected model | `decide.js:225` |
 
 **The owner override today sits at step 2 — ABOVE protected user selection
-(step 3) and request selection (step 4).** An active owner override therefore
-beats an explicit user or request model pick. This fact drives Open Question
-**Q1** in §10; the roadmap's own wording about where the override sits is
-inconsistent with the source, and the intended 2.3.0 order must be confirmed
-before anything is built.
+(step 3) and request selection (step 4).** In 2.2.1 an active owner override
+therefore beats an explicit user or request model pick.
+
+**2.3.0 changes this.** Owner pins — task and all-tasks alike — move to a single
+tier that sits **below** protected user selection and **above** request
+selection and the configured route (§10, Q1/Q2 resolved). The new `decide()`
+order is in §4.1. The consequence: an explicit `/model` pick now beats an active
+all-tasks owner override, where 2.2.x had the override win. The override still
+beats a skill's request selection and the configured route. This behavior change
+is stated loudly in the CHANGELOG and the README at release.
 
 The configured per-task route is resolved inside mode dispatch
 (`modes.js:65`–`77`, mode `configured`), i.e. at step 6 — below everything
@@ -107,7 +139,7 @@ above it.
   cached as applied, so its loud rejection is emitted once per file version.
 - **The module NEVER writes** (`owner-override.js:20`–`25`): "this plugin NEVER
   writes the state file"; whatever sets/clears it "lives outside this plugin."
-  §4 changes this principle precisely (see D50 note there).
+  §4 changes this principle precisely (see §4.3).
 
 ### 2.3 The ask handler — `src/adapters/openclaw/owner-override-ask.js`
 
@@ -265,12 +297,12 @@ vocabularies):
 |---|---|---|
 | `task:<label>` pin, exact ref | `task_pin` | `{ matched_rule: "task_pin", scope: "task:<label>", pin_target: "model", resolved_ref }` |
 | `task:<label>` pin, family | `task_pin` | `{ matched_rule: "task_pin", scope: "task:<label>", pin_target: "family", family, resolved_ref, resolution_reason }` |
-| `all` pin (v2 or migrated v1) | `owner_override_all` | `{ matched_rule: "owner_override_all", scope: "all", pin_target, resolved_ref, no_expiry? }` |
+| `all` pin (v2 or migrated v1) | `owner_override` | `{ matched_rule: "owner_override", scope: "all", pin_target, resolved_ref, no_expiry? }` |
 
-`owner_override_all` **replaces** the old `owner_override` reason for the
-all-tasks scope. That is the one consumer-visible reason-string change in 2.3.0
-and is called out in Q3 (the ruled scope promises existing consumers keep
-working). `task_pin` is wholly new, so it breaks no existing consumer.
+The `all` scope **keeps** emitting `selectionReason: "owner_override"` unchanged
+(§10, Q3 resolved). The scope is carried in the new `pins` block, not by a new
+reason string, so every existing decision-API consumer keeps working. `task_pin`
+is wholly new, so it breaks no existing consumer.
 
 ### 3.5 Label normalization — identical on both paths
 
@@ -309,7 +341,28 @@ replaces the single `resolveOwnerOverride` call and returns, for this turn:
 `task` pin wins over an applicable `all` pin (§4.4). The applied pin produces
 the override exactly as the owner override does today (`overrideToDecision`,
 `decide.js:63`–`69`), sets `selectionReason`/`selectionDetails` per §3.4, and
-records. **Order relative to user/request selection is Q1 — not decided here.**
+records.
+
+**Decision order (resolved — §10, Q1/Q2).** Pins resolve as step 3 of
+`decide()` — **below** protected user selection (`requested.source === "user"`,
+the `/model` pick) and **above** request selection (`requested.source ===
+"request"`, a skill's `request_selection`), early failover, and mode dispatch
+(the configured route). The full order is:
+
+1. governed escalation pre-check
+2. protected user selection (`requested.source === "user"`)
+3. **owner pins — task pin, else all-tasks pin** (both scopes share this tier;
+   task beats all, §4.4)
+4. request selection (`requested.source === "request"`)
+5. early failover
+6. mode dispatch (configured route)
+7. governed escalation post-check
+8. failover
+
+So a skill can never override an owner pin, and the owner's own `/model` pick
+overrides every pin. On a host where several people may chat, every allowed chat
+user's `/model` pick counts as the owner's; a host that needs otherwise must not
+mark such picks `source: "user"`.
 
 ### 4.2 The `pins` block — carried on EVERY decision
 
@@ -358,7 +411,7 @@ Added to the `DecisionResponse` (and to the routing-log record and the audit
 - `resolved_ref` is the concrete model a family resolved to (§5), or equals
   `model_ref` for an exact pin. It is what the cost estimate (§5.3) prices.
 
-### 4.3 The CLI writes; the hook never does (D50 a)
+### 4.3 The CLI writes; the hook never does
 
 `bin/togglelogic-pin.js` (new; added to `package.json` `bin`). Commands:
 
@@ -405,8 +458,19 @@ togglelogic-pin list  [--json] --config <...>
   set_by/set_at/expiry — so every set/clear is accounted for in the audit
   stream, by the single writer. A malformed/rejected scope emits
   `OWNER_PIN_REJECTED` once per version (the §2.2 loud pattern).
+- **One recommendation pointer, CLI-only (Free never recommends a model).** Free
+  does not recommend models — choosing the model is the owner's job; model
+  *recommendations* (benchmarks, multiple-choice) are a licensed ToggleLogic
+  Intelligence capability, out of scope for Free. The only pointer Free carries
+  is a single plain line the CLI prints **after** its `set` and `list` output:
+  `Want the best model recommended for each task? See ToggleLogic Intelligence —
+  https://togglelogic.ai`. It appears **only** on CLI `set`/`list` stdout —
+  never in chat replies, decision responses, audit or routing logs, or error
+  output. The CLI **omits** the line when the resolved config shows a licensed
+  layer already configured (detected from config only; the CLI never loads the
+  licensed layer). No pricing, per the house rules.
 
-**Principle update (D50 a).** `owner-override.js`'s "this plugin NEVER writes
+**Principle update.** `owner-override.js`'s "this plugin NEVER writes
 the state file" (`:20`) becomes precise: **the routing hook and resolver never
 write; the package now ships a CLI that writes.** The doc comment and the
 module's independence note are updated to say so; the hot path's read-only
@@ -424,6 +488,12 @@ ordering that makes a task pin meaningful in the presence of a global pin, and
 it matches the configured-route precedence intuition (a matched label route
 beats the `default` route, `modes.js:158`).
 
+**Cross-ref — where this tier sits.** The pin tier as a whole is step 3 of
+`decide()` (§4.1): below the owner's own `/model` pick and above a skill's
+request selection and the configured route. §4.4 governs only the task-vs-all
+ordering *within* that tier — task beats all — and is unchanged by the R1
+ruling.
+
 ### 4.5 Replay — decision
 
 **Decision: log the full `pins` snapshot in every routing record (for audit and
@@ -439,11 +509,13 @@ records NOT replayable, with precise reasons.** Rationale:
   re-resolving would guess. Consistent with how `owner_override`,
   `provider_unavailable`, and `intelligence` are already treated
   (`replay.js:31`–`39`), pin records are counted, not re-run.
-- New `NOT_REPLAYABLE` reasons: `task_pin: "task-pin state is not reconstructed
-  by replay"`, `owner_override_all: "owner-pin state is not reconstructed by
-  replay"`. (An exact-ref pin is in principle deterministic from the snapshot;
-  re-running it is a possible future enhancement, noted but not built in 2.3.0 —
-  Q5.) `replay` continues to force the pin resolver off, as it does for the
+- New `NOT_REPLAYABLE` reason: `task_pin: "task-pin state is not reconstructed
+  by replay"`. The `all` scope keeps emitting `owner_override` (§3.4; §10, Q3),
+  which is **already** in `NOT_REPLAYABLE` (`replay.js:33`), so no new reason is
+  needed for it. (Exact-ref pin replay is **deferred** — §10, Q5: the snapshot
+  is logged, but pin records stay not-replayable with precise reasons; re-running
+  an exact-ref pin from the snapshot is a possible future enhancement, not built
+  in 2.3.0.) `replay` continues to force the pin resolver off, as it does for the
   override (`replay.js:89`).
 
 ---
@@ -585,17 +657,32 @@ Additional:
 8. **Malformed fail-closed** — `expires_at_ms` present but non-finite in any
    scope → that scope rejected, `OWNER_PIN_REJECTED` once per version, decision
    routes as if unpinned.
-9. **Replay** — a routing log with `task_pin` / `owner_override_all` records is
-   counted under the new `NOT_REPLAYABLE` reasons; non-pin records still replay;
-   the logged `pins` snapshot is preserved in the record.
+9. **Replay** — a routing log with `task_pin` records is counted under the new
+   `NOT_REPLAYABLE` reason, and `all`-scope records (reason `owner_override`) stay
+   counted under the existing `owner_override` not-replayable reason; non-pin
+   records still replay; the logged `pins` snapshot is preserved in the record.
 10. **Decision-API backward compatibility** — existing fixtures
     (`tests/fixtures/decision-matrix/`) still pass; `pins` is additive; a
-    consumer ignoring `pins` is unaffected; the `owner_override` → 
-    `owner_override_all` reason change is asserted (and gated on Q3).
-11. **CLI** — set/clear/list each scope; atomic write (temp+rename observed);
+    consumer ignoring `pins` is unaffected. Q3 is resolved: the `all` scope
+    **keeps** emitting `selectionReason: "owner_override"` (scope carried only in
+    the `pins` block), so assert the reason string is **unchanged** and no
+    existing consumer breaks. `task_pin` is the only new reason.
+11. **Decision order (R1).** A turn with an explicit `/model` pick
+    (`requested.source === "user"`) overrides an active all-tasks pin **and** an
+    active task pin (both reported `not_applied / outranked_by_user`). A skill's
+    request selection (`requested.source === "request"`) does **not** override an
+    applicable pin (task or all); the pin wins and the request is outranked. A
+    task pin beats the configured route for the same label (Q6).
+12. **Recommendation pointer is CLI-only (R2).** The `togglelogic-pin` CLI prints
+    the single pointer line after `set` and after `list`, and **nowhere else** —
+    assert it is absent from chat replies, decision responses, audit and routing
+    logs, and error output. Assert the line is **omitted** when the resolved
+    config shows a licensed layer configured (config-only detection; the CLI
+    never loads the licensed layer). No dollar price appears in the line.
+13. **CLI** — set/clear/list each scope; atomic write (temp+rename observed);
     schema validation rejects a bad ref; exclusive lock serializes two concurrent
     writers; exit codes.
-12. **Ask handler** — `owner-override-ask.js` keeps working by resolving the
+14. **Ask handler** — `owner-override-ask.js` keeps working by resolving the
     `all` scope; a task-only pin does not trigger it.
 
 Canary-host acceptance (release-time, not part of this doc): a labelled turn
@@ -612,17 +699,18 @@ Rough sizes: S ≈ <½ day, M ≈ ~1 day, L ≈ ~2 days, each with tests.
 | # | Piece | Size | Notes |
 |---|---|---|---|
 | T1 | `src/routing/owner-pins.js`: `resolveOwnerPins` (scopes, TTL per scope, v1→`all` migration, malformed fail-closed, per-scope mtime cache reusing the §2.2 pattern) | **L** | Core of the feature; CC. Extend, don't fork, the owner-override resolver. |
-| T2 | `decide.js` wiring: replace the single override call, apply most-specific pin, set reasons/details (§3.4), build the `pins` block (§4.2); **gated on Q1 order** | **M** | CC. Do not start until Q1 is answered. |
-| T3 | Label normalization: `modes.js` lowercase, `normalize.js` lowercase keys + collision warning (§3.5) | **S** | CC. Behavior change — land with Q4 confirmed. |
+| T2 | `decide.js` wiring: replace the single override call, apply most-specific pin at the resolved pin tier (§4.1), set reasons/details (§3.4), build the `pins` block (§4.2) | **M** | CC. Order resolved (§10, Q1/Q2) — no longer gated. |
+| T3 | Label normalization: `modes.js` lowercase, `normalize.js` lowercase keys + collision warning (§3.5) | **S** | CC. Behavior change, Q4 resolved: lowercase+trim both sides, loud collision warning, CHANGELOG note. |
 | T4 | Family pins + `family:` configured routes via the existing resolver; `openclaw.plugin.json` pattern widening (§5.2) | **M** | CC. |
-| T5 | `bin/togglelogic-pin.js` CLI: set/clear/list, exclusive lock, atomic write, schema validation, `all`-expiry guard, exit codes (§4.3) | **L** | **Codex candidate** — self-contained, clear contract, bounded surface, stops at an open PR; CC reviews. Depends on the v2 schema (this doc) and T1's path resolution. |
-| T6 | Response schema + `pins` block + new reasons in `decision-response.v1.schema.json`; audit events `OWNER_PIN_CHANGE`/`OWNER_PIN_REJECTED` + `controlsFor` entries | **S** | CC. |
+| T5 | `bin/togglelogic-pin.js` CLI: set/clear/list, exclusive lock, atomic write, schema validation, `all`-expiry guard, exit codes, **and the single CLI recommendation-pointer line** (§4.3, R2) | **L** | **Assigned to Codex** — self-contained, clear contract, bounded surface; stops at an open PR; CC reviews. Depends on the v2 schema (this doc) and T1's path resolution. |
+| T6 | Response schema + `pins` block + the new `task_pin` reason in `decision-response.v1.schema.json` (the `all` scope keeps `owner_override`, Q3); audit events `OWNER_PIN_CHANGE`/`OWNER_PIN_REJECTED` + `controlsFor` entries | **S** | CC. |
 | T7 | Replay: new `NOT_REPLAYABLE` reasons; preserve the `pins` snapshot in the record (§4.5) | **S** | CC. |
 | T8 | `taskPins` capability gate + health reason flip (§7) | **S** | CC. |
 | T9 | Tests (§8), docs (README/ROADMAP note, host-contract note), CHANGELOG, version bump to 2.3.0 in all three places (`package.json`, `openclaw.plugin.json`, `src/index.js` `PLUGIN_VERSION`), tag — **release step, CC only** | **M** | CC. Intelligence 2.1.2's validated-pairs list needs Free 2.3.0 added in its next release (below). |
 
-Suggested order: T1 → (Q1) → T2 → T3/T4 → T6/T7/T8 → T5 (Codex, parallel once
-the schema is fixed) → T9.
+Suggested order: T1 → T2 → T3/T4 → T6/T7/T8, with T5 (Codex) running in parallel
+once T1's path resolution lands → T9. T2 is no longer gated — the decision order
+is resolved (§10, Q1/Q2).
 
 **Intelligence compatibility.** The licensed layer's accepted Free range is
 `>=2.0.0 <3.0.0` (ROADMAP compatibility constraint), so 2.3.0 is in range and a
@@ -631,61 +719,61 @@ as a validated pairing is tracked privately, not here.
 
 ---
 
-## 10. OPEN QUESTIONS FOR CLAUDE
+## 10. Resolved decisions (2026-10-24)
 
-**Q1 — Decision order (must answer before T2). The roadmap wording is
-internally inconsistent with the source.**
-Source today (`decide.js:145`–`192`): the owner override is at **step 2, ABOVE**
-protected user selection (step 3) and request selection (step 4) — an active
-override **beats** a user/request pick. ROADMAP §M6 says the task pin "sits above
-the configured route and **below user/request selection** — **the same position
-the owner override holds today**." Those two clauses contradict each other,
-because the override does **not** sit below user/request today — it sits above.
-The brief's stated order (governed → user/request → task pin → all-tasks
-override → configured → mode) matches the "below user/request" clause.
-**Behavior change implied if we adopt "below user/request":** a user's or
-request's explicit model selection would **override an active all-tasks owner
-pin**, which is the **reverse** of 2.2.x (where the owner override wins over a
-user pick). That silently weakens every existing owner-override deployment.
-Please rule: (a) pins (task + all) go **below** user/request (adopt the roadmap
-prose; accept the override-weakening behavior change, and the existing
-owner-override moves down too); or (b) pins stay **above** user/request (keep
-today's override position; the roadmap prose is corrected). Not decided here.
+Every question in this section is **resolved**; the design is ready to build.
+The question numbers are kept for traceability.
 
-**Q2 — Does the all-tasks override keep beating user/request, or move with the
-task pin?** If Q1 is (a), confirm whether the *existing* all-tasks override
-(incl. migrated v1 files) also drops below user/request, or whether only the new
-task pin does and the legacy `all` override keeps its step-2 position for
-backward compatibility. (The doc assumes task pin and `all` share one position,
-chosen by Q1 — confirm.)
+**Q1 — Decision order. RESOLVED (R1).** The owner is in charge: the owner's own
+pick in chat (`/model`, `requested.source === "user"`) overrides every pin, and
+a skill can never override the owner's pins. The `decide()` order is:
 
-**Q3 — `owner_override` → `owner_override_all` reason string.** The all-tasks
-scope will report `selectionReason: "owner_override_all"` (§3.4), not
-`owner_override`. The ruled scope promises existing decision-API consumers keep
-working. Is changing this one reason string acceptable, or must the `all` scope
-keep emitting `owner_override` (with scope carried only in the new `pins`
-block)? `task_pin` is new regardless.
+1. governed escalation pre-check
+2. protected user selection (`requested.source === "user"`)
+3. **owner pins — task pin, else all-tasks pin** (both scopes share this tier;
+   task beats all, §4.4)
+4. request selection (`requested.source === "request"`, a skill's
+   `request_selection`)
+5. early failover
+6. mode dispatch (configured route)
+7. governed escalation post-check
+8. failover
 
-**Q4 — Case-insensitive label matching is a behavior change for configured
-routes.** §3.5 lowercases both the stored `configuredRoutes` keys and the
-looked-up label (today trim-only, case-sensitive). Hosts that already emit
-lowercase labels are unaffected, but a deployment with mixed-case route keys
-would see matching change. Confirm we lowercase both sides
-(recommended, for one consistent rule) and emit a loud collision warning.
+**Behavior change vs 2.2.x — stated loudly in the CHANGELOG and the README:** an
+explicit `/model` pick now beats an active all-tasks owner override (in 2.2.x the
+override won). Unchanged: the override still beats a skill's request selection
+and the configured route. **Host-contract note:** on a host where several people
+may chat, every allowed chat user's `/model` pick counts as the owner's; a host
+that needs otherwise must not mark such picks `source: "user"`. ROADMAP §M6 prose
+is corrected to match.
 
-**Q5 — Replay of exact-ref pins.** §4.5 logs the `pins` snapshot but keeps
-automated `replay` marking pin records not-replayable (consistent with
-`owner_override` today). An exact-ref (non-family) pin is deterministic from the
-snapshot and *could* be re-run in replay. Worth building in 2.3.0, or defer?
+**Q2 — Does the all-tasks override move with the task pin? RESOLVED (R1).** Yes.
+The task pin and the all-tasks pin (including migrated v1 files) **share one
+tier** at step 3, below protected user selection. The legacy `all` override no
+longer holds a step-2 position above user/request. Within the tier, task beats
+all (§4.4).
 
-**Q6 — Where does the task label come from when BOTH a configured route and a
-task pin exist for the same label?** The doc applies the task pin above the
-configured route (pin at the override tier, configured route at mode dispatch,
-per §4.1/§4.4). Confirm a task pin should override a configured route for the
-same label (expected), i.e. the owner's explicit pin beats the static config.
+**Q3 — reason string. RESOLVED (R3).** The `all` scope **keeps** emitting
+`selectionReason: "owner_override"`; scope lives in the new `pins` block, not in
+a new reason string. There is **no** `owner_override_all` reason. `task_pin` is
+the only new reason, and is additive.
 
-**Q7 — `list` live resolution.** Should `togglelogic-pin list` resolve a family
-to its current child live (needs the pricing catalog + availability, i.e. host
-wiring in the CLI), or only show the family and note "resolved at decision
-time"? The doc assumes the latter (no live catalog in the CLI) to keep the CLI
-dependency-light; confirm.
+**Q4 — case-insensitive label matching. RESOLVED (R3).** Lowercase **and** trim
+both the `configuredRoutes` keys and the incoming task label (one consistent
+rule). A key collision (two keys normalizing to the same scope) emits a loud
+config warning; the behavior change is noted in the CHANGELOG.
+
+**Q5 — replay of exact-ref pins. RESOLVED (R3) — deferred.** The `pins` snapshot
+is logged on every record, but automated `replay` keeps marking pin-driven
+records **not replayable**, with precise reasons (§4.5). Re-running an exact-ref
+pin from the snapshot is not built in 2.3.0.
+
+**Q6 — task pin vs configured route for the same label. RESOLVED (R3).** The
+task pin **beats** the configured route for the same label: the owner's explicit
+pin resolves at the pin tier (step 3), above mode dispatch (step 6). The owner's
+pin wins over the static config.
+
+**Q7 — `list` live resolution. RESOLVED (R3).** `togglelogic-pin list` shows the
+family and notes "resolved at decision time"; it does **not** resolve a family
+to its current child live. No live catalog in the CLI (keeps the CLI
+dependency-light).
