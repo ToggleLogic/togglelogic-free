@@ -15,13 +15,19 @@
  * ToggleLogic as the top-priority routing input — not a gateway-default bypass
  * the classifier would silently override.
  *
- * INDEPENDENCE: this plugin NEVER writes the state file and contains NO model
- * values or deployment policy. The state file's contents (which model, who set
- * it, why) are entirely deployment-provided DATA. Whatever workflow sets or
- * clears the file — a skill, a CLI, a UI — lives outside this plugin. The
+ * INDEPENDENCE: the routing hook and this resolver NEVER write the state file
+ * and contain NO model values or deployment policy. The state file's contents
+ * (which model, who set it, why) are entirely deployment-provided DATA. As of
+ * Free 2.3.0 the package ships a `togglelogic-pin` CLI that is the one writer;
+ * the read path here (and in owner-pins.js) stays strictly read-only. The
  * override "holds" across requests because this resolver runs per request and
  * keeps applying the file's value until the file says active:false (or is
  * removed).
+ *
+ * 2.3.0 — owner pins: the per-task/all-tasks pin resolver lives in
+ * routing/owner-pins.js and reuses this module's TTL + ref helpers. This
+ * function still resolves the single top-level (v1) override shape for the
+ * owner-override ask handler; decide() now routes through resolveOwnerPins.
  *
  * OPTIONAL EXPIRY/TTL (1.0.5 hardening): the state file MAY carry an
  * `expires_at_ms` wall-clock deadline. Four cases:
@@ -62,7 +68,7 @@ import { statSync, readFileSync } from "node:fs";
 import { resolveOpenClawPath, resolvePath } from "../path-utils.js";
 
 /** A model_ref must be "provider/model" — a single non-edge slash. */
-function looksLikeModelRef(ref) {
+export function looksLikeModelRef(ref) {
   if (typeof ref !== "string") return false;
   const i = ref.indexOf("/");
   return i > 0 && i < ref.length - 1;
@@ -76,7 +82,7 @@ function looksLikeModelRef(ref) {
  * Only true ABSENCE is backward-compatible-apply; a present-but-invalid value
  * (including null) fails closed.
  */
-function ttlVerdict(state, nowMs) {
+export function ttlVerdict(state, nowMs) {
   if (!state || !Object.prototype.hasOwnProperty.call(state, "expires_at_ms")) {
     return "apply"; // no TTL → backward-compatible
   }
