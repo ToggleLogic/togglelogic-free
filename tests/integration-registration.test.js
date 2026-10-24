@@ -143,3 +143,26 @@ test('routing emits through the shared writer when cost visibility is disabled',
   const row = JSON.parse((await fs.readFile(f.raw.costVisibility.events.path, 'utf8')).trim());
   assert.equal(row.event, 'fallback_unresolved');
 });
+
+test('M6 §7: taskPins gate flips no-task-labels-seen -> active on the first labelled turn', async (t) => {
+  const f = await fixture(t);
+  f.raw.ownerOverride = { enabled: true, statePath: path.join(f.dir, 'pins.json') };
+  const runtime = f.start();
+  const gate = runtime.gates.find((g) => g.id === 'taskPins');
+  assert.ok(gate, 'taskPins gate is registered');
+  assert.equal(gate.enabled, true);
+  assert.equal(gate.ready, true);
+  assert.equal(gate.reason, 'no-task-labels-seen', 'no labelled turn observed yet');
+  const hook = f.hooks.get('before_model_resolve')[0];
+  await hook({}, { agentId: 'main', taskType: 'inventory-sync' });
+  assert.equal(gate.reason, 'active', 'flips once a labelled turn reaches the engine');
+});
+
+test('M6 §7: the taskPins gate is disabled when ownerOverride is off', async (t) => {
+  const f = await fixture(t);
+  const runtime = f.start();
+  const gate = runtime.gates.find((g) => g.id === 'taskPins');
+  assert.ok(gate);
+  assert.equal(gate.enabled, false);
+  assert.equal(gate.reason, 'disabled');
+});

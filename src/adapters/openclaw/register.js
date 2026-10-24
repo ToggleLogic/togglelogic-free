@@ -47,6 +47,14 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
   const gates = [];
   const mark = (id, enabled, reason) => gates.push({ id, enabled, reason });
 
+  // M6 §7: the taskPins capability gate. `enabled` tracks ownerOverride; its
+  // reason flips from "no-task-labels-seen" to "active" the first time a decision
+  // observes a non-null labelSeen, so an operator can tell at a glance whether
+  // per-task routing is actually reaching the engine (a deployment can run with
+  // zero labelled turns and silently never benefit from routes or task pins).
+  const taskPinsEnabled = config.ownerOverride?.enabled === true;
+  const taskPinsSeen = { any: false };
+
   // 2.1.5: audit-write failures are loud. Forward each rate-limited failure
   // report to the usage-events stream (an independent sink), record the audit
   // capability gate, and repeat an error-level log at every session start while
@@ -105,7 +113,7 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
     const seam = createIntelligenceSeam(config.intelligence, fallbackLogger, buildRuntimeConfigFromApiConfig(api?.config), version, newSessions.consume, { paths });
     const governed = config.features.governedEscalation.enabled
       ? createApprovalGate({ config: config.governedEscalation, pricing: createPricing(config.costVisibility.pricing, fallbackLogger, { paths, now: clock }), now: clock, paths }) : null;
-    const interceptor = createInterceptor({ config, hostConfig: api?.config, hostSession: () => { try { return api?.runtime?.agent?.session ?? null; } catch { return null; } }, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation, availability, lineageResolver, usageEvents, fallbackLogger, paths });
+    const interceptor = createInterceptor({ config, hostConfig: api?.config, hostSession: () => { try { return api?.runtime?.agent?.session ?? null; } catch { return null; } }, logger: routingLogger, seam, version, audit, governedEscalation: governed, requestCorrelation, availability, lineageResolver, usageEvents, fallbackLogger, paths, onLabelSeen: () => { taskPinsSeen.any = true; } });
     api.on("session_start", (event, context) => newSessions.mark({ sessionId: event?.sessionId || context?.sessionId, sessionKey: event?.sessionKey || context?.sessionKey }));
     api.on("before_model_resolve", interceptor, { priority: 100 });
     if (governed) {
@@ -128,6 +136,11 @@ export function registerCapabilities({ api, audit, fallbackLogger, version, conf
     api.on("message_sending", createOwnerOverrideAskHandler({ config, fallbackLogger, paths }), { priority: 50 });
     registered.push("ownerOverrideAsk"); mark("ownerOverrideAsk", true, "configured");
   } else mark("ownerOverrideAsk", false, "disabled");
+
+  // M6 §7: the taskPins gate's reason is LIVE (a getter), so a later read reflects
+  // whether a labelled turn has reached the engine since registration.
+  gates.push({ id: "taskPins", enabled: taskPinsEnabled, ready: true,
+    get reason() { return taskPinsEnabled ? (taskPinsSeen.any ? "active" : "no-task-labels-seen") : "disabled"; } });
 
   if (config.features.costVisibility.enabled) {
     api.on("llm_output", (event, context) => availability.observe(event, requestCorrelation.lookup(event, context)), { priority: 60 });

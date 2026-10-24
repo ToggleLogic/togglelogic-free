@@ -87,7 +87,7 @@ export function applyDecision(response) {
   return { ...(d.model ? { modelOverride: d.model } : {}), ...(d.provider ? { providerOverride: d.provider } : {}) };
 }
 
-export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null, lineageResolver = null, usageEvents = null, fallbackLogger = null, hostSession = null, paths = null }) {
+export function createInterceptor({ config, hostConfig, logger, seam, version, audit, governedEscalation = null, requestCorrelation = null, availability = null, lineageResolver = null, usageEvents = null, fallbackLogger = null, hostSession = null, paths = null, onLabelSeen = null }) {
   const recent = new Map();
   const preflight = new Map();
   const windowMs = 60_000;
@@ -175,6 +175,9 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
     };
 
     const response = await core.decide(toDecisionRequest(event, context, decision), { decision, record, beforeDispatch });
+    // M6 §7: report to the taskPins capability gate that a labelled turn actually
+    // reached the engine (flips its reason no-task-labels-seen -> active).
+    if (response?.pins?.labelSeen) { try { onLabelSeen?.(); } catch {} }
     return applyDecision(response);
   };
 
