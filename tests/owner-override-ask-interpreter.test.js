@@ -65,6 +65,23 @@ test("a missing interpreter is swallowed: the handler never throws or rewrites o
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
+test("M6 §2.3: a task-only pin resolves to no `all` scope, so the ask handler never fires", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "tl-ask-task-"));
+  try {
+    const out = path.join(tmp, "payload.json");
+    const consumer = path.join(tmp, "consumer.mjs");
+    fs.writeFileSync(consumer, `import fs from "node:fs";let s="";process.stdin.on("data",(d)=>s+=d);process.stdin.on("end",()=>fs.writeFileSync(${JSON.stringify(out)},s));`);
+    const statePath = path.join(tmp, "owner.json");
+    // A v2 file with ONLY a task pin — no `all` scope.
+    fs.writeFileSync(statePath, JSON.stringify({ schema: "togglelogic-owner-pins/v2", pins: { "task:inventory-sync": { active: true, model_ref: "anthropic/claude-opus-4-8", set_by: "togglelogic-pin", set_at_ms: 1 } } }));
+    const config = normalizeConfig({ ownerOverride: { enabled: true, statePath, askConsumer: consumer, askInterpreter: process.execPath } });
+    const handler = createOwnerOverrideAskHandler({ config, fallbackLogger: { warn() {} } });
+    assert.equal(await handler({ content: "x".repeat(120) }, { channelId: "telegram" }), undefined);
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(fs.existsSync(out), false, "a task-only pin must not trigger the all-tasks ask handler");
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test("the deprecated bounded executor is excluded from the npm package", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(here, "../package.json"), "utf8"));
   assert.ok(pkg.files.includes("!src/enforcement/bounded-executor.js"));

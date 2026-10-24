@@ -225,8 +225,34 @@ export function resolveOwnerPins(ownerOverrideConfig, { label = null, paths = nu
   // Loud only on the first read of a new version (quiet on cache hits), exactly
   // like owner-override.js's one-rejection-per-version contract.
   if (freshVersion && doc.rejections && doc.rejections.length) base.rejections = doc.rejections;
+  // On a fresh version carrying a recognized pins file, surface the scopes
+  // present so the caller can emit ONE OWNER_PIN_CHANGE (§4.3). Quiet on cache
+  // hits, so a set/clear is accounted for exactly once per file version.
+  if (freshVersion && doc.schemaVersion) base.changed = summarizeScopes(doc);
   return base;
 }
 
+// Summarize the scopes present in a parsed document for the one-shot
+// OWNER_PIN_CHANGE audit event (§4.3): scope + target + set_by/set_at/expiry
+// only — never a resolved model recommendation, never a price.
+function summarizeScopes(doc) {
+  const out = [];
+  const one = (scope, pin) => {
+    if (!pin || typeof pin !== "object") return;
+    const target = looksLikeModelRef(pin.model_ref) ? "model" : (typeof pin.family === "string" && pin.family ? "family" : "model");
+    out.push({
+      scope,
+      pin_target: target,
+      active: pin.active === true,
+      ...(typeof pin.set_by === "string" ? { set_by: pin.set_by } : {}),
+      ...(typeof pin.set_at_ms === "number" ? { set_at_ms: pin.set_at_ms } : {}),
+      expires_at_ms: typeof pin.expires_at_ms === "number" && Number.isFinite(pin.expires_at_ms) ? pin.expires_at_ms : null,
+    });
+  };
+  one("all", doc.allRaw);
+  if (doc.taskRaw) for (const [lbl, pin] of doc.taskRaw) one(`task:${lbl}`, pin);
+  return out;
+}
+
 // Exposed for in-process tests only.
-export const _internal = { classify, scopeResult, _cache };
+export const _internal = { classify, scopeResult, summarizeScopes, _cache };

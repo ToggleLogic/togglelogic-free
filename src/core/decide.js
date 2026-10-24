@@ -163,9 +163,18 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       ? (family) => { const r = familyResolver(family, request.agent); return { resolved_ref: r?.child ?? null, resolution_reason: r?.reason }; }
       : null;
     const pins = resolveOwnerPins(config.ownerOverride, { label: pinLabel, paths, resolveFamily });
+    // Account for a set/clear in the audit stream exactly once per file version
+    // (§4.3): the CLI never writes audit, so the hook emits OWNER_PIN_CHANGE on
+    // the first decision that observes a new version, carrying scopes + metadata
+    // only (never a model recommendation, never a price).
+    if (pins.changed && pins.changed.length) emit(audit, EVENTS.OWNER_PIN_CHANGE, { outcome: OUTCOMES.NOOP, principal: { source: "owner" }, details: { scopes: pins.changed }, correlationId: decision.requestId });
     // Malformed scope → fail-closed; surface it loudly exactly once per file
-    // version. (The pins block below still reports the scope as `malformed`.)
-    if (pins.rejections.length) { try { fallbackLogger?.warn?.(`ToggleLogic owner-pin rejected (fail-closed): ${pins.rejections.map((r) => `${r.scope} ${r.reason}`).join("; ")}`); } catch {} }
+    // version, in the audit stream and the operator log. (The pins block below
+    // still reports the scope as `malformed`.)
+    if (pins.rejections.length) {
+      emit(audit, EVENTS.OWNER_PIN_REJECTED, { outcome: OUTCOMES.FAILURE, principal: { source: "owner" }, details: { rejected: pins.rejections }, correlationId: decision.requestId });
+      try { fallbackLogger?.warn?.(`ToggleLogic owner-pin rejected (fail-closed): ${pins.rejections.map((r) => `${r.scope} ${r.reason}`).join("; ")}`); } catch {}
+    }
     const taskEligible = pins.task?.eligible === true;
     const allEligible = pins.all?.eligible === true;
 

@@ -7,7 +7,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { resolveOwnerOverride } from "../../routing/owner-override.js";
+import { resolveOwnerPins } from "../../routing/owner-pins.js";
 import { resolvePath } from "../../path-utils.js";
 
 // User-facing channels only (same generic set as turn-end capture). The
@@ -43,16 +43,19 @@ export function createOwnerOverrideAskHandler({ config, fallbackLogger, paths = 
         event && typeof event.content === "string" ? event.content : "";
       if (!content || content.length < MIN_TURN_CHARS) return; // skip acks
 
-      const owner = resolveOwnerOverride(oo, { paths });
-      if (!owner.applied) return; // no active override → nothing to ask about
+      // M6 §2.3: the ask handler keeps reading the single state file by resolving
+      // the `all` scope of the owner-pin resolver (which honors v1 files and v2
+      // `all` pins alike). A task-only pin leaves `all` null, so it never fires.
+      const all = resolveOwnerPins(oo, { paths }).all;
+      if (!all || !all.eligible) return; // no active all-tasks pin → nothing to ask
 
       // Generic state for the consumer. The engine supplies facts; the
       // consumer supplies all policy/wording/targeting.
       const payload = JSON.stringify({
-        override_model: owner.modelRef,
-        set_by: owner.state?.set_by ?? null,
-        set_at_ms: owner.state?.set_at_ms ?? null,
-        family_input: owner.state?.family_input ?? null,
+        override_model: all.resolvedRef,
+        set_by: all.setBy ?? null,
+        set_at_ms: all.setAtMs ?? null,
+        family_input: all.family ?? null,
         channel: channelId,
         completed_turn_chars: content.length,
       });

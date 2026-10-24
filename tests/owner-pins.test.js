@@ -325,6 +325,30 @@ test("family route (T4, §5.2): an unresolved family: route is a loud passthroug
   assert.equal(res.rationale.details.resolutionReason, "invalid-lineage");
 });
 
+test("audit (T6, §4.3): OWNER_PIN_CHANGE fires once per file version, carrying scopes", async () => {
+  const events = [];
+  const c = core(v2({ ...allPin(SONNET), ...taskPin("inventory-sync", OPUS) }), { services: { audit: { emit: (e) => events.push(e) } } });
+  await c.decide(request(withLabel("inventory-sync")), { decision: record() });
+  const change = events.filter((e) => e.event === "owner_pin_change");
+  assert.equal(change.length, 1, "one OWNER_PIN_CHANGE on the first observation");
+  assert.equal(change[0].outcome, "noop");
+  assert.ok(change[0].details.scopes.some((s) => s.scope === "all"));
+  assert.ok(change[0].details.scopes.some((s) => s.scope === "task:inventory-sync" && s.pin_target === "model"));
+  await c.decide(request(withLabel("inventory-sync")), { decision: record() });
+  assert.equal(events.filter((e) => e.event === "owner_pin_change").length, 1, "quiet on the cached version");
+});
+
+test("audit (T6, §4.3): OWNER_PIN_REJECTED fires on a malformed scope (fail-closed)", async () => {
+  const events = [];
+  const c = core(v2({ all: { active: true, model_ref: SONNET, set_by: "x", set_at_ms: BASE, expires_at_ms: null } }),
+    { mode: "configured", configuredRoutes: { default: FLASH }, services: { audit: { emit: (e) => events.push(e) } } });
+  await c.decide(request(), { decision: record() });
+  const rej = events.filter((e) => e.event === "owner_pin_rejected");
+  assert.equal(rej.length, 1);
+  assert.equal(rej[0].outcome, "failure");
+  assert.equal(rej[0].details.rejected[0].scope, "all");
+});
+
 test("order: decide() applies a task pin for a mixed-case incoming label (§3.5 end-to-end)", async () => {
   const c = core(v2(taskPin("inventory-sync", OPUS)), { mode: "configured", configuredRoutes: { default: FLASH } });
   const res = await c.decide(request(withLabel("  INVENTORY-SYNC ")), { decision: record() });

@@ -91,6 +91,16 @@ export const EVENTS = Object.freeze({
   // reason only — never conversation content.
   SESSION_PIN_STORE_ABSENT: "session_pin_store_absent",
 
+  // --- Owner pins (M6, Free 2.3.0) ---
+  // The togglelogic-pin CLI is the only writer of owner-pin state; it does NOT
+  // write the audit stream (keeping one audit writer for the M2 v2 chain). So a
+  // set/clear is accounted for here instead: the routing hook emits OWNER_PIN_CHANGE
+  // once per file version (the mtime cache detects the change), carrying the scopes
+  // present and their set_by/set_at/expiry — never a model recommendation, never a
+  // price. A malformed/fail-closed scope emits OWNER_PIN_REJECTED once per version.
+  OWNER_PIN_CHANGE: "owner_pin_change",
+  OWNER_PIN_REJECTED: "owner_pin_rejected",
+
   // --- Audit integrity (2.1.5) ---
   // Written into the audit stream by the first successful write after one or
   // more audit writes failed. details: failedCount, firstFailureAt,
@@ -143,6 +153,11 @@ export function controlsFor(event) {
     case EVENTS.ROUTING_SKIPPED:
     case EVENTS.SESSION_PIN_STORE_ABSENT:
       return ["AU-2", "AU-3", "AU-12"];
+    case EVENTS.OWNER_PIN_CHANGE:
+    case EVENTS.OWNER_PIN_REJECTED:
+      // A pin set/clear is an owner configuration change observed in the stream;
+      // CM-6 (Configuration Settings) reads through alongside the AU controls.
+      return ["AU-2", "AU-3", "AU-12", "CM-6"];
     case EVENTS.AUDIT_WRITE_RECOVERED:
       // AU-5: response to audit logging process failures.
       return ["AU-2", "AU-3", "AU-5", "AU-12"];
