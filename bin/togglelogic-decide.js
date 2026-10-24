@@ -5,7 +5,8 @@
  * License (see LICENSE); all rights reserved.
  * PATENT PENDING.
  */
-import { promises as fs } from "node:fs";
+import { promises as fs, realpathSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { normalizeConfig } from "../src/config/normalize.js";
 import { replayRecords } from "../src/core/replay.js";
 import { resolveOpenClawPath } from "../src/path-utils.js";
@@ -49,4 +50,4 @@ async function main(args) {
   }
   if (report.differences.length) process.exitCode = 2;
 }
-main(process.argv.slice(2)).catch((error) => { console.error(error.message); process.exitCode = 1; });
+if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) main(process.argv.slice(2)).catch((error) => { console.error(error.message); process.exitCode = 1; });
