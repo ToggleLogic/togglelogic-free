@@ -1,5 +1,5 @@
 {
- "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); D28 (M1 step 5) re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios; M6 (Free 2.3.0) re-record: owner pins moved below protected user selection (R1), so the two active-owner-override scenarios now read the session store (emitting session_pin_store_absent + warn) before the pin applies — the pin's routing_log, routing.decision audit and hook return value are unchanged; M6 T4 re-record: `family:` configured routes now resolve through the lineage resolver, so the 'configured mode, family alias' scenario (family:flash, an invalid lineage) is a loud 'family route unresolved' passthrough instead of the old 'family aliases require ToggleLogic Intelligence' no-op; M6 T6 re-record: the routing hook now emits a one-shot owner_pin_change audit event on the first decision that observes an owner-pin file version, so the three owner-override scenarios gain that record before their routing.decision; M6 T7 re-record: every routing record now carries the full pins snapshot (§4.5), so each scenario's routing_log gains a `pins` field; no other field changed",
+ "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); the M1 step 5 re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios; M6 (Free 2.3.0) re-record: owner pins moved below protected user selection (R1), so the two active-owner-override scenarios now read the session store (emitting session_pin_store_absent + warn) before the pin applies — the pin's routing_log, routing.decision audit and hook return value are unchanged; M6 T4 re-record: `family:` configured routes now resolve through the lineage resolver, so the 'configured mode, family alias' scenario (family:flash, an invalid lineage) is a loud 'family route unresolved' passthrough instead of the old 'family aliases require ToggleLogic Intelligence' no-op; M6 T6 re-record: the routing hook now emits a one-shot owner_pin_change audit event on the first decision that observes an owner-pin file version, so the three owner-override scenarios gain that record before their routing.decision; M6 T7 re-record: every routing record now carries the full pins snapshot (§4.5), so each scenario's routing_log gains a `pins` field; M6 T9 re-record (§5.3 pin failover): the 'owner override with provider override, provider down' scenario now fails over loudly to a host-configured fallback (provider_unavailable) instead of serving the pinned ref to the down provider — its pin is reported pins.all.status not_applied/unavailable with the pin surfaced in selectionDetails; no other scenario changed",
  "scenarios": [
   {
    "name": "passthrough mode, host default",
@@ -1877,8 +1877,8 @@
      "ok": true,
      "frozenEmpty": false,
      "value": {
-      "modelOverride": "gemini-3.5-flash",
-      "providerOverride": "google"
+      "modelOverride": "claude-sonnet-4-6",
+      "providerOverride": "anthropic"
      }
     }
    ],
@@ -1941,8 +1941,27 @@
      "togglelogic: session pin store not readable (<TMP>/sessions.json); a user pin equal to the agent default cannot be recognised. Selections that differ from the default are still honored."
     ],
     [
+     "audit",
+     {
+      "event": "routing.decision",
+      "outcome": "success",
+      "principal": {
+       "source": "plugin"
+      },
+      "details": {
+       "selectionReason": "provider_unavailable",
+       "unavailableProvider": "google",
+       "lineage": "anthropic/claude-sonnet",
+       "resolvedChild": "anthropic/claude-sonnet-4-6",
+       "resolutionReason": "host-configured-fallback",
+       "skipped": []
+      },
+      "correlationId": "id1"
+     }
+    ],
+    [
      "correlation",
-     "owner_override",
+     "provider_unavailable",
      "q"
     ],
     [
@@ -1955,12 +1974,18 @@
       "requestedProvider": "anthropic",
       "modelOverrideSource": null,
       "capabilityNeeds": [],
-      "selectedModel": "google/gemini-3.5-flash",
-      "selectedProvider": "google",
-      "selectionReason": "owner_override",
+      "selectedModel": "anthropic/claude-sonnet-4-6",
+      "selectedProvider": "anthropic",
+      "selectionReason": "provider_unavailable",
       "selectionDetails": {
-       "matched_rule": "owner_override",
-       "providerUnavailableConflict": true
+       "unavailableProvider": "google",
+       "lineage": "anthropic/claude-sonnet",
+       "resolvedChild": "anthropic/claude-sonnet-4-6",
+       "resolutionReason": "host-configured-fallback",
+       "skipped": [],
+       "pinned_scope": "all",
+       "pin_target": "model",
+       "pinned_ref": "google/gemini-3.5-flash"
       },
       "mode": "cheap",
       "durationMs": "number",
@@ -1974,30 +1999,10 @@
         "resolved_ref": "google/gemini-3.5-flash",
         "expires_at_ms": null,
         "no_expiry": true,
-        "status": "applied",
-        "reason": "applied"
+        "status": "not_applied",
+        "reason": "unavailable"
        }
       }
-     }
-    ],
-    [
-     "audit",
-     {
-      "event": "routing.decision",
-      "outcome": "success",
-      "principal": {
-       "source": "owner"
-      },
-      "subject": {
-       "hook": "before_model_resolve"
-      },
-      "details": {
-       "mode": "owner_override",
-       "selectedModel": "google/gemini-3.5-flash",
-       "matched_rule": "owner_override",
-       "providerUnavailableConflict": true
-      },
-      "correlationId": "id1"
      }
     ]
    ]

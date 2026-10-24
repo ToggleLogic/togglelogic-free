@@ -54,7 +54,7 @@ test('zero usage and mismatched assistant attribution never prove refusal', () =
   assert.equal(a.unavailable('google'), false);
 });
 
-test('next-turn reroute and owner override conflict are recorded', async (t) => {
+test('next-turn reroute and an all-tasks pin on a down provider fail over loudly (M6 §5.3)', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tl-refusal-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const statePath = path.join(dir, 'override.json');
@@ -65,10 +65,15 @@ test('next-turn reroute and owner override conflict are recorded', async (t) => 
     availability, lineageResolver: async () => ({ lineage: 'anthropic/claude-haiku', child: 'anthropic/claude-haiku', reason: 'newest-configured-release' }), logger: { async write(row) { rows.push(row); } }, seam: { status: () => 'unavailable' } });
   assert.deepEqual(await route({}, {}), { providerOverride: 'anthropic', modelOverride: 'claude-haiku' });
   assert.equal(rows[0].selectionReason, 'provider_unavailable');
+  // An all-tasks pin to the down provider must NOT be served to it: §5.3 runs the
+  // same failover path, loudly, never serving the pin's ref to a dead provider.
   await fs.writeFile(statePath, JSON.stringify({ active: true, model_ref: 'google/gemini-flash' }));
-  assert.deepEqual(await route({}, {}), { modelOverride: 'gemini-flash', providerOverride: 'google' });
-  assert.equal(rows[1].selectionReason, 'owner_override');
-  assert.equal(rows[1].selectionDetails.providerUnavailableConflict, true);
+  assert.deepEqual(await route({}, {}), { providerOverride: 'anthropic', modelOverride: 'claude-haiku' });
+  assert.equal(rows[1].selectionReason, 'provider_unavailable');
+  assert.equal(rows[1].selectionDetails.pinned_ref, 'google/gemini-flash', 'the pin that could not be served is surfaced');
+  assert.equal(rows[1].selectionDetails.unavailableProvider, 'google');
+  assert.equal(rows[1].pins.all.status, 'not_applied');
+  assert.equal(rows[1].pins.all.reason, 'unavailable');
 });
 
 test('no available fallback preserves the selection', async () => {

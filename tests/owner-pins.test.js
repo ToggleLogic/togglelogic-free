@@ -325,6 +325,74 @@ test("family route (T4, §5.2): an unresolved family: route is a loud passthroug
   assert.equal(res.rationale.details.resolutionReason, "invalid-lineage");
 });
 
+// --- §5.3 pin failover: a pinned provider that is down fails over loudly ------
+
+const down = (...providers) => ({ unavailable: (p) => providers.includes(p) });
+
+test("failover (§5.3): an exact-ref task pin on a down provider fails over loudly, reported not_applied/unavailable", async () => {
+  // OPUS is anthropic/*; anthropic is down. The lineage resolver offers FLASH.
+  const lineageResolver = async (agent) => ({ child: FLASH, lineage: "google/gemini-3.5", reason: `resolved:${agent}`, skipped: [OPUS] });
+  const c = core(v2(taskPin("inventory-sync", OPUS)),
+    { mode: "configured", configuredRoutes: { default: SONNET }, services: { availability: down("anthropic"), lineageResolver } });
+  const res = await c.decide(request(withLabel("inventory-sync")), { decision: record() });
+  assert.equal(res.reason, "provider_unavailable", "never serves the pin's ref to a dead provider");
+  assert.deepEqual(res.decision, { action: "route", ref: FLASH, provider: "google", model: "gemini-3.5-flash" });
+  // selectionDetails shows the pin, the unavailability and the failover target.
+  assert.equal(res.rationale.details.pinned_scope, "task:inventory-sync");
+  assert.equal(res.rationale.details.pinned_ref, OPUS);
+  assert.equal(res.rationale.details.unavailableProvider, "anthropic");
+  assert.equal(res.rationale.details.resolvedChild, FLASH);
+  // the pins block reports the pin not_applied/unavailable (§4.2 enum).
+  assert.equal(res.pins.task.status, "not_applied");
+  assert.equal(res.pins.task.reason, "unavailable");
+  assert.equal(res.pins.task.resolved_ref, OPUS);
+});
+
+test("failover (§5.3): a family task pin whose resolved member is down fails over to an available member", async () => {
+  // The family resolves to FLASH (google); google is down → fail over to SONNET.
+  const familyResolver = (family) => family === "google/*" ? { child: FLASH, reason: "newest-configured-release" } : { child: null, reason: "no-configured-child" };
+  const lineageResolver = async () => ({ child: SONNET, lineage: "anthropic/claude-sonnet", reason: "newest-configured-release", skipped: [FLASH] });
+  const c = core(v2({ "task:t": { active: true, family: "google/*", set_by: "x", set_at_ms: BASE } }),
+    { mode: "configured", configuredRoutes: { default: HAIKU }, services: { availability: down("google"), familyResolver, lineageResolver } });
+  const res = await c.decide(request(withLabel("t")), { decision: record() });
+  assert.equal(res.reason, "provider_unavailable");
+  assert.equal(res.decision.ref, SONNET, "failed over off the down family member");
+  assert.equal(res.pins.task.status, "not_applied");
+  assert.equal(res.pins.task.reason, "unavailable");
+  assert.equal(res.pins.task.pin_target, "family");
+  assert.equal(res.pins.task.family, "google/*");
+  assert.equal(res.pins.task.resolved_ref, FLASH, "the resolved family member that could not be served");
+  assert.equal(res.rationale.details.pinned_family, "google/*");
+});
+
+test("failover (§5.3): an all-tasks pin on a down provider fails over via host fallbacks and outranks a task pin that is also down", async () => {
+  // all pins SONNET (anthropic), task pins OPUS (anthropic); anthropic is down.
+  // The task pin still wins the tier, then fails over via host fallbacks to FLASH.
+  const c = core(v2({ ...allPin(SONNET), ...taskPin("t", OPUS) }),
+    { mode: "configured", configuredRoutes: { default: HAIKU }, services: { availability: down("anthropic") } });
+  const req = request({ ...withLabel("t"), candidates: [HAIKU, SONNET, FLASH, OPUS], fallbacks: [FLASH] });
+  const res = await c.decide(req, { decision: record() });
+  assert.equal(res.reason, "provider_unavailable");
+  assert.equal(res.decision.ref, FLASH, "host-configured fallback off the down provider");
+  assert.equal(res.rationale.details.resolutionReason, "host-configured-fallback");
+  assert.equal(res.pins.task.status, "not_applied");
+  assert.equal(res.pins.task.reason, "unavailable");
+  assert.equal(res.pins.all.status, "not_applied");
+  assert.equal(res.pins.all.reason, "outranked_by_task_pin", "the task pin still won the tier even though it failed over");
+});
+
+test("failover (§5.3): a pinned provider down with no available target fails loud (fallback_unresolved), never the pin's ref", async () => {
+  const c = core(v2(taskPin("t", OPUS)),
+    { mode: "configured", configuredRoutes: { default: SONNET }, services: { availability: down("anthropic"), lineageResolver: async () => ({ child: null, skipped: [OPUS] }) } });
+  // Every fallback is also anthropic, so nothing is available.
+  const req = request({ ...withLabel("t"), candidates: [OPUS], fallbacks: [SONNET] });
+  const res = await c.decide(req, { decision: record() });
+  assert.equal(res.reason, "fallback_unresolved", "loud fail, never serves the pin to a dead provider");
+  assert.deepEqual(res.decision, { action: "passthrough" });
+  assert.equal(res.pins.task.status, "not_applied");
+  assert.equal(res.pins.task.reason, "unavailable");
+});
+
 test("audit (T6, §4.3): OWNER_PIN_CHANGE fires once per file version, carrying scopes", async () => {
   const events = [];
   const c = core(v2({ ...allPin(SONNET), ...taskPin("inventory-sync", OPUS) }), { services: { audit: { emit: (e) => events.push(e) } } });
