@@ -42,7 +42,9 @@ test('set/list/clear round trips normalized tasks, all scope, family and metadat
   assert.match(r.out[0], /all provider\/\* \(resolved at decision time\)/);
   assert.match(r.out[1], /task:inventory-sync provider\/model/);
   r = await f.invoke(['list', '--json']);
-  assert.deepEqual(JSON.parse(r.out[0]), await f.read()); assert.equal(r.out[1], pointer);
+  assert.deepEqual(JSON.parse(r.out[0]), await f.read());
+  assert.equal(r.out.length, 1); // stdout is one pure JSON document, no pointer
+  assert.equal(r.err.at(-1), pointer); // pointer moved to stderr for --json
   for (const scope of ['task: INVENTORY-SYNC ', 'all', 'all']) {
     r = await f.invoke(['clear', '--scope', scope]);
     assert.equal(r.code, 0); assert.equal(r.out.length, 1); assert.ok(!r.out.join('').includes(pointer));

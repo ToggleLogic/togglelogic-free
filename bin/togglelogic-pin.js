@@ -177,7 +177,10 @@ export async function run(args, { clock = Date.now, paths = null, stdout = conso
       else for (const [key, value] of Object.entries(doc.pins).sort(([a], [b]) => a.localeCompare(b))) stdout(line(key, value));
     } else stdout(command === 'set' ? line(scope, pin) : `Cleared ${scope}`);
     const licensed = raw?.intelligence && raw.intelligence.enabled !== false && (raw.intelligence.enabled === true || Boolean(raw.intelligence.path?.trim()));
-    if (command !== 'clear' && !licensed) stdout(POINTER);
+    // `list --json` keeps stdout a single machine-readable JSON document; the
+    // human-facing pointer still appears, on stderr, so it never pollutes the
+    // data stream (and is still omitted when licensed / on errors).
+    if (command !== 'clear' && !licensed) (options.json ? stderr : stdout)(POINTER);
     return 0;
   } catch (error) { stderr(`togglelogic-pin: ${error.message.replace(/[\r\n]+/g, ' ')}`); return 1; }
 }
