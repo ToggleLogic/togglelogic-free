@@ -97,7 +97,7 @@ function unpriced(reason) { return { priced: false, usd: null, basis: "none", un
 
 export function createDecisionCore({ policy, services = {}, product = "togglelogic-free", version = null } = {}) {
   const { audit = null, seam, availability = null, lineageResolver = null, usageEvents = null,
-    fallbackLogger = null, governedEscalation = null, paths = null } = services;
+    fallbackLogger = null, governedEscalation = null, paths = null, familyResolver = null } = services;
   const config = policy;
   const policyDigest = policyDigestOf(policy);
   const pricing = services.pricing ?? null;
@@ -157,7 +157,12 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     // pin is reported `outranked_by_user`. Reads the host task label only (not
     // any lazy request field), so it does not perturb the host read order.
     const pinLabel = configuredTaskLabel(event, context);
-    const pins = resolveOwnerPins(config.ownerOverride, { label: pinLabel, paths });
+    // M6 §5.1: a family pin resolves to its newest configured+allowed member via
+    // the injected resolver (T4). Synchronous — no catalog fetch on the hot path.
+    const resolveFamily = familyResolver
+      ? (family) => { const r = familyResolver(family, request.agent); return { resolved_ref: r?.child ?? null, resolution_reason: r?.reason }; }
+      : null;
+    const pins = resolveOwnerPins(config.ownerOverride, { label: pinLabel, paths, resolveFamily });
     // Malformed scope → fail-closed; surface it loudly exactly once per file
     // version. (The pins block below still reports the scope as `malformed`.)
     if (pins.rejections.length) { try { fallbackLogger?.warn?.(`ToggleLogic owner-pin rejected (fail-closed): ${pins.rejections.map((r) => `${r.scope} ${r.reason}`).join("; ")}`); } catch {} }
@@ -281,7 +286,7 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     try {
       const mode = resolveEffectiveMode(config.mode, seam.status(), config);
       decision.mode = mode;
-      const result = await dispatchByMode({ mode, event, hookContext: context, config, seam });
+      const result = await dispatchByMode({ mode, event, hookContext: context, config, seam, familyResolver, agent: request.agent });
       override = result.override; decision.selectedModel = result.selectedModel; decision.selectedProvider = result.selectedProvider; decision.selectionReason = result.selectionReason; decision.selectionDetails = result.selectionDetails;
       const governed = governedEscalation ? await governedEscalation.afterRouting(event?.prompt, context, result) : null;
       if (governed?.override) override = governed.override;

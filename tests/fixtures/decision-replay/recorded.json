@@ -1,5 +1,5 @@
 {
- "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); D28 (M1 step 5) re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios; M6 (Free 2.3.0) re-record: owner pins moved below protected user selection (R1), so the two active-owner-override scenarios now read the session store (emitting session_pin_store_absent + warn) before the pin applies — the pin's routing_log, routing.decision audit and hook return value are unchanged",
+ "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); D28 (M1 step 5) re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios; M6 (Free 2.3.0) re-record: owner pins moved below protected user selection (R1), so the two active-owner-override scenarios now read the session store (emitting session_pin_store_absent + warn) before the pin applies — the pin's routing_log, routing.decision audit and hook return value are unchanged; M6 T4 re-record: `family:` configured routes now resolve through the lineage resolver, so the 'configured mode, family alias' scenario (family:flash, an invalid lineage) is a loud 'family route unresolved' passthrough instead of the old 'family aliases require ToggleLogic Intelligence' no-op",
  "scenarios": [
   {
    "name": "passthrough mode, host default",
@@ -443,8 +443,10 @@
       "selectedProvider": null,
       "selectionReason": "passthrough",
       "selectionDetails": {
-       "reason": "family aliases require ToggleLogic Intelligence",
-       "matchedKey": "default"
+       "reason": "family route unresolved",
+       "matchedKey": "default",
+       "family": "flash",
+       "resolutionReason": "invalid-lineage"
       },
       "mode": "configured",
       "durationMs": "number"

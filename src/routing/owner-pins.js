@@ -102,7 +102,7 @@ function scopeResult(scopeKey, pin, source, nowMs, resolveFamily) {
     ? pin.expires_at_ms : null;
 
   // Target resolution. Exact ref resolves to itself; a family resolves through
-  // the injected resolver (wired by T4) — absent one, it is reported deferred.
+  // the injected resolver (wired by T4) to its newest configured member.
   let pinTarget = "model";
   let modelRef;
   let family;
@@ -113,19 +113,14 @@ function scopeResult(scopeKey, pin, source, nowMs, resolveFamily) {
     modelRef = pin.model_ref;
     resolvedRef = pin.model_ref;
   } else if (typeof pin.family === "string" && pin.family) {
+    // A family resolves through the injected resolver (wired in T4 from the host
+    // allowlist). A family that resolves to nothing is reported `unavailable`
+    // below with the resolver's own reason — never silently dropped.
     pinTarget = "family";
     family = pin.family;
-    if (typeof resolveFamily === "function") {
-      const r = resolveFamily(pin.family);
-      if (r && typeof r.resolved_ref === "string" && r.resolved_ref) {
-        resolvedRef = r.resolved_ref;
-        resolutionReason = r.resolution_reason;
-      } else {
-        resolutionReason = "no-configured-child";
-      }
-    } else {
-      resolutionReason = "family_resolution_deferred";
-    }
+    const r = typeof resolveFamily === "function" ? resolveFamily(pin.family) : null;
+    resolvedRef = r && typeof r.resolved_ref === "string" && r.resolved_ref ? r.resolved_ref : null;
+    resolutionReason = r?.resolution_reason ?? (resolvedRef ? undefined : "no-configured-child");
   }
 
   const active = pin.active === true;

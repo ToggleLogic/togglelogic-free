@@ -68,7 +68,7 @@ function overrideForModelRef(modelRef) {
   return { modelOverride: modelRef };
 }
 
-export async function dispatchByMode({ mode, event, hookContext, config, seam }) {
+export async function dispatchByMode({ mode, event, hookContext, config, seam, familyResolver = null, agent = undefined }) {
   switch (mode) {
     case "passthrough":
       return passthroughResult();
@@ -76,7 +76,24 @@ export async function dispatchByMode({ mode, event, hookContext, config, seam })
     case "configured": {
       const route = pickConfiguredRoute(config.configuredRoutes, event, hookContext);
       if (!route) return passthroughResult({ reason: "no configured match" });
-      if (route.modelId.startsWith("family:")) return passthroughResult({ reason: "family aliases require ToggleLogic Intelligence", matchedKey: route.key });
+      if (route.modelId.startsWith("family:")) {
+        // M6 §5.2: resolve a `family:<lineage>` route to the newest configured
+        // member via the same resolver a family pin uses. An unresolved family
+        // is a loud passthrough (reason carried), never a silent model.
+        const lineage = route.modelId.slice("family:".length);
+        const resolved = typeof familyResolver === "function" ? familyResolver(lineage, agent) : null;
+        if (!resolved || !resolved.child) {
+          return passthroughResult({ reason: "family route unresolved", matchedKey: route.key, family: lineage, resolutionReason: resolved?.reason ?? "no-configured-child" });
+        }
+        const familyOverride = overrideForModelRef(resolved.child);
+        return {
+          override: familyOverride,
+          selectedModel: resolved.child,
+          selectedProvider: familyOverride.providerOverride ?? null,
+          selectionReason: "configured",
+          selectionDetails: { matchedKey: route.key, family: lineage, resolvedChild: resolved.child, resolutionReason: resolved.reason },
+        };
+      }
       const override = overrideForModelRef(route.modelId);
       return {
         override,

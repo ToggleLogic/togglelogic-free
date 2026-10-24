@@ -5,7 +5,7 @@
  * PATENT PENDING.
  */
 import { hostFallbacks } from "../../usage/provider-refusal.js";
-import { configuredModels } from "../../routing/lineage-resolver.js";
+import { configuredModels, resolveLineage } from "../../routing/lineage-resolver.js";
 import crypto from "node:crypto";
 import { newDecision, finalizeDecision } from "../../routing/decision.js";
 import { createDecisionCore } from "../../core/decide.js";
@@ -96,8 +96,20 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
   let sessionPinStoreSignaled = false;
   const fingerprint = (event, context) => clean(event?.prompt) && clean(context?.sessionKey)
     ? crypto.createHash("sha256").update(`${context.sessionKey}\0${event.prompt}`).digest("hex") : null;
+  // M6 §5.1/§5.2: resolve a family pin or a `family:` configured route to the
+  // newest configured+allowed member, SYNCHRONOUSLY, via the existing lineage
+  // resolver over the host allowlist. No live pricing catalog is fetched on the
+  // hot path (preserving §3.1's one-stat-per-decision cost model), so ordering
+  // is configured-order; release-date ordering still applies on the async
+  // failover path. An unresolvable family fails loudly (never a silent model).
+  const familyResolver = (family, agentId) => resolveLineage({
+    lineage: family,
+    allowedModels: configuredModels(hostConfig, agentId),
+    catalog: [],
+    unavailable: (provider) => availability?.unavailable(provider) ?? false,
+  });
   const core = createDecisionCore({ policy: config, version,
-    services: { audit, seam, availability, lineageResolver, usageEvents, fallbackLogger, governedEscalation, paths } });
+    services: { audit, seam, availability, lineageResolver, familyResolver, usageEvents, fallbackLogger, governedEscalation, paths } });
 
   function readSession(context) {
     const sessionLookup = readSessionSelection(hostConfig, context, { hostSession: typeof hostSession === "function" ? hostSession() : hostSession });

@@ -278,18 +278,51 @@ test("pins block: a malformed pin fails closed, routes as unpinned, and warns lo
   assert.equal(warns.length, 1, "quiet on the cached version");
 });
 
-test("pins block: a family pin is reported (resolution deferred to T4) and does not apply yet", async () => {
-  // T1/T2 carry the family descriptor; the lineage resolver is wired in T4.
-  const c = core(v2({ "task:t": { active: true, family: "google/gemini-3.5-*", set_by: "x", set_at_ms: BASE } }),
+test("family pin (T4): without a resolved member it is reported unavailable, never silent", async () => {
+  // No familyResolver wired → the family resolves to nothing and the pin is
+  // reported `unavailable` with the resolver's reason (the deferred seam is gone).
+  const c = core(v2({ "task:t": { active: true, family: "google/*", set_by: "x", set_at_ms: BASE } }),
     { mode: "configured", configuredRoutes: { default: FLASH } });
   const res = await c.decide(request(withLabel("t")), { decision: record() });
   assert.equal(res.reason, "configured", "an unresolved family pin does not apply");
   assert.equal(res.pins.task.status, "not_applied");
   assert.equal(res.pins.task.reason, "unavailable");
   assert.equal(res.pins.task.pin_target, "family");
-  assert.equal(res.pins.task.family, "google/gemini-3.5-*");
+  assert.equal(res.pins.task.family, "google/*");
   assert.equal(res.pins.task.resolved_ref, null);
-  assert.equal(res.pins.task.resolution_reason, "family_resolution_deferred");
+  assert.equal(res.pins.task.resolution_reason, "no-configured-child");
+});
+
+test("family pin (T4, §5.1): a wired resolver resolves the family and the pin applies", async () => {
+  const familyResolver = (family) => family === "google/*" ? { child: FLASH, reason: "newest-configured-release" } : { child: null, reason: "no-configured-child" };
+  const c = core(v2({ "task:t": { active: true, family: "google/*", set_by: "x", set_at_ms: BASE } }),
+    { mode: "configured", configuredRoutes: { default: SONNET }, services: { familyResolver } });
+  const res = await c.decide(request(withLabel("t")), { decision: record() });
+  assert.equal(res.reason, "task_pin");
+  assert.equal(res.decision.ref, FLASH);
+  assert.equal(res.pins.task.status, "applied");
+  assert.equal(res.pins.task.pin_target, "family");
+  assert.equal(res.pins.task.family, "google/*");
+  assert.equal(res.pins.task.resolved_ref, FLASH);
+  assert.equal(res.pins.task.resolution_reason, "newest-configured-release");
+});
+
+test("family route (T4, §5.2): a configured family: route resolves to the newest member", async () => {
+  const familyResolver = (family) => family === "google/*" ? { child: FLASH, reason: "newest-configured-release" } : { child: null, reason: "invalid-lineage" };
+  const c = core(v2({}), { mode: "configured", configuredRoutes: { default: "family:google/*" }, services: { familyResolver } });
+  const res = await c.decide(request(withLabel("x")), { decision: record() });
+  assert.equal(res.reason, "configured");
+  assert.equal(res.decision.ref, FLASH);
+});
+
+test("family route (T4, §5.2): an unresolved family: route is a loud passthrough, not a silent model", async () => {
+  const familyResolver = () => ({ child: null, reason: "invalid-lineage" });
+  const c = core(v2({}), { mode: "configured", configuredRoutes: { default: "family:nope" }, services: { familyResolver } });
+  const res = await c.decide(request(withLabel("x")), { decision: record() });
+  assert.equal(res.reason, "passthrough");
+  assert.equal(res.decision.action, "passthrough");
+  assert.equal(res.rationale.details.reason, "family route unresolved");
+  assert.equal(res.rationale.details.resolutionReason, "invalid-lineage");
 });
 
 test("order: decide() applies a task pin for a mixed-case incoming label (§3.5 end-to-end)", async () => {
