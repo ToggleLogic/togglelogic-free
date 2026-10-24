@@ -1,5 +1,59 @@
 # Changelog
 
+## 2.3.0-rc.1 — 2026-10-24
+
+Milestone M6 — per-task owner pins, built to
+`docs/design/M6-PER-TASK-OWNER-PINS.md`. The owner can pin a model — an exact ref
+or a model family — to a single labelled task, or to all tasks, and every
+decision now reports what is pinned, to what, and why.
+
+- **Per-task and all-tasks owner pins.** One state file holds every scope: an
+  `all` pin (the former global owner override) plus any number of `task:<label>`
+  pins. The most specific applicable pin wins — a task pin beats the all-tasks
+  pin. A pin target may be an exact model ref or a model family. An all-tasks
+  pin now **requires an expiry** at set time; an existing one with no expiry
+  keeps working and is reported as held.
+- **`togglelogic-pin` CLI** (new in `bin/`): `set` / `clear` / `list` pins, with
+  an exclusive lock, atomic write, and schema validation. The routing hook only
+  ever reads; the CLI is the only writer.
+- **A `pins` block on every decision.** The Decision API response, the routing
+  record, and the audit `routing.decision` details carry a per-turn pins
+  snapshot — including a pin that exists but was **not** applied, with the reason
+  (expired / unavailable / outranked / inactive / malformed).
+- **Family pins and `family:` configured routes** resolve through the existing
+  lineage resolver. A family that cannot resolve fails **loudly**, never a silent
+  model.
+- **Pinned provider down → loud failover.** A pinned model whose provider is
+  unavailable runs the same failover path a configured route uses; the pin is
+  reported `not_applied / unavailable` with the failover target, and the pin's
+  ref is never served to a dead provider. With no available target the decision
+  is `fallback_unresolved` (loud).
+- **Audit events.** `owner_pin_change` (one-shot per observed file version) and
+  `owner_pin_rejected` (a malformed, fail-closed scope) account for every
+  set/clear and every rejection in the audit stream, via the single audit writer.
+- **`taskPins` capability gate** with a live health reason that flips from
+  `no-task-labels-seen` to `active` on the first observed labelled turn, so an
+  operator can see whether per-task routing is reaching the engine.
+
+**Behavior changes — read these.**
+
+- **An explicit `/model` pick now beats an active all-tasks owner override.** In
+  2.2.x the override won; in 2.3.0 the owner's own in-chat pick (a selection the
+  host marks `source: "user"`) wins over every pin. The override still beats a
+  skill's request selection and the configured route — that is unchanged, and a
+  skill can never override an owner pin. **Host-contract note:** on a host where
+  several people may chat, every allowed chat user's `/model` pick counts as the
+  owner's; a host that needs otherwise must not mark such picks `source: "user"`.
+- **Configured route keys and task labels now match case-insensitively.** Both
+  are normalized by lowercasing and trimming, so a route key `Inventory-Sync` and
+  a turn labelled `inventory-sync` match. Two keys that normalize to the same
+  scope collide: the engine keeps the last and emits a **loud** config warning.
+  Deployments that already emit lowercase labels are unaffected; mixed-case
+  `configuredRoutes` keys may see matching change.
+- **Family pins resolve in the owner's configured order** at decision time (the
+  first configured-and-allowed member), not by release date. Release-date
+  ordering applies only on the async failover path.
+
 ## 2.2.1 — 2026-10-22
 
 Documentation only. The README now links the changelog (togglelogic.ai/changelog

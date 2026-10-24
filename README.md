@@ -46,6 +46,34 @@ Routing is opt-in:
 `configuredRoutes` matches only structured labels supplied by the host. ToggleLogic
 Free never reads prompt text to infer a workflow.
 
+## Owner pins
+
+The owner can pin a model to a single labelled task, or to every task. Pins are
+set from the command line with `togglelogic-pin`; the routing hook only reads
+them, and each pin is one line in `list`.
+
+```sh
+# pin an exact model for one task
+togglelogic-pin set --scope task:inventory-sync --model anthropic/claude-opus-4-8 --config openclaw.json
+# pin a model family for one task (resolves to a configured member)
+togglelogic-pin set --scope task:drafts --family google/gemini-3.5-* --config openclaw.json
+# pin all tasks (an all-tasks pin must carry an expiry)
+togglelogic-pin set --scope all --model anthropic/claude-sonnet-4-6 --expires +72h --config openclaw.json
+# clear one pin, or list every pin
+togglelogic-pin clear --scope task:inventory-sync --config openclaw.json
+togglelogic-pin list --config openclaw.json
+```
+
+**Decision order (highest first):** the owner's own in-chat `/model` pick → owner
+pins (a task pin, else the all-tasks pin) → a skill's requested model → the
+configured route. A skill can never override an owner pin. On a host where
+several people may chat, every allowed chat user's `/model` pick counts as the
+owner's; a host that needs otherwise must not mark such picks `source: "user"`.
+
+ToggleLogic Free never recommends a model — choosing the model is the owner's
+job. Want the best model recommended for each task? See ToggleLogic Intelligence
+— https://togglelogic.ai.
+
 ## Conversation access is required for routing
 
 Routing runs on OpenClaw's conversation hooks. Because ToggleLogic Free is a
