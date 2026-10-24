@@ -207,6 +207,11 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
         outrankedBy: outrankedBy === "user" ? "outranked_by_user" : applied === "task" ? "outranked_by_task_pin" : null,
       }),
     });
+    // §4.5: log the full pins snapshot in EVERY routing record. `snapshot` stamps
+    // decision.pins (for the log) and returns the same block handed to respond(),
+    // so the record and the response carry one identical view. Call it BEFORE
+    // record() (and before applyPin, which records internally).
+    const snapshot = (applied, outrankedBy) => (decision.pins = pinsBlock(applied, outrankedBy));
 
     async function failover(ref, unchanged = NO_CHANGE) {
       if (!ref || !availability?.unavailable(ref.split("/")[0])) return null;
@@ -240,9 +245,10 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     if (requested?.source === "user") {
       decision.selectedModel = requested.ref; decision.selectedProvider = requested.provider; decision.selectionReason = "user_selection"; decision.selectionDetails = { matched_rule: "user_selection_precedence", pin_source: requested.pinSource };
       if (availability?.unavailable(requested.provider)) decision.selectionDetails.userSelectionConflict = true;
+      const block = snapshot(null, "user");
       record();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, details: { selectedModel: requested.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
-      return respond(request, decision, NO_CHANGE, pinsBlock(null, "user"));
+      return respond(request, decision, NO_CHANGE, block);
     }
 
     // 3. Owner pins — the most specific applicable pin wins (task beats all,
@@ -264,12 +270,14 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       const details = s.pinTarget === "family"
         ? { matched_rule: "task_pin", scope: s.scope, pin_target: "family", family: s.family, resolved_ref: s.resolvedRef, resolution_reason: s.resolutionReason }
         : { matched_rule: "task_pin", scope: s.scope, pin_target: "model", resolved_ref: s.resolvedRef };
-      return respond(request, decision, applyPin(s, "task_pin", details, "task_pin"), pinsBlock("task", null));
+      const block = snapshot("task", null);
+      return respond(request, decision, applyPin(s, "task_pin", details, "task_pin"), block);
     }
     if (allEligible) {
       // The all-tasks pin keeps 2.2.x's `owner_override` reason + minimal details
       // in the record/audit (scope/target are in the `pins` block).
-      return respond(request, decision, applyPin(pins.all, "owner_override", { matched_rule: "owner_override" }, "owner_override"), pinsBlock("all", null));
+      const block = snapshot("all", null);
+      return respond(request, decision, applyPin(pins.all, "owner_override", { matched_rule: "owner_override" }, "owner_override"), block);
     }
 
     // 4. Request selection — a skill's requested model. Below the pin tier, so an
@@ -278,15 +286,16 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       decision.selectedModel = requested.ref; decision.selectedProvider = requested.provider; decision.selectionReason = "request_selection";
       decision.selectionDetails = { matched_rule: "request_selection_precedence", host_default: request.defaultRef };
       if (availability?.unavailable(requested.provider)) decision.selectionDetails.userSelectionConflict = true;
+      const block = snapshot(null, null);
       record();
       emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.NOOP, principal: { source: "user" }, subject: { hook: "before_model_resolve" }, details: { mode: "request_selection", selectedModel: requested.ref, ...decision.selectionDetails }, correlationId: decision.requestId });
-      return respond(request, decision, NO_CHANGE, pinsBlock(null, null));
+      return respond(request, decision, NO_CHANGE, block);
     }
 
     // 5. Early failover if the pending model's provider is unavailable.
     const pending = requested?.ref || request.defaultRef;
     const earlyFallback = await failover(pending);
-    if (earlyFallback) { record(); return respond(request, decision, earlyFallback, pinsBlock(null, null)); }
+    if (earlyFallback) { const block = snapshot(null, null); record(); return respond(request, decision, earlyFallback, block); }
 
     if (!beforeDispatch()) return respond(request, decision, NO_CHANGE, pinsBlock(null, null));
 
@@ -308,9 +317,10 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     const selectedRef = decision.selectedModel?.includes("/") ? decision.selectedModel
       : refOf(decision.selectedProvider, decision.selectedModel);
     override = await failover(selectedRef, override) || override;
+    const block = snapshot(null, null);
     record();
     if (decision.selectionReason !== "fallback_unresolved") emit(audit, EVENTS.ROUTING_DECISION, { outcome: overrideToDecision(override).action === "passthrough" ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
-    return respond(request, decision, override, pinsBlock(null, null));
+    return respond(request, decision, override, block);
   }
 
   return Object.freeze({ decide, unresolved });

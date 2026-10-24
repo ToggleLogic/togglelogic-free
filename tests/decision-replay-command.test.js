@@ -33,9 +33,22 @@ test("replay classifies replayable vs not, and reports only real differences", a
 });
 
 test("every reason outside the replayable set is named with why", () => {
-  for (const reason of ["owner_override", "intelligence", "intelligence_shadow", "pin", "provider_unavailable", "fallback_unresolved", "fallback"]) {
+  for (const reason of ["owner_override", "task_pin", "intelligence", "intelligence_shadow", "pin", "provider_unavailable", "fallback_unresolved", "fallback"]) {
     assert.equal(typeof NOT_REPLAYABLE[reason], "string");
   }
+});
+
+test("M6 §4.5: a task_pin record is counted not-replayable; a logged pins snapshot never breaks replay", async () => {
+  const taskPinRec = { requestId: "p1", selectedModel: "anthropic/claude-opus-4-8", selectedProvider: "anthropic", selectionReason: "task_pin",
+    selectionDetails: { matched_rule: "task_pin", scope: "task:inventory-sync" },
+    pins: { labelSeen: "inventory-sync", task: { scope: "task:inventory-sync", status: "applied", reason: "applied", pin_target: "model", resolved_ref: "anthropic/claude-opus-4-8" }, all: null } };
+  // A non-pin record that now also carries the universal pins snapshot must replay unaffected.
+  const cheapRec = { requestId: "p2", selectedModel: "google/gemini-3.5-flash", selectedProvider: "google", selectionReason: "cheap_default", selectionDetails: {},
+    pins: { labelSeen: null, task: null, all: null } };
+  const report = await replayRecords([taskPinRec, cheapRec].map((r) => JSON.stringify(r)), normalizeConfig({ mode: "cheap", cheapHeuristic: { default: "google/gemini-3.5-flash" } }));
+  assert.equal(report.notReplayable.task_pin, 1, "task_pin records are counted, not re-run");
+  assert.equal(report.replayed, 1, "the non-pin record still replays");
+  assert.equal(report.matched, 1, "and matches despite carrying a pins snapshot");
 });
 
 test("togglelogic-decide replay prints a summary, exits 2 on differences, and writes nothing", () => {

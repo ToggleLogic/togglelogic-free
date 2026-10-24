@@ -1,5 +1,5 @@
 {
- "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); D28 (M1 step 5) re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios; M6 (Free 2.3.0) re-record: owner pins moved below protected user selection (R1), so the two active-owner-override scenarios now read the session store (emitting session_pin_store_absent + warn) before the pin applies — the pin's routing_log, routing.decision audit and hook return value are unchanged; M6 T4 re-record: `family:` configured routes now resolve through the lineage resolver, so the 'configured mode, family alias' scenario (family:flash, an invalid lineage) is a loud 'family route unresolved' passthrough instead of the old 'family aliases require ToggleLogic Intelligence' no-op; M6 T6 re-record: the routing hook now emits a one-shot owner_pin_change audit event on the first decision that observes an owner-pin file version, so the three owner-override scenarios gain that record before their routing.decision",
+ "recordedFrom": "015d0a5 (pre-extraction interceptor, M1 step 2); D28 (M1 step 5) re-record changed only routing_decision audit outcome success->noop in 7 passthrough scenarios; M6 (Free 2.3.0) re-record: owner pins moved below protected user selection (R1), so the two active-owner-override scenarios now read the session store (emitting session_pin_store_absent + warn) before the pin applies — the pin's routing_log, routing.decision audit and hook return value are unchanged; M6 T4 re-record: `family:` configured routes now resolve through the lineage resolver, so the 'configured mode, family alias' scenario (family:flash, an invalid lineage) is a loud 'family route unresolved' passthrough instead of the old 'family aliases require ToggleLogic Intelligence' no-op; M6 T6 re-record: the routing hook now emits a one-shot owner_pin_change audit event on the first decision that observes an owner-pin file version, so the three owner-override scenarios gain that record before their routing.decision; M6 T7 re-record: every routing record now carries the full pins snapshot (§4.5), so each scenario's routing_log gains a `pins` field; no other field changed",
  "scenarios": [
   {
    "name": "passthrough mode, host default",
@@ -68,7 +68,12 @@
       "selectionReason": "passthrough",
       "selectionDetails": {},
       "mode": "passthrough",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -164,7 +169,12 @@
        "matchedKey": "summarize"
       },
       "mode": "configured",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": "summarize",
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -260,7 +270,12 @@
        "matchedKey": "default"
       },
       "mode": "configured",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": "other",
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -353,7 +368,12 @@
        "reason": "no configured match"
       },
       "mode": "configured",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -449,7 +469,12 @@
        "resolutionReason": "invalid-lineage"
       },
       "mode": "configured",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -545,7 +570,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -640,7 +670,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -733,7 +768,12 @@
        "reason": "no cheap default configured"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -829,7 +869,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -938,7 +983,12 @@
        "tier": "general_purpose"
       },
       "mode": "intelligence",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -1037,7 +1087,12 @@
       "selectionReason": "intelligence",
       "selectionDetails": {},
       "mode": "intelligence",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -1140,7 +1195,12 @@
        "pin_resolution": "honored"
       },
       "mode": "intelligence",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -1239,7 +1299,12 @@
        "would": "google/gemini-3.5-flash"
       },
       "mode": "intelligence",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -1338,7 +1403,12 @@
        "reason": "intelligence declined"
       },
       "mode": "intelligence",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -1432,7 +1502,12 @@
        "intelligenceStatus": "unavailable"
       },
       "mode": "intelligence_unavailable",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -1532,7 +1607,12 @@
        "fallbackOnError": true
       },
       "mode": "intelligence",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -1751,7 +1831,21 @@
        "matched_rule": "owner_override"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": {
+        "scope": "all",
+        "pin_target": "model",
+        "model_ref": "google/gemini-3.5-flash",
+        "resolved_ref": "google/gemini-3.5-flash",
+        "expires_at_ms": null,
+        "no_expiry": true,
+        "status": "applied",
+        "reason": "applied"
+       }
+      }
      }
     ],
     [
@@ -1869,7 +1963,21 @@
        "providerUnavailableConflict": true
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": {
+        "scope": "all",
+        "pin_target": "model",
+        "model_ref": "google/gemini-3.5-flash",
+        "resolved_ref": "google/gemini-3.5-flash",
+        "expires_at_ms": null,
+        "no_expiry": true,
+        "status": "applied",
+        "reason": "applied"
+       }
+      }
      }
     ],
     [
@@ -1987,7 +2095,21 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": {
+        "scope": "all",
+        "pin_target": "model",
+        "model_ref": "google/gemini-3.5-flash",
+        "resolved_ref": "google/gemini-3.5-flash",
+        "expires_at_ms": null,
+        "no_expiry": true,
+        "status": "not_applied",
+        "reason": "inactive"
+       }
+      }
      }
     ],
     [
@@ -2062,7 +2184,12 @@
        "pin_source": "host_runtime"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2135,7 +2262,12 @@
        "userSelectionConflict": true
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2208,7 +2340,12 @@
        "pin_source": "legacy_file"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2299,7 +2436,12 @@
        "host_default": "anthropic/claude-haiku-4-5"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2395,7 +2537,12 @@
        "userSelectionConflict": true
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2474,7 +2621,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2580,7 +2732,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2641,7 +2798,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2718,7 +2880,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -2845,7 +3012,12 @@
        ]
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ]
    ]
@@ -2949,7 +3121,12 @@
        "skipped": []
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ]
    ]
@@ -3059,7 +3236,12 @@
        ]
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ]
    ]
@@ -3163,7 +3345,12 @@
        "skipped": []
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -3289,7 +3476,12 @@
        "skipped": []
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ]
    ]
@@ -3372,7 +3564,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -3493,7 +3690,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -3642,7 +3844,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [
@@ -3751,7 +3958,12 @@
        "matchedKey": "cheap_default"
       },
       "mode": "cheap",
-      "durationMs": "number"
+      "durationMs": "number",
+      "pins": {
+       "labelSeen": null,
+       "task": null,
+       "all": null
+      }
      }
     ],
     [

@@ -12,7 +12,8 @@
  * A record is replayable only when its outcome depends on nothing but the
  * logged inputs and the policy. Records that depended on state the log does
  * not carry are counted, by reason, and never guessed at:
- *   owner_override                       owner state at the time
+ *   owner_override                       owner (all-tasks) state at the time
+ *   task_pin                             task-pin state is not reconstructed (§4.5)
  *   intelligence, intelligence_shadow, pin   the licensed seam
  *   provider_unavailable, fallback_unresolved  provider availability then
  *   fallback                             an error during dispatch
@@ -30,6 +31,7 @@ import { createDecisionCore, policyDigestOf } from "./decide.js";
 
 export const NOT_REPLAYABLE = Object.freeze({
   owner_override: "owner override state is not in the log",
+  task_pin: "task-pin state is not reconstructed by replay",
   intelligence: "depends on the licensed seam",
   intelligence_shadow: "depends on the licensed seam",
   pin: "depends on the licensed seam",
