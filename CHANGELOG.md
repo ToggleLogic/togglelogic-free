@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.3.0 — YYYY-MM-DD
+## 2.3.0 — 2026-10-25
 
 Milestone M6 — per-task owner pins, built to
 `docs/design/M6-PER-TASK-OWNER-PINS.md`. The owner can pin a model — an exact ref
