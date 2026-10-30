@@ -113,6 +113,12 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
       const ts = now();
       const ref = refOf(event);
       const provider = event?.provider || (ref.includes("/") ? ref.split("/")[0] : "unknown");
+      // Free 2.4.0: a configured local provider is EXPLICITLY priced at $0 (basis
+      // "local-zero-cost") — a real, visible $0 ledger row, distinct from both a
+      // hosted priced estimate and the loud hosted-unpriced path. Local inference
+      // has no provider invoice, so it is not subject to the usage-validity gate
+      // below (which guards against a false $0 on a priced HOSTED model).
+      const local = isLocalProvider(provider, cv.localProviders, hostConfig);
       const usage = (event && event.usage) || {};
       const inTok = num(usage.input);
       const outTok = num(usage.output);
@@ -120,8 +126,8 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
       const cacheWriteTok = num(usage.cacheWrite);
       const cacheTok = cacheReadTok + cacheWriteTok;
 
-      const price = await pricing.resolve(ref);
-      let priced = !!(price && price.priced);
+      const price = local ? null : await pricing.resolve(ref);
+      let priced = local ? true : !!(price && price.priced);
       // USAGE VALIDITY GATE (2026-08-02): a numeric dollar cost is trustworthy only when
       // the call actually reported finite input AND output token counts. Absent or
       // non-finite usage on a PRICED model is a false $0.00 waiting to happen — the old
@@ -134,7 +140,7 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
           (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) &&
           Number.isFinite(Number(value)) && Number(value) >= 0) &&
         inTok + outTok + cacheReadTok + cacheWriteTok > 0;
-      let costed = priced && usageValid;
+      let costed = !local && priced && usageValid;
       // Single reconciled cost math (cache-token aware) shared with the receipt.
       // Fall back to costUsd for minimal pricing deps that predate costBreakdown.
       let breakdown = null;
@@ -150,7 +156,7 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
       }
       const cost = breakdown ? breakdown.total : null;
       if (costed && (!Number.isFinite(cost) || cost < 0)) { priced = false; costed = false; }
-      const usageMissing = priced && !usageValid;
+      const usageMissing = !local && priced && !usageValid;
 
       const row = {
         schema: "togglelogic.fleet-usage.v1",
@@ -175,7 +181,19 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
         cacheReadTok,
         cacheWriteTok,
       };
-      if (costed) {
+      if (local) {
+        // EXPLICIT, VISIBLE $0 for a configured local provider. Distinct basis so
+        // the ledger shows a real $0 row — never confused with a hosted priced
+        // estimate, and never the loud hosted-unpriced path. Local inference has no
+        // provider invoice, so it is not invoice-eligible.
+        row.costUsd = 0;
+        row.priced = true;
+        row.unpriced = false;
+        row.usageMissing = false;
+        row.costBasis = "local-zero-cost";
+        row.invoiceEligible = false;
+        row.invoiceEligibleReason = "local-zero-cost";
+      } else if (costed) {
         row.costUsd = round6(cost);
         // Public price-card math is attribution evidence, not a provider invoice.
         // Invoice eligibility comes only from billingFields(): off by default,
@@ -213,8 +231,8 @@ export function createCostObserver({ config, hostConfig, audit, fallbackLogger, 
       await balanceReady;
       writeCall(row);
       tally.record({ ts, ref, provider, inputTok: inTok, outputTok: outTok, cacheTok,
-        priced: costed, usageMissing: priced && !usageValid, costUsd: cost });
-      if (row.unpriced && !isLocalProvider(provider, cv.localProviders, hostConfig)) {
+        priced: local || costed, usageMissing: !local && priced && !usageValid, costUsd: local ? 0 : cost });
+      if (row.unpriced && !local) {
         void events.emit("model_unpriced", { ts, provider, model: event?.model, resolvedRef: ref,
           reason: row.reason, requestId: correlation.requestId });
       } else if (row.usageMissing) {

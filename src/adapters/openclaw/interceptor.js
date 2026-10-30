@@ -23,6 +23,17 @@ function selection(provider, model) {
   return { provider: p, model: m, ref: p ? `${p}/${m}` : m };
 }
 
+// Free 2.4.0 (D59): a generic externally-supplied route hint carried as
+// SPAWN-TIME session metadata the host surfaces on every turn's event
+// (event.metadata.routeHint). Read by generic field name only — no
+// integration-specific identifiers. A present-but-empty hint is kept (not
+// nulled) so the decision core can LOUD-FAIL on a present-but-unusable hint
+// rather than silently drop to box default; absent metadata yields null.
+function readRouteHint(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  return { providerOverride: clean(raw.providerOverride), modelOverride: clean(raw.modelOverride) };
+}
+
 
 // 2.0.3: the model the host resolved for this request, compared against the
 // host's configured default for the agent. A difference means the model was
@@ -140,6 +151,7 @@ export function createInterceptor({ config, hostConfig, logger, seam, version, a
       get requested() { return once("requested", () => requestedSelection(selection(context?.modelProviderId, context?.modelId), readSession(context), defaultRef())); },
       get candidates() { return once("candidates", () => configuredModels(hostConfig, context?.agentId)); },
       get fallbacks() { return once("fallbacks", () => hostFallbacks(hostConfig, context?.agentId)); },
+      get routeHint() { return once("routeHint", () => readRouteHint(event?.metadata?.routeHint)); },
       host: { event, context },
     };
   }

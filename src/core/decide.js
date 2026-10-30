@@ -30,6 +30,10 @@
  *   requested     { ref, provider, model, source, pinSource? }, source one of
  *                 user | request | auto | default | none
  *   candidates    host allowlist (refs); fallbacks: host fallback refs, in order
+ *   routeHint     OPTIONAL, Free 2.4.0: a generic externally-supplied binding
+ *                 { providerOverride?, modelOverride? } applied at precedence 4
+ *                 (integration_route_hint) only on a labeled turn when steps 2/3/6
+ *                 produced no model. No integration-specific identifiers.
  *   host          { event, context } — TRANSITIONAL: still needed by governed
  *                 escalation and mode dispatch until those take request fields
  *                 (M1 steps 4 and 7). The core reads nothing else from it.
@@ -335,7 +339,7 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
     try {
       const mode = resolveEffectiveMode(config.mode, seam.status(), config);
       decision.mode = mode;
-      const result = await dispatchByMode({ mode, event, hookContext: context, config, seam, familyResolver, agent: request.agent });
+      const result = await dispatchByMode({ mode, event, hookContext: context, config, seam, familyResolver, agent: request.agent, availability });
       override = result.override; decision.selectedModel = result.selectedModel; decision.selectedProvider = result.selectedProvider; decision.selectionReason = result.selectionReason; decision.selectionDetails = result.selectionDetails;
       const governed = governedEscalation ? await governedEscalation.afterRouting(event?.prompt, context, result) : null;
       if (governed?.override) override = governed.override;
@@ -344,13 +348,46 @@ export function createDecisionCore({ policy, services = {}, product = "togglelog
       if (!config.intelligence.fallbackOnError) throw error;
     }
 
+    // Precedence 4 (Free 2.4.0, D59): integration route hint. Applies ONLY when
+    // mode dispatch declined with a plain passthrough AND the turn carries a host
+    // task label — the fallback tier for an externally-supplied binding, below
+    // owner `/model` (step 2), owner pins (step 3) and configured routes/work
+    // classes (step 6), above box default. It is NOT applied over an explicit
+    // `work_class_floor_unmet`: a capability-gated turn that no eligible family can
+    // serve must stay loud, never be re-routed to the hint's (non-capable) family.
+    // A present-but-unusable hint FAILS LOUD (`integration_route_hint_unusable`),
+    // never a silent drop to box default.
+    if (overrideToDecision(override).action === "passthrough" && pinLabel && decision.selectionReason !== "work_class_floor_unmet") {
+      const hintRaw = request.routeHint;
+      if (hintRaw) {
+        const hint = overrideToDecision(hintRaw);
+        if (hint.action === "route") {
+          override = { ...(hint.provider ? { providerOverride: hint.provider } : {}), ...(hint.model ? { modelOverride: hint.model } : {}) };
+          decision.selectedModel = hint.ref;
+          decision.selectedProvider = hint.provider ?? (hint.ref.includes("/") ? hint.ref.slice(0, hint.ref.indexOf("/")) : null);
+          decision.selectionReason = "integration_route_hint";
+          decision.selectionDetails = { matched_rule: "integration_route_hint", label: pinLabel, resolvedRef: hint.ref };
+        } else {
+          decision.selectionReason = "integration_route_hint_unusable";
+          decision.selectionDetails = { matched_rule: "integration_route_hint", label: pinLabel, failure: "unusable_route_hint" };
+        }
+      }
+    }
+
     // 8. Failover of the selected model.
     const selectedRef = decision.selectedModel?.includes("/") ? decision.selectedModel
       : refOf(decision.selectedProvider, decision.selectedModel);
     override = await failover(selectedRef, override) || override;
     const block = snapshot(null);
     record();
-    if (decision.selectionReason !== "fallback_unresolved") emit(audit, EVENTS.ROUTING_DECISION, { outcome: overrideToDecision(override).action === "passthrough" ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
+    // A declined floor or an unusable hint is a LOUD failure, surfaced as its own
+    // FAILURE audit + operator log (not the usual noop passthrough signal).
+    if (decision.selectionReason === "work_class_floor_unmet" || decision.selectionReason === "integration_route_hint_unusable") {
+      emit(audit, EVENTS.ROUTING_DECISION, { outcome: OUTCOMES.FAILURE, principal: { source: "plugin" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectionReason: decision.selectionReason, ...decision.selectionDetails }, correlationId: decision.requestId });
+      try { fallbackLogger?.warn?.(`ToggleLogic ${decision.selectionReason}: ${decision.selectionDetails?.workClass ?? decision.selectionDetails?.label ?? ""} not routed (box default)`); } catch {}
+    } else if (decision.selectionReason !== "fallback_unresolved") {
+      emit(audit, EVENTS.ROUTING_DECISION, { outcome: overrideToDecision(override).action === "passthrough" ? OUTCOMES.NOOP : OUTCOMES.SUCCESS, principal: { source: "agent" }, subject: { hook: "before_model_resolve" }, details: { mode: decision.mode, selectedModel: decision.selectedModel, selectionReason: decision.selectionReason }, correlationId: decision.requestId });
+    }
     return respond(request, decision, override, block);
   }
 

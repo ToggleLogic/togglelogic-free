@@ -49,11 +49,105 @@ export function warnConfiguredRouteCollisions(collisions, { audit = null, logger
   return true;
 }
 
+/**
+ * Normalize the generic `workClasses` block (Free 2.4.0, D60). A work class is a
+ * host task label that resolves through a capability floor instead of a static
+ * route: an ordered `route` of `family:<lineage>` or `provider/model` members,
+ * the opaque capability tokens the turn `requires`, and an optional
+ * `latencyBudgetMs` the chosen member's observed/declared p95 must meet. Keys are
+ * normalized with the canonical label rule (lowercase + trim); on a collision the
+ * LAST wins and the collision is recorded for a loud registration warning. No
+ * model names, prices or integration-specific identifiers live here — only in
+ * deployment DATA.
+ * @returns {{ workClasses: Record<string, {requires:string[], route:string[], latencyBudgetMs:(number|null)}>, collisions: Array<{normalized:string, keys:string[]}> }}
+ */
+export function normalizeWorkClasses(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const seen = new Map(); // normalizedKey -> { rawKeys: string[], entry }
+  for (const [rawKey, value] of Object.entries(src)) {
+    const key = normalizeLabel(rawKey);
+    if (!key || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    const requires = [...new Set((Array.isArray(value.requires) ? value.requires : [])
+      .map((token) => typeof token === "string" ? token.trim().toLowerCase() : "").filter(Boolean))];
+    const route = (Array.isArray(value.route) ? value.route : [])
+      .map((entry) => typeof entry === "string" ? entry.trim() : "")
+      .filter((entry) => entry && (entry.startsWith("family:") ? validLineage(entry.slice("family:".length)) : entry.includes("/")));
+    const latencyBudgetMs = Number.isFinite(value.latencyBudgetMs) && value.latencyBudgetMs > 0 ? value.latencyBudgetMs : null;
+    const entry = { requires, route, latencyBudgetMs };
+    const prior = seen.get(key);
+    if (prior) { prior.rawKeys.push(rawKey); prior.entry = entry; } // keep last
+    else seen.set(key, { rawKeys: [rawKey], entry });
+  }
+  const workClasses = {};
+  const collisions = [];
+  for (const [key, v] of seen) {
+    workClasses[key] = v.entry;
+    if (v.rawKeys.length > 1) collisions.push({ normalized: key, keys: v.rawKeys });
+  }
+  return { workClasses, collisions };
+}
+
+/**
+ * Normalize the deployment-declared `capabilities` DATA map (Free 2.4.0, D60):
+ * `{ "<token>": ["family:<lineage>" | "<provider/model>", ...] }`. This is the
+ * capability source for an Intelligence-ABSENT box; when the licensed seam is
+ * present it answers the floor instead and this map is the fallback. Tokens are
+ * lowercased; members keep `family:` / `provider/model` validity. No latency here
+ * (that is familyLatencyMs). Empty tokens and empty member lists are dropped.
+ */
+export function normalizeCapabilities(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const [token, value] of Object.entries(src)) {
+    const key = typeof token === "string" ? token.trim().toLowerCase() : "";
+    if (!key) continue;
+    const members = (Array.isArray(value) ? value : [])
+      .map((member) => typeof member === "string" ? member.trim() : "")
+      .filter((member) => member && (member.startsWith("family:") ? validLineage(member.slice("family:".length)) : member.includes("/")));
+    if (members.length) out[key] = members;
+  }
+  return out;
+}
+
+/**
+ * Normalize the deployment-declared `familyLatencyMs` DATA map (Free 2.4.0, D60):
+ * `{ "family:<lineage>" | "<provider/model>": <declared p95 ms> }`. Supplies the
+ * declared p95 a work class's latency budget is checked against on an
+ * Intelligence-absent box; the licensed seam supplies an observed p95 when
+ * present. Positive finite numbers only, keyed by a valid member.
+ */
+export function normalizeFamilyLatencyMs(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const [member, value] of Object.entries(src)) {
+    const key = typeof member === "string" ? member.trim() : "";
+    const valid = key && (key.startsWith("family:") ? validLineage(key.slice("family:".length)) : key.includes("/"));
+    if (valid && Number.isFinite(value) && value > 0) out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * Emit the loud workClasses key-collision warning (mirror of
+ * warnConfiguredRouteCollisions): a config.load audit event plus an operator
+ * logger warning. No-op when there are no collisions. Returns whether it warned.
+ */
+export function warnWorkClassCollisions(collisions, { audit = null, logger = null } = {}) {
+  if (!collisions || collisions.length === 0) return false;
+  try { audit?.emit?.({ event: EVENTS.CONFIG_LOAD, outcome: "failure", principal: { source: "plugin" },
+    details: { check: "work_classes_collision", status: "warning", collisions } }); } catch {}
+  try { logger?.warn?.(`ToggleLogic CONFIG_LOAD: workClasses keys collide after normalization (lowercase+trim); keeping the last of each: ${collisions.map((c) => `${c.normalized} <- [${c.keys.join(", ")}]`).join("; ")}`); } catch {}
+  return true;
+}
+
 export const DEFAULTS = Object.freeze({
   mode: "auto",
   logging: Object.freeze({ enabled: true, path: "~/.openclaw/logs/togglelogic-routing.log", rotateSizeMb: 50 }),
   routing: Object.freeze({ fallbackLineages: Object.freeze([]) }),
   configuredRoutes: Object.freeze({}),
+  workClasses: Object.freeze({}),
+  capabilities: Object.freeze({}),
+  familyLatencyMs: Object.freeze({}),
   cheapHeuristic: Object.freeze({ default: "", order: Object.freeze([]) }),
   intelligence: Object.freeze({ enabled: true, path: "~/togglelogic-intelligence", registryPath: "", shadow: false, fallbackOnError: true, allowReleaseCandidate: false }),
   ownerOverride: Object.freeze({ enabled: false, statePath: "~/.openclaw/togglelogic/owner_model_override.json", askConsumer: "~/.openclaw/togglelogic/owner_override_ask.py", askInterpreter: "python3" }),
@@ -113,12 +207,19 @@ export function normalizeConfig(raw) {
   const phrases = (value, fallback) => [...new Set((Array.isArray(value) ? value : fallback).map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean))];
   const labels = (value) => Object.fromEntries(Object.entries(obj(value)).map(([key, item]) => [key, typeof item === "string" ? item.trim() : ""]).filter(([, item]) => item));
   const { routes: configuredRoutes, collisions: configuredRoutesCollisions } = normalizeConfiguredRoutes(r.configuredRoutes);
+  const { workClasses, collisions: workClassesCollisions } = normalizeWorkClasses(r.workClasses);
+  const capabilities = normalizeCapabilities(r.capabilities);
+  const familyLatencyMs = normalizeFamilyLatencyMs(r.familyLatencyMs);
   return {
     mode: MODES.has(r.mode) ? r.mode : DEFAULTS.mode,
     logging: { enabled: logging.enabled !== false, path: str(logging.path, DEFAULTS.logging.path), rotateSizeMb: num(logging.rotateSizeMb, 50, 1) },
     routing: { fallbackLineages, invalidFallbackLineages },
     configuredRoutes,
     configuredRoutesCollisions,
+    workClasses,
+    workClassesCollisions,
+    capabilities,
+    familyLatencyMs,
     cheapHeuristic: { default: str(obj(r.cheapHeuristic).default), order: Array.isArray(obj(r.cheapHeuristic).order) ? obj(r.cheapHeuristic).order.filter((value) => typeof value === "string" && value) : [] },
     intelligence: { enabled: intelligence.enabled !== false, path: str(intelligence.path, DEFAULTS.intelligence.path), registryPath: str(intelligence.registryPath), shadow: intelligence.shadow === true, fallbackOnError: intelligence.fallbackOnError !== false, allowReleaseCandidate: intelligence.allowReleaseCandidate === true },
     ownerOverride: { enabled: ownerOverride.enabled === true, statePath: str(ownerOverride.statePath, DEFAULTS.ownerOverride.statePath), askConsumer: str(ownerOverride.askConsumer, DEFAULTS.ownerOverride.askConsumer), askInterpreter: str(ownerOverride.askInterpreter, "").trim() || DEFAULTS.ownerOverride.askInterpreter },

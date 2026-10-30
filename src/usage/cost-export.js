@@ -14,7 +14,7 @@ export const EXPORT_LICENSE = [
 ];
 const FIELDS = ["ts", "kind", "deploymentId", "costCenter", "provider", "model", "resolvedRef",
   "lineage", "lineageReason", "inputTok", "outputTok", "cacheTok", "cacheReadTok", "cacheWriteTok",
-  "costUsd", "priceSource", "priceVersion", "unpriced", "usageMissing", "requestId", "billable",
+  "costUsd", "costBasis", "priceSource", "priceVersion", "unpriced", "usageMissing", "requestId", "billable",
   "invoiceEligible", "invoiceEligibleReason"];
 const TOTALS = ["calls", "pricedUsd", "unpricedCalls", "usageMissingCalls", "billableUsd"];
 const GROUP = ["deploymentId", "provider", "lineage"];

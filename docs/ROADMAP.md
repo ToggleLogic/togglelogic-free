@@ -46,9 +46,10 @@ Detailed designs:
 | **2.1.5** (released) | M2 (part 1) | Loud audit-write failures. CI matrix on supported Node versions plus Linux/macOS/Windows jobs. | Patch. No config or format change. |
 | **2.2.0** (released 2026-10-22) | M1 (part 1) | Host-neutral decision core; versioned Decision API v1 (schema published here); OpenClaw adapter with no behavior change; decision matrix and replay command. Known-defect fixes (interpreter path, unwired executor, missing headers, audit outcome of unchanged-model decisions). | Minor. OpenClaw routing unchanged; the audit outcome of unchanged-model decisions is corrected. |
 | **2.3.0** | M6 | Per-task owner pins: an owner pin scoped to one host-supplied task label (set, clear, list), never applied to other tasks; pin state (scope, model or family, set time, expiry) carried on every decision response and audit record so the host can show it; configured per-task routes may name a model family, resolved to the newest configured member; the all-tasks owner override becomes an explicit scope that requires an expiry and is reported as held on every decision. | Minor. Existing configured routes and override files keep working; new fields are additive. |
-| **2.4.0** | M1 (part 2) | Decision sidecar (HTTP); LiteLLM adapter; Envoy `ext_authz` adapter; seam ABI 2 (ABI 1 still accepted); optional per-request tenant attribution in cost rows (billing classification from owner config). | Minor. New surfaces are additive. |
-| **2.5.0** | M2 (part 2) | Audit schema v2: hash chain, verification command, time-based retention (default ≥ 183 days), sealed segments, export (JSON/CSV/SIEM JSONL) with field allowlists, write-time `subject`/`details` allowlists, optional fail-closed audit policy. | Minor if the owner rules the on-disk rotation layout is not a public contract; otherwise **3.0.0** (see M2 risk R1). |
-| **2.6.0** | M5 (Free part) | Trusted data-class labels end to end; local-only enforcement on every selection path; data-boundary document. | Minor. Enforcement applies only when a host supplies a data-class label. |
+| **2.4.0** | M6 (part 2) — labeled-turn routing | Work-class capability floor (an ordered family route gated by required capabilities **and** a latency budget; local-first, loud `work_class_floor_unmet` when no eligible family meets the floor); a precedence-4 integration route hint tier for an externally-supplied binding, applied only on a labeled turn below owner `/model`, pins and configured routes; local turns now priced at an explicit, visible $0. (Owner rulings D59 a / D60 a, D61 a 2026-10-30.) | Minor. All config is additive with empty defaults; owner `/model`, pins and configured routes are unchanged. |
+| **2.5.0** | M1 (part 2) | Decision sidecar (HTTP); LiteLLM adapter; Envoy `ext_authz` adapter; seam ABI 2 (ABI 1 still accepted); optional per-request tenant attribution in cost rows (billing classification from owner config). | Minor. New surfaces are additive. |
+| **2.6.0** | M2 (part 2) | Audit schema v2: hash chain, verification command, time-based retention (default ≥ 183 days), sealed segments, export (JSON/CSV/SIEM JSONL) with field allowlists, write-time `subject`/`details` allowlists, optional fail-closed audit policy. | Minor if the owner rules the on-disk rotation layout is not a public contract; otherwise **3.0.0** (see M2 risk R1). |
+| **2.7.0** | M5 (Free part) | Trusted data-class labels end to end; local-only enforcement on every selection path; data-boundary document. | Minor. Enforcement applies only when a host supplies a data-class label. |
 
 M3 (enterprise identity) and M4 (hosted service, design only) are licensed and
 planned privately. They consume the M1 API and the M2 log format defined here.
@@ -99,8 +100,9 @@ Two releases (owner ruling 2026-10-19, to ship the core sooner):
 - Free 2.2.0 — core split, Decision API v1, OpenClaw adapter, decision matrix
   and replay (design §7 steps 1–5 and 8), proven on the canary host as
   2.2.0-rc.N first.
-- Free 2.4.0 — decision sidecar, LiteLLM and Envoy adapters, seam ABI 2
-  (design §7 steps 6–7).
+- Free 2.5.0 — decision sidecar, LiteLLM and Envoy adapters, seam ABI 2
+  (design §7 steps 6–7). (Moved from 2.4.0, which now carries the M6-part-2
+  labeled-turn routing work — owner ruling D61 a, 2026-10-30.)
 
 ### Interfaces and schemas
 
@@ -192,17 +194,17 @@ Free 2.3.0.
    independent sink), and an `audit.write.recovered` record in the audit stream
    itself when writes resume, carrying the failure count and window. Same
    pattern as 2.1.2.
-2. **Hash chain + verification (2.5.0).** Each record carries a sequence number
+2. **Hash chain + verification (2.6.0).** Each record carries a sequence number
    and the hash of its predecessor. `togglelogic-audit verify` detects edits,
    deletions, reorders and truncation (truncation against a recorded head or an
    external anchor).
-3. **Time-based retention (2.5.0).** Configurable; default 183 days (at least
+3. **Time-based retention (2.6.0).** Configurable; default 183 days (at least
    six months). Rotation seals segments and never deletes a record inside the
    retention window, even under size pressure; pressure is reported loudly.
-4. **Export (2.5.0).** `togglelogic-audit export` to JSON, CSV and a SIEM-friendly
+4. **Export (2.6.0).** `togglelogic-audit export` to JSON, CSV and a SIEM-friendly
    JSONL stream, with field-allowlist profiles. `subject` and `details` are
    filtered by per-event allowlists at write time.
-5. **Optional fail-closed policy (2.5.0).** `audit.failurePolicy: "block"` makes
+5. **Optional fail-closed policy (2.6.0).** `audit.failurePolicy: "block"` makes
    routing return a block decision while the audit log cannot be written.
    Default stays `"continue"`.
 
@@ -212,7 +214,7 @@ signing keys, signed checkpoints and hosted verification licensed.
 
 ### Proposed versions
 
-Free 2.1.5 (loud failures + CI), Free 2.5.0 (everything else).
+Free 2.1.5 (loud failures + CI), Free 2.6.0 (everything else).
 
 ### Test and proof plan
 
@@ -232,7 +234,7 @@ Free 2.1.5 (loud failures + CI), Free 2.5.0 (everything else).
 - 2.1.5: an induced failure on the canary host (audit path pointed at a
   read-only directory in a scratch profile) showing the error log, gate and
   events; then restoration and the recovery record.
-- 2.5.0: `togglelogic-audit verify` passing on the live canary log after
+- 2.6.0: `togglelogic-audit verify` passing on the live canary log after
   several days; one rotation and one prune observed; an export file handed to
   the owner.
 
@@ -273,7 +275,7 @@ Free 2.1.5 (loud failures + CI), Free 2.5.0 (everything else).
 
 ### Proposed versions
 
-Free 2.6.0.
+Free 2.7.0.
 
 ### Test and proof plan
 

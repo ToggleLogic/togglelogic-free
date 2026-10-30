@@ -20,7 +20,7 @@
       "then": { "required": ["ref"] }
     },
     "reason": {
-      "enum": ["owner_override", "task_pin", "user_selection", "request_selection", "configured", "cheap_default", "intelligence", "pin", "intelligence_shadow", "provider_unavailable", "fallback_unresolved", "passthrough", "fallback", "blocked"]
+      "enum": ["owner_override", "task_pin", "user_selection", "request_selection", "configured", "cheap_default", "intelligence", "pin", "intelligence_shadow", "provider_unavailable", "fallback_unresolved", "passthrough", "fallback", "blocked", "work_class", "work_class_floor_unmet", "integration_route_hint", "integration_route_hint_unusable"]
     },
     "rationale": {
       "type": "object", "additionalProperties": false,

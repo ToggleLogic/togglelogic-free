@@ -82,6 +82,24 @@ test("CSV quotes text, neutralizes spreadsheet formulas, and exports no arbitrar
   assert.doesNotMatch(csv + JSON.stringify(report), /PRIVATE_ERROR|PRIVATE_KEY/);
 });
 
+test("export and ledger-reader accept a local-zero-cost row: priced $0, basis carried, not unpriced", async (t) => {
+  const f = await fixture(t);
+  const local = { kind: "call", ts: "2026-09-10T00:00:00Z", deploymentId: "deployment-a", costCenter: "team",
+    provider: "ollama", model: "glm4:9b", resolvedRef: "ollama/glm4:9b", inputTok: 10, outputTok: 5,
+    cacheReadTok: 0, cacheWriteTok: 0, costUsd: 0, unpriced: false, usageMissing: false,
+    costBasis: "local-zero-cost", billable: true, requestId: "request-local" };
+  await f.write(f.ledgerPath, [local]);
+  await f.write(f.ledgerPath + ".2", []);
+  const report = await exportLedger({ ledgerPath: f.ledgerPath, month: "2026-09" });
+  const row = report.rows.find((r) => r.resolvedRef === "ollama/glm4:9b");
+  assert.ok(row, "the local-zero-cost row is read from the ledger");
+  assert.equal(row.costUsd, 0);
+  assert.equal(row.unpriced, false);
+  assert.equal(row.usageMissing, false);
+  assert.equal(row.costBasis, "local-zero-cost", "the new basis is carried into the export");
+  assert.equal(report.totals.unpricedCalls, 0, "a local $0 row is NOT counted as unpriced");
+});
+
 test("UTC bounds cover leap February and December rollover", () => {
   assert.equal(monthBounds("2028-02").endExclusive, "2028-03-01T00:00:00.000Z");
   assert.equal(monthBounds("2026-12").endExclusive, "2027-01-01T00:00:00.000Z");

@@ -55,6 +55,7 @@ export async function createAdapter({
   }
   let classifyFn = null;
   let waitForReachabilityFn = null;
+  let queryCapabilityFn = null;
   try {
     const classifierUrl = new URL(
       "file://" + intelligencePath + "/src/classifier.js"
@@ -63,6 +64,13 @@ export async function createAdapter({
     classifyFn = mod.classify;
     waitForReachabilityFn = typeof mod.waitForReachability === "function"
       ? mod.waitForReachability
+      : null;
+    // Free 2.4.0 (D60) seam ABI extension: an optional synchronous capability
+    // query the licensed layer (Intelligence ≥ 2.2.x) implements to answer a
+    // work-class floor (capabilities + observed p95) for this box. Absent in
+    // earlier layers → the floor falls back to the deployment's declared DATA.
+    queryCapabilityFn = typeof mod.queryCapability === "function"
+      ? mod.queryCapability
       : null;
   } catch (err) {
     try {
@@ -173,8 +181,20 @@ export async function createAdapter({
     }
   }
 
+  /**
+   * Free 2.4.0 (D60) — synchronous capability-floor query. Delegates to the
+   * licensed layer's `queryCapability` when present; returns null otherwise (the
+   * seam caller then uses the deployment's declared capability DATA). Reads only
+   * the layer's pre-warmed state — never blocks the hot path.
+   */
+  function queryCapability(query, runtimeConfig) {
+    if (typeof queryCapabilityFn !== "function") return null;
+    try { return queryCapabilityFn(query, runtimeConfig ? { runtimeConfig } : {}); } catch { return null; }
+  }
+
   return {
     classify,
+    queryCapability,
     version,
     isStub: classifyFn === null,
   };

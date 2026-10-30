@@ -1,5 +1,60 @@
 # Changelog
 
+## 2.4.0-rc.1 — 2026-10-30
+
+Labeled-turn routing, built to `docs/design/D59-D60-LABELED-TURN-ROUTING.md`
+(owner rulings D59 a / D60 a; version D61 a). On a labeled turn ToggleLogic now
+owns the model choice with a clear precedence and can resolve a task label through
+a capability floor, and local turns are priced as an explicit, visible zero. All
+new configuration is additive with empty defaults.
+
+### Behavior changes — read these
+
+- **Local turns are now priced at an explicit, visible $0** (basis
+  `local-zero-cost`), not left visible-but-unpriced. A configured local provider
+  produces a real `$0` ledger row distinct from both a hosted priced estimate and
+  the loud hosted-unpriced path (which stays loud for hosted models that cannot be
+  priced). The offline exporter and ledger reader carry the new basis and count
+  such rows as priced zero, not unpriced.
+- **A new precedence-4 integration route-hint tier** applies on a *labeled* turn
+  only, and only below owner `/model`, owner pins, and configured routes / work
+  classes. An externally-supplied binding carried as spawn-time session metadata
+  (`event.metadata.routeHint`, read by generic field name) is used only when the
+  engine's own rules decline. A present-but-unusable hint fails **loud**
+  (`integration_route_hint_unusable`); a hint to an unavailable provider fails
+  over; neither drops silently to the box default. Deployments that configure no
+  hint see no change.
+
+### Added
+
+- **Work-class capability floor (D60).** A `workClasses.<label>` entry resolves a
+  task label through an ordered family `route` gated by `requires` (opaque
+  capability tokens) **and** an optional `latencyBudgetMs`. A route member is
+  eligible only when it is resolvable, reachable, capable, and within the latency
+  budget — so a capable-but-too-slow local family is excluded in favor of the next
+  route member. Local-first falls out of route order. When no member meets the
+  floor the decision is a loud `work_class_floor_unmet` passthrough — capability-
+  gated work (e.g. forced structured output) is never routed to a non-capable
+  family. The floor is answered by the licensed Intelligence seam when present
+  (synchronous, pre-warmed — never blocking the hot path) and otherwise by the
+  deployment-declared `capabilities` and `familyLatencyMs` data maps; when neither
+  can answer, it fails loud (no silent bypass).
+- **Integration route hint (D59).** Generic `routeHint`
+  (`{ providerOverride?, modelOverride? }`) plumbed through the Decision API
+  (`work.routeHint`) and the OpenClaw adapter into the precedence-4 tier above.
+- **Seam ABI extension** for the capability query, implemented by a licensed layer
+  ≥ the paired release; additive and declined gracefully when absent.
+- New config blocks `workClasses`, `capabilities`, `familyLatencyMs` — all additive
+  with empty defaults; a loud warning on `workClasses` key collisions.
+
+### Compatibility
+
+Minor. Empty `workClasses` / `capabilities` / `familyLatencyMs` and an absent
+`routeHint` ⇒ byte-identical behavior to 2.3.0 (verified by replay of a recorded
+routing log: zero differences). Owner `/model`, owner pins and configured routes
+are unchanged. The new selection reasons are treated as not-replayable, so recorded
+logs from earlier releases replay unchanged.
+
 ## 2.3.0 — 2026-10-25
 
 Milestone M6 — per-task owner pins, built to

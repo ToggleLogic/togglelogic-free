@@ -21,6 +21,7 @@
  */
 
 import { pickCheapDefault } from "./cheap-heuristic.js";
+import { evaluateWorkClassFloor } from "./capability-floor.js";
 
 const PASSTHROUGH = Object.freeze({});
 
@@ -68,7 +69,17 @@ function overrideForModelRef(modelRef) {
   return { modelOverride: modelRef };
 }
 
-export async function dispatchByMode({ mode, event, hookContext, config, seam, familyResolver = null, agent = undefined }) {
+export async function dispatchByMode({ mode, event, hookContext, config, seam, familyResolver = null, agent = undefined, availability = null }) {
+  // Work-class capability floor (Free 2.4.0, D60). When the host task label names
+  // a configured work class, it resolves through the capability floor — an ordered
+  // route gated by required capabilities and a latency budget — instead of the
+  // mode's normal behavior. This overlays EVERY mode and is a no-op when no
+  // workClasses are configured (byte-identical to 2.3.0). A floor that no eligible
+  // family meets is a LOUD passthrough (`work_class_floor_unmet`), never a silent
+  // route to a non-capable family.
+  const workClass = resolveWorkClassFor(config, event, hookContext);
+  if (workClass) return resolveWorkClass({ label: workClass.label, workClass: workClass.entry, config, seam, familyResolver, agent, availability });
+
   switch (mode) {
     case "passthrough":
       return passthroughResult();
@@ -172,6 +183,51 @@ function passthroughResult(details = {}) {
     selectedProvider: null,
     selectionReason: "passthrough",
     selectionDetails: details,
+  };
+}
+
+// The configured work class for this turn's host task label, or null. Uses the
+// identical narrow label fields and normalization as configured routes, so a work
+// class keyed `intent_classification` matches a turn labelled the same.
+function resolveWorkClassFor(config, event, hookContext) {
+  const label = configuredTaskLabel(event, hookContext);
+  const entry = label && config?.workClasses ? config.workClasses[label] : null;
+  return entry ? { label, entry } : null;
+}
+
+// Resolve a work class through the capability floor and shape the dispatch
+// result. A met floor routes to the chosen member (`work_class`); an unmet floor
+// is a LOUD, distinct passthrough (`work_class_floor_unmet`) the decision core
+// surfaces as a failure — it is NOT a silent box default and NOT eligible for the
+// integration route hint fallback (that would defeat the floor).
+function resolveWorkClass({ label, workClass, config, seam, familyResolver, agent, availability }) {
+  const capabilityQuery = seam && typeof seam.queryCapability === "function"
+    ? (query) => seam.queryCapability(query)
+    : null;
+  const floor = evaluateWorkClassFloor({ workClass, config, familyResolver, availability, capabilityQuery, agent });
+  if (!floor.ok) {
+    return {
+      override: PASSTHROUGH,
+      selectedModel: null,
+      selectedProvider: null,
+      selectionReason: "work_class_floor_unmet",
+      selectionDetails: { workClass: label, requires: workClass.requires ?? [], latencyBudgetMs: workClass.latencyBudgetMs ?? null, excluded: floor.excluded },
+    };
+  }
+  const override = overrideForModelRef(floor.ref);
+  return {
+    override,
+    selectedModel: floor.ref,
+    selectedProvider: override.providerOverride ?? null,
+    selectionReason: "work_class",
+    selectionDetails: {
+      workClass: label,
+      resolvedRef: floor.ref,
+      member: floor.member,
+      ...(floor.family ? { family: floor.family } : {}),
+      floorBasis: floor.basis,
+      ...(floor.p95Ms != null ? { p95Ms: floor.p95Ms } : {}),
+    },
   };
 }
 

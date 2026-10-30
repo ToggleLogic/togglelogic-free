@@ -75,29 +75,42 @@ test("usage_missing: repeated priced zero-usage refusals emit once per UTC hour,
   assert.equal(f.observer.tally.summarize().usageMissing.calls, 52);
 });
 
-test("local unpriced calls stay in ledger; configured provider IDs and loopback endpoints suppress events", async () => {
+test("local calls are explicit, visible $0 (basis local-zero-cost); configured IDs and loopback endpoints suppress unpriced events", async () => {
+  // Free 2.4.0: a configured local provider is EXPLICITLY priced at $0 — a real,
+  // visible $0 ledger row (priced:true, unpriced:false, costBasis local-zero-cost),
+  // never the hosted-unpriced path. No model_unpriced event fires for it.
   for (const provider of ["ollama", "lmstudio", "llamacpp", "vllm-local"]) {
     const f = fixture({ priced: false });
     await f.observe({ ...call, provider });
     assert.equal(f.events.length, 0);
-    assert.equal(f.rows[0].unpriced, true);
+    assert.equal(f.rows[0].unpriced, false);
+    assert.equal(f.rows[0].priced, true);
+    assert.equal(f.rows[0].costUsd, 0);
+    assert.equal(f.rows[0].usageMissing, false);
+    assert.equal(f.rows[0].costBasis, "local-zero-cost");
+    assert.equal(f.rows[0].invoiceEligible, false);
   }
   const custom = fixture({ priced: false, config: { localProviders: ["CUSTOM"] } });
   await custom.observe({ ...call, provider: "custom" });
   assert.equal(custom.events.length, 0);
+  assert.equal(custom.rows[0].costBasis, "local-zero-cost");
   for (const baseUrl of ["http://localhost:1234/v1", "http://127.0.0.1/v1", "http://[::1]:8000/v1"]) {
     const f = fixture({ priced: false, hostConfig: { models: { providers: { proxy: { baseUrl } } } } });
     await f.observe({ ...call, provider: "proxy" });
     assert.equal(f.events.length, 0, baseUrl);
     assert.equal(f.rows[0].provider, "proxy", "use serving provider, not price vendor");
-    assert.equal(f.rows[0].unpriced, true);
+    assert.equal(f.rows[0].unpriced, false);
+    assert.equal(f.rows[0].costUsd, 0);
+    assert.equal(f.rows[0].costBasis, "local-zero-cost");
   }
   for (const baseUrl of ["https://localhost.example.com", "https://127.0.0.1.example.com", "not a URL"]) {
     assert.equal(isLocalProvider("proxy", [], { models: { providers: { proxy: { baseUrl } } } }), false);
   }
+  // A remote (non-local) provider with an explicit empty local list stays loud-unpriced.
   const remote = fixture({ priced: false, config: { localProviders: [] } });
   await remote.observe({ ...call, provider: "ollama" });
   assert.equal(remote.events.length, 1, "explicit empty list replaces defaults");
+  assert.equal(remote.rows[0].unpriced, true);
 });
 
 test("three summary buckets stay separate, dollar-only human output, UTC date", () => {

@@ -103,6 +103,20 @@ export function createIntelligenceSeam(
     return adapter.classify(request, hostRuntimeConfig);
   }
 
+  /**
+   * Free 2.4.0 (D60) — synchronous capability-floor query for a work class.
+   * Given { ref, requires, latencyBudgetMs } the licensed layer answers this
+   * box's observed capabilities and p95 latency; returns null when the layer is
+   * absent or cannot answer (the caller then falls back to the deployment's
+   * declared capability DATA, and loud-fails if neither can answer). SYNCHRONOUS
+   * by contract: it must read only pre-warmed state — never block the hot path on
+   * a reachability probe (a cold layer returns null → config fallback).
+   */
+  function queryCapability(query) {
+    if (state !== "available" || !adapter || typeof adapter.queryCapability !== "function") return null;
+    try { return adapter.queryCapability(query, hostRuntimeConfig); } catch { return null; }
+  }
+
   function info() {
     return {
       state,
@@ -111,5 +125,5 @@ export function createIntelligenceSeam(
     };
   }
 
-  return { detect, status, classify, info };
+  return { detect, status, classify, queryCapability, info };
 }

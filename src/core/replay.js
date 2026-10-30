@@ -38,6 +38,10 @@ export const NOT_REPLAYABLE = Object.freeze({
   provider_unavailable: "provider availability is not in the log",
   fallback_unresolved: "provider availability is not in the log",
   fallback: "dispatch error at the time",
+  work_class: "depends on the capability floor (seam/availability) not in the log",
+  work_class_floor_unmet: "depends on the capability floor (seam/availability) not in the log",
+  integration_route_hint: "depends on an integration route hint not carried in the log",
+  integration_route_hint_unusable: "depends on an integration route hint not carried in the log",
 });
 
 // The host's requested selection, built exactly as the OpenClaw adapter builds
